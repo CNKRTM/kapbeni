@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KapBeni — Yönetim Paneli</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config={theme:{extend:{colors:{
+  brand:'#e53935', brandd:'#c62828',
+  dark:'#1a2e4a', dark2:'#243b5e',
+  dark3:'#2f4d7a'
+}}}}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:10px;font-size:13.5px;font-weight:500;color:#94a3b8;cursor:pointer;transition:all .15s;text-decoration:none;user-select:none}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#e2e8f0}
+.nav-item.active{background:#e53935;color:#fff}
+.nav-item .icon{width:20px;text-align:center;flex-shrink:0;font-size:15px}
+.nav-section{font-size:10px;font-weight:700;color:#475569;letter-spacing:.08em;padding:16px 14px 4px;text-transform:uppercase}
+.stat-card{background:#fff;border-radius:14px;padding:20px;border:1px solid #e2e8f0}
+.stat-card .val{font-size:28px;font-weight:800;line-height:1.1;margin-top:4px}
+.badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:99px;font-size:11.5px;font-weight:600}
+.badge.green{background:#dcfce7;color:#15803d}
+.badge.red{background:#fee2e2;color:#b91c1c}
+.badge.amber{background:#fef3c7;color:#b45309}
+.badge.blue{background:#dbeafe;color:#1d4ed8}
+.badge.gray{background:#f1f5f9;color:#64748b}
+.badge.purple{background:#ede9fe;color:#7c3aed}
+.dot{width:7px;height:7px;border-radius:50%}
+.dot.green{background:#22c55e}
+.dot.red{background:#ef4444}
+.dot.amber{background:#f59e0b}
+.dot.blue{background:#3b82f6}
+.dot.gray{background:#94a3b8}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;border:none;line-height:1}
+.btn-primary{background:#e53935;color:#fff}
+.btn-primary:hover{background:#c62828}
+.btn-secondary{background:#f1f5f9;color:#334155}
+.btn-secondary:hover{background:#e2e8f0}
+.btn-success{background:#dcfce7;color:#15803d}
+.btn-success:hover{background:#bbf7d0}
+.btn-danger{background:#fee2e2;color:#b91c1c}
+.btn-danger:hover{background:#fecaca}
+.btn-blue{background:#dbeafe;color:#1d4ed8}
+.btn-blue:hover{background:#bfdbfe}
+.btn-sm{padding:6px 12px;font-size:12px}
+input,select,textarea{border:1.5px solid #e2e8f0;border-radius:9px;padding:9px 13px;font-size:13.5px;font-family:inherit;width:100%;transition:border .15s;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:#e53935}
+label{font-size:12.5px;font-weight:600;color:#475569;display:block;margin-bottom:5px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #f1f5f9;white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid #f8fafc;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:14px;overflow:hidden}
+.card-body{padding:20px}
+.section-title{font-size:15px;font-weight:700;color:#1a2e4a;margin-bottom:16px}
+.toggle{position:relative;display:inline-block;width:42px;height:23px;flex-shrink:0}
+.toggle input{opacity:0;width:0;height:0}
+.toggle .slider{position:absolute;inset:0;background:#cbd5e1;border-radius:99px;cursor:pointer;transition:.2s}
+.toggle .slider:before{content:'';position:absolute;left:3px;top:3px;width:17px;height:17px;background:#fff;border-radius:50%;transition:.2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle input:checked+.slider{background:#22c55e}
+.toggle input:checked+.slider:before{transform:translateX(19px)}
+#app{min-height:100vh;background:#f8fafc}
+.sidebar{width:248px;flex-shrink:0;background:#1a2e4a;min-height:100vh;display:flex;flex-direction:column}
+.sidebar-logo{padding:22px 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
+.sidebar-logo .brand{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px}
+.sidebar-logo .brand span{color:#e53935}
+.sidebar-logo .sub{font-size:10.5px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.12em;margin-top:2px}
+.sidebar-nav{flex:1;padding:10px 8px;overflow-y:auto}
+.sidebar-footer{padding:12px 8px;border-top:1px solid rgba(255,255,255,.08)}
+.topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+.topbar-title{font-size:16px;font-weight:700;color:#1a2e4a}
+.view-wrap{padding:24px;max-width:1200px}
+.toast{position:fixed;bottom:24px;right:24px;z-index:999;background:#1a2e4a;color:#fff;padding:12px 20px;border-radius:12px;font-size:13.5px;font-weight:600;transform:translateY(80px);opacity:0;transition:.3s;box-shadow:0 8px 24px rgba(0,0,0,.2)}
+.toast.show{transform:translateY(0);opacity:1}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center}
+.modal{background:#fff;border-radius:18px;padding:28px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+@media(max-width:768px){.sidebar{display:none}}
+.star-filled{color:#f59e0b}
+.star-empty{color:#e2e8f0}
+</style>
+</head>
+<body>
+<div id="toast" class="toast"></div>
+<div id="app"></div>
+<script>
+const API='/admin/api';
+let TOKEN=localStorage.getItem('admin_token')||'';
+
+function H(){ return {'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'} }
+
+async function api(path,opts={}){
+  try{
+    const r=await fetch(API+path,{...opts,headers:{...H(),...(opts.headers||{})}});
+    if(r.status===401){logout();throw new Error('401');}
+    const ct=r.headers.get('content-type')||'';
+    return ct.includes('json')?r.json():r.text();
+  }catch(e){if(e.message!=='401')showToast('Bağlantı hatası: '+path,'err'); throw e;}
+}
+
+let _toastTimer=null;
+function showToast(msg,type='ok'){
+  const t=document.getElementById('toast');
+  t.textContent=msg;
+  t.style.background=type==='err'?'#b91c1c':'#1a2e4a';
+  t.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+function logout(){ localStorage.removeItem('admin_token'); TOKEN=''; renderLogin(); }
+const el=id=>document.getElementById(id);
+const fmt=n=>Number(n||0).toLocaleString('tr-TR');
+const fmtDate=d=>d?new Date(d).toLocaleDateString('tr-TR',{day:'2-digit',month:'short',year:'numeric'}):'—';
+const fmtDateTime=d=>d?new Date(d).toLocaleString('tr-TR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+const stars=n=>{let s='';for(let i=0;i<5;i++)s+=`<span class="${i<(n||0)?'star-filled':'star-empty'}">★</span>`;return s;}
+
+// ═══════════════════════════════════════════════
+// LOGIN
+// ═══════════════════════════════════════════════
+function renderLogin(){
+  document.getElementById('app').innerHTML=`
+  <div class="min-h-screen flex items-center justify-center" style="background:linear-gradient(135deg,#1a2e4a 0%,#2f4d7a 100%)">
+    <div class="bg-white rounded-2xl shadow-2xl p-9 w-full max-w-sm">
+      <div class="text-center mb-7">
+        <div class="inline-flex items-center gap-1 mb-2">
+          <span style="font-size:28px;font-weight:800;color:#1a2e4a;letter-spacing:-.5px">Kap</span>
+          <span style="font-size:28px;font-weight:800;color:#e53935;letter-spacing:-.5px">Beni</span>
+        </div>
+        <p style="font-size:12px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.1em">Yönetim Paneli</p>
+      </div>
+      <div id="login-err" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium"></div>
+      <div class="space-y-3">
+        <div>
+          <label>E-posta</label>
+          <input id="login-email" type="email" placeholder="admin@kapbeni.com" onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <div>
+          <label>Şifre</label>
+          <input id="login-pw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
+        </div>
+        <button onclick="doLogin()" class="btn btn-primary w-full justify-center mt-2" style="width:100%;justify-content:center;padding:13px">
+          Giriş Yap
+        </button>
+      </div>
+    </div>
+  </div>`;
+}
+
+async function doLogin(){
+  const email=el('login-email')?.value, pw=el('login-pw')?.value;
+  if(!email||!pw)return;
+  try{
+    const r=await fetch(API+'/giris',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw})});
+    const d=await r.json();
+    if(!r.ok){
+      const err=el('login-err');
+      err.textContent=d.hata||d.message||'Giriş başarısız';
+      err.classList.remove('hidden');
+      return;
+    }
+    TOKEN=d.token; localStorage.setItem('admin_token',TOKEN);
+    renderApp(); route('dashboard');
+  }catch(e){
+    const err=el('login-err');
+    if(err){err.textContent='Sunucuya bağlanılamadı';err.classList.remove('hidden');}
+  }
+}
+
+// ═══════════════════════════════════════════════
+// APP SHELL
+// ═══════════════════════════════════════════════
+const MENU=[
+  {section:'Ana'},
+  {id:'dashboard',icon:'📊',label:'Dashboard'},
+  {section:'Kullanıcılar'},
+  {id:'kullanicilar',icon:'👥',label:'Kullanıcılar'},
+  {id:'kyc',icon:'🪪',label:'KYC İstekleri'},
+  {id:'kurumsalonay',icon:'🏢',label:'Kurumsal Onay'},
+  {section:'İlanlar'},
+  {id:'ilanlaryayin',icon:'📢',label:'Yayın Yönetimi'},
+  {id:'ilansikayet',icon:'🚩',label:'İlan Şikayetleri'},
+  {id:'degerlendirmeler',icon:'⭐',label:'Değerlendirmeler'},
+  {section:'Destek'},
+  {id:'destektickets',icon:'🎫',label:'Destek Talepleri'},
+  {id:'oneriler',icon:'💡',label:'Öneriler & Geri Bildirim'},
+  {section:'Finans'},
+  {id:'abonelikler',icon:'💳',label:'Abonelikler'},
+  {id:'paketler',icon:'🎁',label:'Paketler'},
+  {id:'kuponlar',icon:'🏷️',label:'Kuponlar'},
+  {section:'Pazaryeri'},
+  {id:'vitaminler',icon:'✨',label:'Vitaminler'},
+  {id:'slider',icon:'🖼️',label:'Hero Slider'},
+  {id:'kategoriler',icon:'📁',label:'Kategoriler'},
+  {section:'Sistem'},
+  {id:'waayar',icon:'📱',label:'WhatsApp Ayarları'},
+  {id:'apibaglantilar',icon:'🔌',label:'API Bağlantıları'},
+  {id:'ayarlar',icon:'⚙️',label:'Ayarlar'},
+];
+
+const PAGE_TITLES={
+  dashboard:'Dashboard',kullanicilar:'Kullanıcılar',kyc:'KYC İstekleri',kurumsalonay:'Kurumsal Onay',
+  ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
+  destektickets:'Destek Talepleri',oneriler:'Öneriler & Geri Bildirim',
+  abonelikler:'Abonelikler',paketler:'Paketler',kuponlar:'Kuponlar',
+  vitaminler:'Vitaminler',slider:'Hero Slider',kategoriler:'Kategoriler',
+  waayar:'WhatsApp Ayarları',apibaglantilar:'API Bağlantıları',ayarlar:'Sistem Ayarları'
+};
+
+function renderApp(){
+  const navHtml=MENU.map(m=>{
+    if(m.section) return `<div class="nav-section">${m.section}</div>`;
+    return `<div class="nav-item" id="nav-${m.id}" onclick="route('${m.id}')"><span class="icon">${m.icon}</span>${m.label}</div>`;
+  }).join('');
+
+  document.getElementById('app').innerHTML=`
+  <div style="display:flex;min-height:100vh">
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <div class="brand">Kap<span>Beni</span></div>
+        <div class="sub">Yönetim Paneli</div>
+      </div>
+      <div class="sidebar-nav">${navHtml}</div>
+      <div class="sidebar-footer">
+        <div class="nav-item" onclick="logout()" style="color:#ef4444">
+          <span class="icon">🚪</span>Çıkış Yap
+        </div>
+        <!-- Wird von server.js aus /opt/kapbeni/VERSION ersetzt, gleiche Quelle
+             wie die Fusszeile der Hauptseite. -->
+        <div style="padding:8px 12px 2px;font-size:11px;color:rgba(255,255,255,.35)">v__APP_VERSION__</div>
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div class="topbar">
+        <div class="topbar-title" id="topbar-title">Dashboard</div>
+        <div style="display:flex;align-items:center;gap:12px">
+          <div id="topbar-badge" style="display:none" class="badge amber">
+            <div class="dot amber"></div>
+            <span id="topbar-badge-text"></span>
+          </div>
+          <div style="font-size:13px;color:#64748b;font-weight:500">KapBeni Admin</div>
+        </div>
+      </div>
+      <div style="flex:1;overflow-y:auto;background:#f8fafc">
+        <div class="view-wrap" id="view"></div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function route(r){
+  document.querySelectorAll('.nav-item').forEach(a=>a.classList.remove('active'));
+  const n=document.getElementById('nav-'+r);
+  if(n) n.classList.add('active');
+  const t=document.getElementById('topbar-title');
+  if(t) t.textContent=PAGE_TITLES[r]||r;
+  const views={
+    dashboard:vDashboard,kullanicilar:vKullanicilar,kyc:vKyc,kurumsalonay:vKurumsalOnay,
+    ilanlaryayin:vIlanlarYayin,ilansikayet:vIlanSikayet,degerlendirmeler:vDegerlendirmeler,
+    destektickets:vDestekTickets,oneriler:vOneriler,
+    abonelikler:vAbonelikler,paketler:vPaketler,kuponlar:vKuponlar,
+    vitaminler:vVitaminler,slider:vSlider,kategoriler:vKategoriler,
+    waayar:vWaAyar,apibaglantilar:vApi,ayarlar:vAyarlar
+  };
+  (views[r]||vDashboard)();
+}
+
+const V=html=>{const v=document.getElementById('view');if(v)v.innerHTML=html;};
+const Vloading=()=>V(`<div style="padding:60px;text-align:center;color:#94a3b8;font-size:14px">Yükleniyor…</div>`);
+
+function statCard(title,value,sub='',color='#1a2e4a',icon=''){
+  return `<div class="stat-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <p style="font-size:12.5px;font-weight:600;color:#64748b">${title}</p>
+      ${icon?`<span style="font-size:20px">${icon}</span>`:''}
+    </div>
+    <div class="val" style="color:${color}">${value}</div>
+    ${sub?`<p style="font-size:12px;color:#94a3b8;margin-top:4px">${sub}</p>`:''}
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+async function vDashboard(){
+  Vloading();
+  const [s,m]=await Promise.all([
+    api('/dashboard/stats').catch(()=>({})),
+    api('/dashboard/metrics').catch(()=>({}))
+  ]);
+
+  // pending badge
+  const pending=(s.bekleyen_onay||0)+(s.acik_destek||0);
+  const badge=document.getElementById('topbar-badge');
+  const badgeText=document.getElementById('topbar-badge-text');
+  if(badge&&badgeText&&pending>0){
+    badge.style.display='';
+    badgeText.textContent=`${pending} bekleyen`;
+  }
+
+  V(`
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+    ${statCard('Toplam Kullanıcı',fmt(s.toplam_kullanici),'Kayıtlı hesaplar','#1a2e4a','👥')}
+    ${statCard('Aktif İlan',fmt(s.aktif_ilan),'Yayında olan ilanlar','#1a2e4a','📢')}
+    ${statCard('Bugün Yeni Kayıt','+'+fmt(s.bugun_yeni_kullanici),'','#15803d','📈')}
+    ${statCard('Bugün Yeni İlan','+'+fmt(s.yeni_ilan),'','#15803d','✅')}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+    ${statCard('Bekleyen Onay',fmt(s.bekleyen_onay),'KYC + Kurumsal','#b45309','⏳')}
+    ${statCard('Açık Destek',fmt(s.acik_destek),'Yanıt bekleyen','#b91c1c','🎫')}
+    ${statCard('CPU',m.cpu??'—','Sunucu yükü','#1a2e4a','🖥️')}
+    ${statCard('RAM',m.ram!=null?m.ram+'%':'—','Bellek kullanımı','#1a2e4a','💾')}
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <!-- Hızlı İşlemler -->
+    <div class="card">
+      <div class="card-body">
+        <p class="section-title">Hızlı İşlemler</p>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="route('kullanicilar')">
+            👥 Kullanıcı Yönetimi →
+          </button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="route('ilanlaryayin')">
+            📢 İlan Yayın Yönetimi →
+          </button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="route('destektickets')">
+            🎫 Açık Destek Talepleri →
+          </button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="route('ilansikayet')">
+            🚩 İlan Şikayetleri →
+          </button>
+          <button class="btn btn-secondary" style="justify-content:flex-start" onclick="route('kurumsalonay')">
+            🏢 Kurumsal Onay Bekleyenler →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Servis Durumu -->
+    <div class="card">
+      <div class="card-body">
+        <p class="section-title">Servis Durumu</p>
+        ${await api('/dashboard/servisler').catch(()=>({})).then(sv=>
+          Object.entries(sv).length
+          ? Object.entries(sv).map(([k,v])=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid #f1f5f9">
+              <span style="font-size:13.5px;color:#334155;font-weight:500">${k}</span>
+              <span class="badge ${v==='active'?'green':'red'}">
+                <div class="dot ${v==='active'?'green':'red'}"></div>
+                ${v==='active'?'Çalışıyor':'Durdu'}
+              </span>
+            </div>`).join('')
+          : '<p style="color:#94a3b8;font-size:13.5px">Servis durumu alınamadı</p>'
+        )}
+      </div>
+    </div>
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// KULLANICILAR
+// ═══════════════════════════════════════════════
+async function vKullanicilar(){
+  Vloading();
+  const d=await api('/kullanicilar').catch(()=>({kpi:{},kullanicilar:[]}));
+  const kpi=d.kpi||{};
+  V(`
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
+    ${statCard('Toplam',fmt(kpi.toplam),'','#1a2e4a')}
+    ${statCard('Aktif',fmt(kpi.aktif),'','#15803d')}
+    ${statCard('Askıda',fmt(kpi.park),'','#b45309')}
+    ${statCard('Banlı',fmt(kpi.banlı||0),'','#b91c1c')}
+  </div>
+  <div class="card">
+    <div class="card-body" style="padding-bottom:12px">
+      <div style="display:flex;gap:10px;align-items:center">
+        <input id="ksearch" placeholder="🔍  Ad, e-posta veya kullanıcı no..." style="max-width:380px" onkeydown="if(event.key==='Enter')searchK()"/>
+        <button class="btn btn-primary btn-sm" onclick="searchK()">Ara</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>Kullanıcı No</th><th>Ad Soyad</th><th>E-posta</th>
+          <th style="text-align:center">İlan</th><th style="text-align:center">Durum</th><th style="text-align:center">İşlem</th>
+        </tr></thead>
+        <tbody id="k-tbody">
+          ${renderKRows(d.kullanicilar||[])}
+        </tbody>
+      </table>
+    </div>
+  </div>`);
+}
+
+function renderKRows(rows){
+  if(!rows.length) return `<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px">Kullanıcı bulunamadı</td></tr>`;
+  return rows.map(u=>{
+    const statusBadge={aktif:'green',park:'amber',askida:'amber',banli:'red'}[u.durum]||'gray';
+    const statusLabel={aktif:'Aktif',park:'Parkta',askida:'Askıda',banli:'Banlı'}[u.durum]||u.durum||'—';
+    return `<tr>
+      <td><code style="font-size:12px;color:#64748b">${u.kullanici_no||'—'}</code></td>
+      <td><span style="font-weight:600;color:#1a2e4a">${[u.ad,u.soyad].filter(Boolean).join(' ')||'İsimsiz'}</span></td>
+      <td style="color:#64748b">${u.email||'—'}</td>
+      <td style="text-align:center;font-weight:700">${u.ilan_sayisi||0}</td>
+      <td style="text-align:center"><span class="badge ${statusBadge}"><div class="dot ${statusBadge}"></div>${statusLabel}</span></td>
+      <td style="text-align:center"><button class="btn btn-secondary btn-sm" onclick="kDetay(${u.id})">Detay →</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function searchK(){
+  const q=el('ksearch')?.value||'';
+  const d=await api('/kullanicilar?q='+encodeURIComponent(q)).catch(()=>({kullanicilar:[]}));
+  const tbody=document.getElementById('k-tbody');
+  if(tbody) tbody.innerHTML=renderKRows(d.kullanicilar||[]);
+}
+
+async function kDetay(id){
+  Vloading();
+  const [u,g,il]=await Promise.all([
+    api('/kullanicilar/'+id).catch(()=>({})),
+    api('/kullanicilar/'+id+'/girisler').catch(()=>[]),
+    api('/kullanicilar/'+id+'/ilanlar').catch(()=>[])
+  ]);
+  const statusBadge={aktif:'green',park:'amber',askida:'amber',banli:'red'}[u.durum]||'gray';
+  const statusLabel={aktif:'Aktif',park:'Parkta',askida:'Askıda',banli:'Banlı'}[u.durum]||u.durum||'—';
+
+  V(`
+  <button class="btn btn-secondary btn-sm" onclick="route('kullanicilar')" style="margin-bottom:16px">← Kullanıcılara Dön</button>
+
+  <div class="card" style="margin-bottom:20px">
+    <div class="card-body">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:20px;flex-wrap:wrap">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <h2 style="font-size:20px;font-weight:800;color:#1a2e4a">${[u.ad,u.soyad].filter(Boolean).join(' ')||'İsimsiz'}</h2>
+            <span class="badge ${statusBadge}">${statusLabel}</span>
+            ${u.e_devlet_dogrulandi?'<span class="badge blue">e-Devlet ✓</span>':''}
+            ${u.hesap_tipi==='kurumsal'?'<span class="badge purple">Kurumsal</span>':''}
+          </div>
+          <p style="color:#64748b;font-size:13.5px">${u.email||''}</p>
+          <p style="color:#94a3b8;font-size:12px;margin-top:2px">No: ${u.kullanici_no||'—'} · Kayıt: ${fmtDate(u.created_at)}</p>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(4,80px);gap:12px;text-align:center">
+          <div style="background:#f8fafc;border-radius:10px;padding:12px">
+            <div style="font-size:20px;font-weight:800;color:#1a2e4a">${u.ilan_sayisi||0}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">İlan</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:10px;padding:12px">
+            <div style="font-size:20px;font-weight:800;color:#1a2e4a">${u.giris_sayisi||0}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">Giriş</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:10px;padding:12px">
+            <div style="font-size:20px;font-weight:800;color:${(u.risk_sayisi||0)>3?'#b91c1c':'#1a2e4a'}">${u.risk_sayisi||0}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">Risk</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:10px;padding:12px">
+            <div style="font-size:18px">${u.e_devlet_dogrulandi?'✅':'❌'}</div>
+            <div style="font-size:11px;color:#94a3b8;margin-top:2px">e-Dev</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid #f1f5f9">
+        <p style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em">Aksiyonlar</p>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <button class="btn btn-blue btn-sm" onclick="kAksiyon(${u.id},'e-devlet')">🪪 e-Devlet Doğrula</button>
+          <button class="btn btn-success btn-sm" onclick="kAksiyon(${u.id},'aktifles')">✅ Aktifleştir</button>
+          <button class="btn btn-sm" style="background:#fef3c7;color:#b45309" onclick="kAksiyon(${u.id},'parkla')">⏸ Parkla</button>
+          <button class="btn btn-sm" style="background:#ffedd5;color:#c2410c" onclick="kAksiyon(${u.id},'askiya-al')">⚠️ Askıya Al</button>
+          <button class="btn btn-danger btn-sm" onclick="if(confirm('Bu kullanıcıyı banlamak istediğinize emin misiniz?'))kAksiyon(${u.id},'banla')">🚫 Banla</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card">
+      <div class="card-body">
+        <p class="section-title">Son Giriş IP Geçmişi</p>
+        ${g.length?g.slice(0,10).map(x=>`
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f8fafc;font-size:13px">
+            <span style="color:#334155;font-family:monospace">${x.ip_adresi||'—'}</span>
+            <span style="color:#64748b">${x.sehir||''} ${x.ulke||''}</span>
+            <span style="color:#94a3b8">${fmtDateTime(x.giris_tarihi)}</span>
+          </div>`).join('')
+        :'<p style="color:#94a3b8;font-size:13.5px">Giriş kaydı yok</p>'}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-body">
+        <p class="section-title">İlanları (${il.length})</p>
+        ${il.length?il.slice(0,10).map(x=>{
+          const c={aktif:'green',canli:'green',askida:'amber',sona_erdi:'gray',satildi:'blue'}[x.ilan_durum||x.yayin_durum]||'gray';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f8fafc">
+            <span style="font-size:13.5px;color:#334155;font-weight:500">${x.baslik||'—'}</span>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px;font-weight:700">${fmt(x.fiyat)}₺</span>
+              <span class="badge ${c}" style="font-size:11px">${x.ilan_durum||x.yayin_durum||'—'}</span>
+            </div>
+          </div>`;}).join('')
+        :'<p style="color:#94a3b8;font-size:13.5px">İlan bulunamadı</p>'}
+      </div>
+    </div>
+  </div>`);
+}
+
+async function kAksiyon(id,a){
+  await api('/kullanicilar/'+id+'/'+a,{method:'PUT'});
+  showToast('İşlem tamamlandı ✓');
+  kDetay(id);
+}
+
+// ═══════════════════════════════════════════════
+// İLAN YAYIN YÖNETİMİ
+// ═══════════════════════════════════════════════
+let _ilanFilter='all';
+async function vIlanlarYayin(){
+  Vloading();
+  const d=await api('/ilanlar-yayin?durum='+_ilanFilter).catch(()=>[]);
+  const filters=[['all','Tümü'],['canli','Yayında'],['askida','Askıda'],['sona_erdi','Süresi Doldu'],['satildi','Satıldı']];
+
+  const statusBadge=s=>{
+    const m={canli:'green',askida:'amber',satildi:'blue',sona_erdi:'gray'};
+    const lbl={canli:'Yayında',askida:'Askıda',satildi:'Satıldı',sona_erdi:'Süresi Doldu'};
+    return `<span class="badge ${m[s]||'gray'}"><div class="dot ${m[s]||'gray'}"></div>${lbl[s]||s||'—'}</span>`;
+  };
+
+  V(`
+  <div style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+    ${filters.map(([v,l])=>`<button onclick="_ilanFilter='${v}';vIlanlarYayin()" class="btn ${_ilanFilter===v?'btn-primary':'btn-secondary'} btn-sm">${l}</button>`).join('')}
+  </div>
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th>İlan No</th><th>Başlık</th><th>Satıcı</th>
+          <th style="text-align:center">Fiyat</th><th style="text-align:center">Durum</th>
+          <th style="text-align:center">Son Geç.</th><th style="text-align:center">Şikayet</th><th style="text-align:center">İşlem</th>
+        </tr></thead>
+        <tbody>
+          ${(d||[]).length? (d||[]).map(i=>`<tr>
+            <td><code style="font-size:12px;color:#64748b">#${i.ilan_no||''}</code></td>
+            <td><span style="font-weight:600;color:#1a2e4a;max-width:200px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.baslik||''}</span></td>
+            <td style="color:#64748b;font-size:13px">${i.satici_ad||'—'}</td>
+            <td style="text-align:center;font-weight:700">${fmt(i.fiyat)}₺</td>
+            <td style="text-align:center">${statusBadge(i.yayin_durum)}</td>
+            <td style="text-align:center;color:#94a3b8;font-size:12.5px">${fmtDate(i.son_gecerlilik)}</td>
+            <td style="text-align:center">${(i.sikayet_sayisi||0)>0?`<span class="badge red">${i.sikayet_sayisi} şikayet</span>`:''}</td>
+            <td style="text-align:center">
+              <select onchange="ilanYayinDurum('${i.uuid}',this.value)" style="font-size:12px;padding:5px 8px;width:auto">
+                <option value="canli"${i.yayin_durum==='canli'?' selected':''}>▶ Yayında</option>
+                <option value="askida"${i.yayin_durum==='askida'?' selected':''}>⏸ Askıda</option>
+                <option value="sona_erdi"${i.yayin_durum==='sona_erdi'?' selected':''}>⌛ Süresi Doldu</option>
+                <option value="satildi"${i.yayin_durum==='satildi'?' selected':''}>✓ Satıldı</option>
+              </select>
+            </td>
+          </tr>`).join('')
+          :`<tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:32px">İlan bulunamadı</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  </div>`);
+}
+async function ilanYayinDurum(uuid,durum){
+  await api('/ilanlar-yayin/'+uuid+'/durum',{method:'PATCH',body:JSON.stringify({durum})});
+  showToast('Durum güncellendi ✓');
+}
+
+// ═══════════════════════════════════════════════
+// İLAN ŞİKAYETLERİ
+// ═══════════════════════════════════════════════
+async function vIlanSikayet(){
+  Vloading();
+  const d=await api('/ilan-sikayet').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">🎉 Şikayet bulunamadı</div></div>`);return;}
+  V(`<div style="display:flex;flex-direction:column;gap:12px">
+    ${(d||[]).map(s=>{
+      const c={beklemede:'amber',incelendi:'blue',kapatildi:'gray'}[s.durum]||'gray';
+      return `<div class="card"><div class="card-body">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+          <div style="flex:1">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <span class="badge ${c}"><div class="dot ${c}"></div>${s.durum||'—'}</span>
+              <span style="font-size:12px;color:#64748b;background:#f1f5f9;padding:3px 8px;border-radius:6px">${(s.sebep||s.sikayet_tipi||'').toString().replace(/_/g,' ')}</span>
+            </div>
+            <p style="font-weight:700;color:#1a2e4a;margin-bottom:4px">İlan: #${s.ilan_no||''} — ${s.ilan_baslik||''}</p>
+            <p style="font-size:12.5px;color:#64748b">${s.sikayet_eden_ad||'Anonim'} · ${fmtDate(s.created_at)}</p>
+            ${s.aciklama?`<div style="margin-top:10px;background:#f8fafc;border-radius:8px;padding:10px 14px;font-size:13.5px;color:#334155">${s.aciklama}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+            <button class="btn btn-blue btn-sm" onclick="sikayetDurum(${s.id},'incelendi')">👁 İncelendi</button>
+            <button class="btn btn-secondary btn-sm" onclick="sikayetDurum(${s.id},'kapatildi')">✓ Kapat</button>
+          </div>
+        </div>
+      </div></div>`;
+    }).join('')}
+  </div>`);
+}
+async function sikayetDurum(id,durum){
+  await api('/ilan-sikayet/'+id,{method:'PATCH',body:JSON.stringify({durum})});
+  showToast('Durum güncellendi ✓');
+  vIlanSikayet();
+}
+
+// ═══════════════════════════════════════════════
+// DEĞERLENDİRMELER
+// ═══════════════════════════════════════════════
+async function vDegerlendirmeler(){
+  Vloading();
+  const d=await api('/degerlendirme').catch(()=>[]);
+  V(`<div class="card"><div style="overflow-x:auto">
+    <table>
+      <thead><tr>
+        <th>Değerlendiren</th><th>Değerlendirilen</th><th style="text-align:center">Puan</th>
+        <th>Yorum</th><th style="text-align:center">Durum</th><th style="text-align:center">İşlem</th>
+      </tr></thead>
+      <tbody>
+        ${(d||[]).length? (d||[]).map(x=>{
+          const c={onaylandi:'green',reddedildi:'red',beklemede:'amber'}[x.durum]||'amber';
+          return `<tr>
+            <td style="font-weight:500;color:#334155">${x.degerlendiren_ad||'—'}</td>
+            <td style="font-weight:500;color:#334155">${x.degerlendirilen_ad||'—'}</td>
+            <td style="text-align:center;white-space:nowrap">${stars(x.puan)}</td>
+            <td style="max-width:220px"><div style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#64748b;font-size:13px">${x.yorum||''}</div></td>
+            <td style="text-align:center"><span class="badge ${c}">${x.durum||'beklemede'}</span></td>
+            <td style="text-align:center;white-space:nowrap">
+              <button class="btn btn-success btn-sm" onclick="degerDurum(${x.id},'onaylandi')" style="margin-right:6px">Onayla</button>
+              <button class="btn btn-danger btn-sm" onclick="degerDurum(${x.id},'reddedildi')">Reddet</button>
+            </td>
+          </tr>`;
+        }).join('')
+        :`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px">Değerlendirme bulunamadı</td></tr>`}
+      </tbody>
+    </table>
+  </div></div>`);
+}
+async function degerDurum(id,durum){
+  await api('/degerlendirme/'+id,{method:'PATCH',body:JSON.stringify({durum})});
+  showToast('Değerlendirme güncellendi ✓');
+  vDegerlendirmeler();
+}
+
+// ═══════════════════════════════════════════════
+// DESTEK TİCKETS
+// ═══════════════════════════════════════════════
+async function vDestekTickets(){
+  Vloading();
+  const d=await api('/support-tickets').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">🎉 Açık destek talebi yok</div></div>`);return;}
+  V(`<div style="display:flex;flex-direction:column;gap:16px">
+    ${(d||[]).map(t=>{
+      const c={acik:'amber',cevaplandi:'green',kapali:'gray',bekliyor:'amber'}[t.durum]||'gray';
+      return `<div class="card"><div class="card-body">
+        <div style="display:flex;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div style="flex:1;min-width:280px">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+              <code style="font-size:12px;background:#f1f5f9;padding:3px 8px;border-radius:6px;color:#64748b">${t.ticket_no||''}</code>
+              <span class="badge ${c}"><div class="dot ${c}"></div>${t.durum||'—'}</span>
+            </div>
+            <p style="font-weight:700;color:#1a2e4a;font-size:15px;margin-bottom:4px">${t.konu||''}</p>
+            <p style="font-size:12.5px;color:#64748b;margin-bottom:10px">${t.isim||''} · ${t.email||''} · ${fmtDate(t.created_at)}</p>
+            <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;font-size:13.5px;color:#334155;margin-bottom:${t.admin_cevap?'10px':'0'}">${t.mesaj||''}</div>
+            ${t.admin_cevap?`<div style="background:#eff6ff;border-radius:10px;padding:12px 14px;border-left:3px solid #3b82f6">
+              <p style="font-size:11.5px;font-weight:700;color:#3b82f6;margin-bottom:4px">Admin Yanıtı</p>
+              <p style="font-size:13.5px;color:#1e40af">${t.admin_cevap}</p>
+            </div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;min-width:200px">
+            <textarea id="tr-${t.id}" rows="3" placeholder="Yanıtınızı yazın…" style="resize:none"></textarea>
+            <button class="btn btn-primary btn-sm" onclick="ticketYanit(${t.id})">📤 Yanıtla & Gönder</button>
+            <button class="btn btn-secondary btn-sm" onclick="ticketKapat(${t.id})">✓ Talebi Kapat</button>
+          </div>
+        </div>
+      </div></div>`;
+    }).join('')}
+  </div>`);
+}
+async function ticketYanit(id){
+  const t=el('tr-'+id); if(!t||!t.value.trim()){showToast('Yanıt metni boş','err');return;}
+  await api('/support-tickets/'+id,{method:'PATCH',body:JSON.stringify({admin_cevap:t.value,durum:'cevaplandi'})});
+  showToast('Yanıt gönderildi ✓');
+  vDestekTickets();
+}
+async function ticketKapat(id){
+  await api('/support-tickets/'+id,{method:'PATCH',body:JSON.stringify({durum:'kapali'})});
+  showToast('Talep kapatıldı ✓');
+  vDestekTickets();
+}
+
+// ═══════════════════════════════════════════════
+// ÖNERİLER & GERİ BİLDİRİM
+// ═══════════════════════════════════════════════
+async function vOneriler(){
+  Vloading();
+  const d=await api('/oneriler').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">Henüz öneri bulunmuyor</div></div>`);return;}
+  V(`<div style="display:flex;flex-direction:column;gap:12px">
+    ${(d||[]).map(o=>`<div class="card"><div class="card-body">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+        <div style="flex:1">
+          <p style="font-weight:700;color:#1a2e4a;margin-bottom:4px">${o.konu||''}</p>
+          <p style="font-size:12.5px;color:#64748b;margin-bottom:8px">${o.kullanici_ad||'Anonim'} · ${fmtDate(o.created_at)}</p>
+          <div style="background:#f8fafc;border-radius:8px;padding:10px 14px;font-size:13.5px;color:#334155">${o.mesaj||''}</div>
+        </div>
+        <span style="font-size:24px">💡</span>
+      </div>
+    </div></div>`).join('')}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// KYC
+// ═══════════════════════════════════════════════
+async function vKyc(){
+  Vloading();
+  const d=await api('/kyc').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">🎉 Bekleyen KYC isteği yok</div></div>`);return;}
+  V(`<div style="display:flex;flex-direction:column;gap:12px">
+    ${(d||[]).map(k=>`<div class="card"><div class="card-body">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <p style="font-weight:700;color:#1a2e4a">Kullanıcı #${k.user_id}</p>
+          <p style="font-size:12.5px;color:#64748b">Durum: ${k.durum||'—'} · ${fmtDate(k.created_at)}</p>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-success btn-sm" onclick="kycAksiyon(${k.id},'onayla')">✅ Onayla</button>
+          <button class="btn btn-danger btn-sm" onclick="kycAksiyon(${k.id},'reddet')">❌ Reddet</button>
+        </div>
+      </div>
+    </div></div>`).join('')}
+  </div>`);
+}
+async function kycAksiyon(id,aksiyon){
+  await api('/kyc/'+id+'/'+aksiyon,{method:'POST'});
+  showToast('KYC güncellendi ✓');
+  vKyc();
+}
+
+// ═══════════════════════════════════════════════
+// KURUMSAL ONAY
+// ═══════════════════════════════════════════════
+async function vKurumsalOnay(){
+  Vloading();
+  const d=await api('/kurumsal-bekleyenler').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">🎉 Onay bekleyen kurumsal hesap yok</div></div>`);return;}
+  V(`<div style="display:flex;flex-direction:column;gap:12px">
+    ${(d||[]).map(u=>`<div class="card"><div class="card-body">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">
+        <div>
+          <p style="font-weight:800;color:#1a2e4a;font-size:15px;margin-bottom:4px">${u.firma_adi||'—'}</p>
+          <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:13px;color:#64748b;margin-bottom:6px">
+            <span>VKN: <strong>${u.vkn||'—'}</strong></span>
+            <span>MERSİS: <strong>${u.mersis_no||'—'}</strong></span>
+          </div>
+          <p style="font-size:13px;color:#64748b">${[u.ad,u.soyad].filter(Boolean).join(' ')||'—'} · ${u.email||''}</p>
+          ${u.ticari_adres?`<p style="font-size:12.5px;color:#94a3b8;margin-top:4px">📍 ${u.ticari_adres}</p>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+          <button class="btn btn-success btn-sm" onclick="kurumsalAksiyon(${u.id},true)">✅ Onayla</button>
+          <button class="btn btn-danger btn-sm" onclick="kurumsalAksiyon(${u.id},false)">❌ Reddet</button>
+        </div>
+      </div>
+    </div></div>`).join('')}
+  </div>`);
+}
+async function kurumsalAksiyon(id,onay){
+  await api('/kurumsal-onayla/'+id,{method:'PATCH',body:JSON.stringify({onay})});
+  showToast(onay?'Kurumsal hesap onaylandı ✓':'Kurumsal hesap reddedildi');
+  vKurumsalOnay();
+}
+
+// ═══════════════════════════════════════════════
+// ABONELİKLER
+// ═══════════════════════════════════════════════
+async function vAbonelikler(){
+  Vloading();
+  const d=await api('/abonelikler').catch(()=>[]);
+  V(`<div class="card"><div style="overflow-x:auto">
+    <table>
+      <thead><tr><th>Kullanıcı</th><th>Paket</th><th style="text-align:center">Başlangıç</th><th style="text-align:center">Bitiş</th><th style="text-align:center">Kalan İlan</th><th style="text-align:center">Durum</th></tr></thead>
+      <tbody>
+        ${(d||[]).length? (d||[]).map(a=>{
+          const b=a.bitis?new Date(a.bitis):null;
+          const aktif=a.durum==='aktif'&&(!b||b>new Date());
+          const c=aktif?'green':a.durum==='iptal'?'red':'gray';
+          return `<tr>
+            <td>
+              <div style="font-weight:600;color:#1a2e4a">${a.kullanici_ad||'—'}</div>
+              <div style="font-size:12px;color:#94a3b8">${a.email||''}</div>
+            </td>
+            <td style="color:#334155;font-weight:500">${a.paket_isim||'—'}</td>
+            <td style="text-align:center;color:#64748b;font-size:13px">${fmtDate(a.baslangic)}</td>
+            <td style="text-align:center;color:${b&&b<new Date()?'#b91c1c':'#64748b'};font-size:13px">${fmtDate(a.bitis)}</td>
+            <td style="text-align:center;font-weight:700">${a.ilan_hakki_kalan??'—'}</td>
+            <td style="text-align:center"><span class="badge ${c}">${aktif?'Aktif':a.durum==='iptal'?'İptal':'Süresi Doldu'}</span></td>
+          </tr>`;
+        }).join('')
+        :`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px">Abonelik bulunamadı</td></tr>`}
+      </tbody>
+    </table>
+  </div></div>`);
+}
+
+// ═══════════════════════════════════════════════
+// PAKETLER CRUD
+// ═══════════════════════════════════════════════
+let _paketList=[], _paketEdit=null;
+async function vPaketler(){
+  Vloading();
+  _paketList=await api('/paketler').catch(()=>[])||[];
+  const e=_paketEdit||{isim:'',fiyat:'',ilan_hakki:'',sure_gun:'',hesap_tipi:'bireysel',aktif:true};
+
+  V(`
+  <div class="card" style="margin-bottom:20px;max-width:640px">
+    <div class="card-body">
+      <p class="section-title">${_paketEdit?'Paketi Düzenle':'Yeni Paket Ekle'}</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="grid-column:1/-1">
+          <label>Paket Adı</label>
+          <input id="pk-isim" value="${(e.isim||'').replace(/"/g,'&quot;')}" placeholder="örn. Standart, Premium…"/>
+        </div>
+        <div><label>Fiyat (₺)</label><input id="pk-fiyat" type="number" value="${e.fiyat??''}"/></div>
+        <div><label>İlan Hakkı</label><input id="pk-ilan" type="number" value="${e.ilan_hakki??''}"/></div>
+        <div><label>Süre (Gün)</label><input id="pk-sure" type="number" value="${e.sure_gun??''}"/></div>
+        <div>
+          <label>Hesap Tipi</label>
+          <select id="pk-tip">
+            <option value="bireysel"${e.hesap_tipi==='bireysel'?' selected':''}>Bireysel</option>
+            <option value="kurumsal"${e.hesap_tipi==='kurumsal'?' selected':''}>Kurumsal</option>
+            <option value="hepsi"${e.hesap_tipi==='hepsi'?' selected':''}>Hepsi</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:20px">
+          <input id="pk-aktif" type="checkbox" ${e.aktif?'checked':''} style="width:18px;height:18px;cursor:pointer"/>
+          <label style="margin:0;cursor:pointer">Aktif</label>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn btn-primary" onclick="paketKaydet()">${_paketEdit?'Güncelle':'Paket Ekle'}</button>
+        ${_paketEdit?`<button class="btn btn-secondary" onclick="_paketEdit=null;vPaketler()">İptal</button>`:''}
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Paket Adı</th><th style="text-align:center">Fiyat</th><th style="text-align:center">İlan Hakkı</th><th style="text-align:center">Süre</th><th>Hesap Tipi</th><th style="text-align:center">Aktif</th><th style="text-align:center">İşlem</th></tr></thead>
+        <tbody>
+          ${_paketList.length? _paketList.map(p=>`<tr>
+            <td style="font-weight:600;color:#1a2e4a">${p.isim||''}</td>
+            <td style="text-align:center;font-weight:700">${fmt(p.fiyat)}₺</td>
+            <td style="text-align:center">${p.ilan_hakki} ilan</td>
+            <td style="text-align:center">${p.sure_gun} gün</td>
+            <td style="text-transform:capitalize;color:#64748b">${p.hesap_tipi||''}</td>
+            <td style="text-align:center">
+              <label class="toggle"><input type="checkbox" ${p.aktif?'checked':''} onchange="paketToggle(${p.id})"><span class="slider"></span></label>
+            </td>
+            <td style="text-align:center"><button class="btn btn-blue btn-sm" onclick="paketDuzenle(${p.id})">Düzenle</button></td>
+          </tr>`).join('')
+          :`<tr><td colspan="7" style="text-align:center;color:#94a3b8;padding:32px">Paket bulunamadı</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  </div>`);
+}
+function paketForm(){ return {isim:el('pk-isim').value,fiyat:parseFloat(el('pk-fiyat').value)||0,ilan_hakki:parseInt(el('pk-ilan').value)||0,sure_gun:parseInt(el('pk-sure').value)||30,hesap_tipi:el('pk-tip').value,aktif:el('pk-aktif').checked}; }
+async function paketKaydet(){
+  const f=paketForm(); if(!f.isim){showToast('Paket adı zorunlu','err');return;}
+  if(_paketEdit) await api('/paketler/'+_paketEdit.id,{method:'PUT',body:JSON.stringify(f)});
+  else await api('/paketler',{method:'POST',body:JSON.stringify(f)});
+  showToast('Paket kaydedildi ✓');
+  _paketEdit=null; vPaketler();
+}
+function paketDuzenle(id){ _paketEdit=_paketList.find(x=>x.id===id)||null; vPaketler(); }
+async function paketToggle(id){ const p=_paketList.find(x=>x.id===id); if(!p)return; await api('/paketler/'+id,{method:'PUT',body:JSON.stringify({aktif:!p.aktif})}); showToast('Güncellendi ✓'); vPaketler(); }
+
+// ═══════════════════════════════════════════════
+// KUPONLAR CRUD
+// ═══════════════════════════════════════════════
+function kuponGen(){ return Math.random().toString(36).substring(2,8).toUpperCase(); }
+async function vKuponlar(){
+  Vloading();
+  const d=await api('/paket-kuponlari').catch(()=>[]);
+  V(`
+  <div class="card" style="margin-bottom:20px;max-width:640px">
+    <div class="card-body">
+      <p class="section-title">Yeni Kupon Oluştur</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div style="grid-column:1/-1;display:flex;gap:10px">
+          <input id="kp-kod" placeholder="Kupon kodu (boş = otomatik)" style="text-transform:uppercase;letter-spacing:.1em;font-weight:600"/>
+          <button class="btn btn-secondary" onclick="el('kp-kod').value=kuponGen()" style="white-space:nowrap">🎲 Oluştur</button>
+        </div>
+        <div>
+          <label>İndirim Türü</label>
+          <select id="kp-tip">
+            <option value="yuzde">Yüzde (%)</option>
+            <option value="sabit">Sabit (₺)</option>
+          </select>
+        </div>
+        <div><label>İndirim Değeri</label><input id="kp-deger" type="number" placeholder="örn. 20"/></div>
+        <div><label>Kullanım Limiti (opsiyonel)</label><input id="kp-limit" type="number" placeholder="Limitsiz"/></div>
+        <div><label>Bitiş Tarihi (opsiyonel)</label><input id="kp-bitis" type="date"/></div>
+        <div style="display:flex;align-items:center;gap:8px;padding-top:20px">
+          <input id="kp-aktif" type="checkbox" checked style="width:18px;height:18px;cursor:pointer"/>
+          <label style="margin:0;cursor:pointer">Aktif</label>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="margin-top:16px" onclick="kuponKaydet()">🏷️ Kupon Oluştur</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Kod</th><th>Tür</th><th style="text-align:center">Değer</th><th style="text-align:center">Kullanım</th><th style="text-align:center">Bitiş</th><th style="text-align:center">Aktif</th></tr></thead>
+        <tbody>
+          ${(d||[]).length? (d||[]).map(k=>`<tr>
+            <td><code style="font-size:14px;font-weight:700;letter-spacing:.12em;color:#1a2e4a">${k.kod||''}</code></td>
+            <td style="text-transform:capitalize;color:#64748b">${k.indirim_tipi==='yuzde'?'Yüzde':'Sabit'}</td>
+            <td style="text-align:center;font-weight:700">${k.indirim_tipi==='yuzde'?'%'+k.indirim_degeri:fmt(k.indirim_degeri)+'₺'}</td>
+            <td style="text-align:center;color:#64748b">${k.kullanim_sayisi||0}${k.kullanim_limiti?'/'+k.kullanim_limiti:''}</td>
+            <td style="text-align:center;color:${k.gecerlilik_bitis&&new Date(k.gecerlilik_bitis)<new Date()?'#b91c1c':'#64748b'};font-size:13px">${fmtDate(k.gecerlilik_bitis)}</td>
+            <td style="text-align:center">
+              <label class="toggle"><input type="checkbox" ${k.aktif?'checked':''} onchange="kuponToggle(${k.id})"><span class="slider"></span></label>
+            </td>
+          </tr>`).join('')
+          :`<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:32px">Kupon bulunamadı</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+  </div>`);
+}
+async function kuponKaydet(){
+  const body={kod:(el('kp-kod').value||kuponGen()).toUpperCase(),indirim_tipi:el('kp-tip').value,indirim_degeri:parseFloat(el('kp-deger').value),kullanim_limiti:el('kp-limit').value?parseInt(el('kp-limit').value):null,gecerlilik_bitis:el('kp-bitis').value||null,aktif:el('kp-aktif').checked};
+  if(isNaN(body.indirim_degeri)){showToast('İndirim değeri gerekli','err');return;}
+  const r=await api('/paket-kuponlari',{method:'POST',body:JSON.stringify(body)});
+  if(r&&r.hata){showToast(r.hata,'err');return;}
+  showToast('Kupon oluşturuldu ✓');
+  vKuponlar();
+}
+async function kuponToggle(id){ await api('/paket-kuponlari/'+id+'/toggle',{method:'PUT'}); showToast('Güncellendi ✓'); vKuponlar(); }
+
+// ═══════════════════════════════════════════════
+// VİTAMİNLER
+// ═══════════════════════════════════════════════
+async function vVitaminler(){
+  Vloading();
+  const d=await api('/vitaminler').catch(()=>[]);
+  V(`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px">
+    ${(d||[]).length? (d||[]).map(v=>`<div class="card"><div class="card-body" style="text-align:center">
+      <div style="font-size:28px;margin-bottom:8px">✨</div>
+      <p style="font-weight:700;color:#1a2e4a;margin-bottom:4px">${v.etiket||v.ad||'—'}</p>
+      <p style="font-size:22px;font-weight:800;color:#e53935">${fmt(v.fiyat_3gun||v.fiyat)}₺</p>
+      <p style="font-size:12px;color:#94a3b8">3 günlük fiyat</p>
+    </div></div>`).join('')
+    :`<div class="card" style="grid-column:1/-1"><div class="card-body" style="text-align:center;color:#94a3b8;padding:48px">Vitamin bulunamadı</div></div>`}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// HERO SLIDER
+// ═══════════════════════════════════════════════
+async function vSlider(){
+  Vloading();
+  const d=await api('/slider').catch(()=>[]);
+  V(`<div style="display:flex;flex-direction:column;gap:12px">
+    ${(d||[]).length? (d||[]).map(s=>`<div class="card" style="overflow:hidden">
+      <div style="background:linear-gradient(120deg,${s.bg_renk_1||'#e53935'},${s.bg_renk_2||'#1a2e4a'});padding:20px 24px;color:#fff">
+        <p style="font-size:20px;font-weight:800">${s.baslik||'—'}</p>
+        <p style="opacity:.85;font-size:14px;margin-top:4px">${s.alt_baslik||''}</p>
+        ${s.buton_text?`<div style="margin-top:12px;background:rgba(255,255,255,.2);display:inline-block;padding:6px 16px;border-radius:8px;font-size:13px;font-weight:600">${s.buton_text}</div>`:''}
+      </div>
+    </div>`).join('')
+    :`<div class="card"><div class="card-body" style="text-align:center;color:#94a3b8;padding:48px">Slider kaydı bulunamadı</div></div>`}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// KATEGORİLER
+// ═══════════════════════════════════════════════
+async function vKategoriler(){
+  Vloading();
+  const r=await fetch('/api/kategoriler').catch(()=>null);
+  const d=r?await r.json().catch(()=>[]):[];
+  V(`<p style="font-size:13.5px;color:#64748b;margin-bottom:16px">${d.length} ana kategori</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+    ${(d||[]).map(k=>`<div class="card"><div class="card-body" style="text-align:center;padding:16px">
+      <div style="font-size:24px;margin-bottom:6px">${k.icon||'📦'}</div>
+      <p style="font-weight:700;color:#1a2e4a;font-size:14px">${k.ad||k.label||'—'}</p>
+      <p style="font-size:12px;color:#94a3b8;margin-top:2px">${(k.altKategoriler||k.sub||[]).length} alt kategori</p>
+    </div></div>`).join('')}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// WHATSAPP AYARLARI
+// ═══════════════════════════════════════════════
+let _wa={aktif:false,telefon:'',api_key:'',durum:'offline'};
+async function vWaAyar(){
+  Vloading();
+  const r=await api('/whatsapp-ayar').catch(()=>null);
+  if(r&&!r.hata) _wa={aktif:!!r.aktif,telefon:r.telefon||'',api_key:r.api_key||'',durum:r.durum||'offline'};
+  waRender();
+}
+function waRender(){
+  const online=_wa.durum==='online';
+  V(`<div style="max-width:500px">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div>
+            <p style="font-weight:700;color:#1a2e4a;font-size:15px">WhatsApp Bildirimleri</p>
+            <p style="font-size:13px;color:#94a3b8;margin-top:2px">CallMeBot API üzerinden ücretsiz bildirim</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" ${_wa.aktif?'checked':''} onchange="_wa.aktif=this.checked;waRender()">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div style="${!_wa.aktif?'opacity:.4;pointer-events:none':''};display:flex;flex-direction:column;gap:14px">
+          <div>
+            <label>WhatsApp Numarası</label>
+            <input id="wa-tel" value="${_wa.telefon||''}" placeholder="+49XXXXXXXXXX"/>
+            <p style="font-size:12px;color:#94a3b8;margin-top:4px">Uluslararası format: +49XXXXXXXXXX</p>
+          </div>
+          <div>
+            <label>CallMeBot API Key</label>
+            <input id="wa-key" value="${_wa.api_key||''}" placeholder="API anahtarını buraya girin"/>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div style="display:flex;align-items:center;justify-content:space-between">
+          <div>
+            <p style="font-weight:700;color:#1a2e4a;font-size:14px">Çevrimiçi Durumu</p>
+            <p style="font-size:13px;color:${online?'#15803d':'#94a3b8'};margin-top:2px">${online?'🟢 Şu an çevrimiçisiniz':'⚪ Çevrimdışı görünüyorsunuz'}</p>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" ${online?'checked':''} onchange="_wa.durum=this.checked?'online':'offline';waRender()">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fffbeb;border:1.5px solid #fde68a;border-radius:12px;padding:14px 16px;font-size:13px;color:#92400e;margin-bottom:16px;line-height:1.6">
+      <strong>Bildirim tetikleyicileri:</strong> Yeni destek talebi, yeni ilan şikayeti, 3+ şikayetle askıya alınan ilan.
+    </div>
+
+    <button class="btn btn-primary" onclick="waSave()" style="width:100%;justify-content:center;padding:13px">💾 Ayarları Kaydet</button>
+  </div>`);
+}
+async function waSave(){
+  if(el('wa-tel')) _wa.telefon=el('wa-tel').value;
+  if(el('wa-key')) _wa.api_key=el('wa-key').value;
+  const r=await api('/whatsapp-ayar',{method:'PATCH',body:JSON.stringify(_wa)});
+  showToast(r&&r.ok?'WhatsApp ayarları kaydedildi ✓':'Ayarlar kaydedildi');
+}
+
+// ═══════════════════════════════════════════════
+// API BAĞLANTILARI
+// ═══════════════════════════════════════════════
+async function vApi(){
+  Vloading();
+  const d=await api('/api-durum').catch(()=>[]);
+  V(`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
+    ${(d||[]).length? (d||[]).map(a=>{
+      const c={bagli:'green',hata:'red',test:'amber'}[a.durum]||'gray';
+      const label={bagli:'✅ Bağlı',hata:'❌ Hata',test:'🟡 Test'}[a.durum]||'— Bilinmiyor';
+      return `<div class="card"><div class="card-body">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
+          <div>
+            <p style="font-weight:700;color:#1a2e4a">${a.ad||'—'}</p>
+            <p style="font-size:12.5px;color:#94a3b8;margin-top:2px">${a.aciklama||''}</p>
+          </div>
+          <span class="badge ${c}">${label}</span>
+        </div>
+        ${a.url?`<code style="font-size:11.5px;color:#64748b;background:#f8fafc;padding:4px 8px;border-radius:6px;display:block;word-break:break-all">${a.url}</code>`:''}
+        ${a.test_mode?'<span class="badge amber" style="margin-top:10px">Test Modu</span>':''}
+        <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="apiTest('${a.ad}')">🔄 Bağlantıyı Test Et</button>
+      </div></div>`;
+    }).join('')
+    :`<div class="card" style="grid-column:1/-1"><div class="card-body" style="text-align:center;color:#94a3b8;padding:48px">API durum verisi alınamadı</div></div>`}
+  </div>`);
+}
+async function apiTest(ad){
+  const d=await api('/api-test?servis='+encodeURIComponent(ad)).catch(()=>({ok:false,hata:'Bağlantı hatası'}));
+  showToast(ad+': '+(d.ok?'✅ Bağlantı başarılı':'❌ '+d.hata), d.ok?'ok':'err');
+}
+
+// ═══════════════════════════════════════════════
+// AYARLAR (placeholder)
+// ═══════════════════════════════════════════════
+function vAyarlar(){
+  V(`<div style="max-width:500px">
+    <div class="card">
+      <div class="card-body">
+        <p class="section-title">Sistem Ayarları</p>
+        <p style="color:#94a3b8;font-size:13.5px;line-height:1.6">Sistem konfigürasyonu, site başlığı, iletişim bilgileri ve gelişmiş ayarlar bu bölümde yönetilecektir.</p>
+        <div style="margin-top:20px;padding:16px;background:#f8fafc;border-radius:12px;font-size:13.5px;color:#64748b;line-height:1.8">
+          <div style="display:flex;justify-content:space-between"><span>Sunucu Adı</span><strong>KapBeni API</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>Platform</span><strong>Node.js / PostgreSQL</strong></div>
+          <div style="display:flex;justify-content:space-between"><span>Ortam</span><strong>Production</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+if(TOKEN){ renderApp(); route('dashboard'); } else { renderLogin(); }
+</script>
+</body>
+</html>
