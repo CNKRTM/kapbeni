@@ -40,11 +40,28 @@ nginx. Backend: drei Node-Dienste unter PM2 plus Postgres, Redis und Meilisearch
 
 **Bauen und ausrollen**
 ```bash
+cd /opt/kapbeni && ./deploy.sh patch "Kurzbeschreibung"   # der übliche Weg
+```
+Erhöht `VERSION`, schreibt den CHANGELOG-Eintrag, prüft Typen, baut, lädt die Dienste neu,
+committet, taggt und pusht. Siehe `DEPLOY.md`. Nur bauen, ohne Version und Commit:
+```bash
 cd /opt/kapbeni/Kapbeni_Prod/src && npx tsc --noEmit && npm run build   # → dist/
 pm2 reload kapbeni-api --update-env                                      # nach API-Änderungen
 ```
 Immer absolute `/opt/kapbeni`-Pfade verwenden. `dist/` wird von **drei** Vhosts ausgeliefert,
 ein Build geht also sofort auf kapbeni.com live.
+
+**Versionierung** — `/opt/kapbeni/VERSION` ist die **einzige** Quelle. Von dort liest
+`Kapbeni_Prod/src/vite.config.ts` beim Bauen (Fußzeile der Website) und `admin/server.js`
+beim Start (Fußzeile der Admin-Seitenleiste). Die Nummer wird nie von Hand in eine
+Quelldatei geschrieben. Fehlt die Datei, steht an beiden Stellen `dev`.
+
+**Git** — Repository `CNKRTM/kapbeni`, Wurzel ist `/opt/kapbeni` (Frontend, API, Admin und
+KYC-Quelle zusammen). Zugang über einen Deploy-Key unter `~/.ssh/kapbeni_deploy` (0600),
+eingebunden als Host-Alias `github-kapbeni` in `~/.ssh/config`. Der private Schlüssel
+verlässt den Server nicht. Ausgeschlossen sind `node_modules/`, `venv/`, `dist/`,
+Sicherungskopien — und sämtliche Zugangsdaten; die stehen ausschließlich in
+`/etc/kapbeni.env` und sind in `.gitignore` gesperrt.
 
 ### Zwei getrennte Admin-Ebenen — häufige Fehlerquelle
 - **SPA-AdminPanel** (in der App): prüft `users.rol === 'admin'`, nutzt `/api/admin/*`
@@ -378,6 +395,52 @@ die Regeln angelegt wurden; die SSH-Regel wird nach vorn sortiert, damit niemand
 Nachbauen vor `ufw enable` selbst aussperrt. Ein erster Versuch, die Befehle aus
 `ufw status numbered` abzuleiten, erzeugte Unsinn (`ufw allow 1]`), weil die laufende Nummer
 als eigenes Feld mitgezählt wird — deshalb der Umweg über `show added`.
+
+**GitHub-Anbindung und Versionierung** — Repository `CNKRTM/kapbeni`, erster Commit
+`993ae2f` (v1.0.0), 146 Dateien, 16,3 MB.
+
+*Zuschnitt:* Wurzel ist `/opt/kapbeni`, nicht nur `Kapbeni_Prod`. Grund: von den Änderungen
+des 11.09. liegt etwa die Hälfte in `api/src/routes/` — bei einem reinen Frontend-Repo wäre
+sie unversioniert geblieben. Außerdem liegt `VERSION` so an der Wurzel und Frontend wie
+Admin lesen sie aus derselben Stelle.
+
+*Vor dem ersten Commit geprüft:* keine `.env`-Dateien, keine Schlüssel- oder
+Zertifikatsdateien im Baum; die zu committende Dateiliste einzeln auf private Schlüssel,
+GitHub-/AWS-/Slack-/OpenAI-Token und Zugangsdaten-Zuweisungen durchsucht. Drei Treffer
+waren Fehlalarme (SQL-Spalte `api_key`, Antwortfeld `token`). `ecosystem.config.js` enthält
+nur `env_file`-Verweise, keine Werte.
+
+*`deploy.sh`* — `./deploy.sh [patch|minor|major] "Text"`, `--dry-run` zeigt nur an. Sieben
+Schritte: Vorbedingungen (Semver gültig, `origin/main` nicht voraus) → Nummer erhöhen →
+CHANGELOG-Abschnitt oben einfügen → `tsc --noEmit` → bauen über das vorhandene
+`build-deploy.sh` (dessen dist-Sicherung und Rotation werden mitbenutzt statt verdoppelt) →
+Dienste neu laden und prüfen → committen, taggen, pushen. Reihenfolge ist Absicht: erst
+prüfen, dann bauen, zuletzt veröffentlichen.
+
+**Drei Fehler im eigenen Skript, beim ersten echten Lauf gefunden und behoben:**
+1. Die Prüfung lief sofort nach `pm2 reload`, der Port war noch zu — der Lauf brach bei
+   einem gesunden Dienst ab. Jetzt bis zu 15 Sekunden Wiederholung.
+2. `C=$(curl … || echo 000)` gab bei Fehlschlag `000000` aus, weil curl **und** das
+   `||` je `000` schrieben. Jetzt eine Funktion mit sauberem Rückgabewert.
+3. **Der wichtigste:** Der Build läuft vor der Dienstprüfung. Beim Abbruch in Schritt 6 blieb
+   ein live ausgeliefertes Bundle mit `1.1.0` stehen, während `VERSION` schon wieder `1.0.0`
+   sagte. Das Aufräumen holt jetzt zusätzlich das `dist` aus der Sicherung zurück, die
+   `build-deploy.sh` vor dem Build angelegt hat, und lädt den Admin neu (er liest `VERSION`
+   beim Start).
+Außerdem prüfte die Bundle-Kontrolle auf `v1.1.0`, vite backt aber `"1.1.0"` ohne das `v`
+aus der JSX-Zeile ein — der Test hätte immer angeschlagen.
+
+*Belegt:* Rücksetzen funktioniert (Abbruch ließ `VERSION` auf `1.0.0`), danach v1.1.0
+vollständig durchgelaufen: Bundle trägt `"1.1.0"`, Admin zeigt `v1.1.0`, Fußzeile auf
+kapbeni.com zeigt `v1.1.0`, Tags `v1.0.0`/`v1.1.0` auf `origin/main`.
+
+*Doku nach dem Cankartim-Muster:* `README.md` (Technikstapel + Verweise), `DEPLOY.md`
+(Ablauf, Rollback, Freeze, Geheimnisse), `CHANGELOG.md` (neueste zuerst), und diese Datei
+als laufender Stand.
+
+**Offen gelassen:** `CLAUDE.md` liegt weiterhin unter `Kapbeni_Prod/`, nicht an der
+Repo-Wurzel — der Pfad war so vorgegeben. Beim Cankartim-Vorbild liegt sie an der Wurzel;
+ein Verschieben wäre eine bewusste Entscheidung, kein Nebeneffekt.
 
 ---
 
