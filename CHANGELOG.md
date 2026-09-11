@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.1.0 — 2026-09-11
+
+Versionierung sichtbar in Fußzeile und Admin
+
 ## 1.0.0 — 2026-09-11
 
 Erste versionierte Fassung. Der Stand war zu diesem Zeitpunkt bereits im

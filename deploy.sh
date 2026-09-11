@@ -79,12 +79,27 @@ if [ "$TROCKEN" -eq 1 ]; then
   exit 0
 fi
 
-# Ab hier wird veraendert: bei Abbruch die alte Nummer zuruecklegen.
+# Ab hier wird veraendert: bei Abbruch alles zuruecklegen.
+#
+# Wichtig ist dabei das dist: der Build laeuft VOR der Dienstpruefung, ein
+# Abbruch in Schritt 6 hinterliesse sonst ein live ausgeliefertes Bundle mit
+# einer Nummer, die VERSION gar nicht mehr nennt. Genau das ist beim ersten
+# echten Lauf passiert. build-deploy.sh legt vor jedem Build eine Sicherung
+# an — die wird hier zurueckgeholt.
 aufraeumen() {
   [ "${FERTIG:-0}" -eq 1 ] && return
-  rot "Abgebrochen — VERSION auf $ALT zurueckgesetzt."
+  rot "Abgebrochen — wird zurueckgesetzt."
   echo "$ALT" > "$VERSION_DATEI"
-  [ -n "${CL_SICHERUNG:-}" ] && [ -f "$CL_SICHERUNG" ] && mv "$CL_SICHERUNG" "$CHANGELOG"
+  grau "     VERSION -> $ALT"
+  [ -n "${CL_SICHERUNG:-}" ] && [ -f "$CL_SICHERUNG" ] && { mv "$CL_SICHERUNG" "$CHANGELOG"; grau "     CHANGELOG zurueckgeholt"; }
+  if [ -n "${DIST_SICHERUNG:-}" ] && [ -d "$DIST_SICHERUNG" ]; then
+    rm -rf "$FRONTEND/dist"
+    cp -a "$DIST_SICHERUNG" "$FRONTEND/dist"
+    grau "     dist zurueckgeholt aus $(basename "$DIST_SICHERUNG")"
+  fi
+  # Der Admin liest VERSION beim Start — ohne Neustart zeigte er die
+  # zurueckgenommene Nummer weiter an.
+  pm2 reload kapbeni-admin --update-env >/dev/null 2>&1 || true
 }
 trap aufraeumen EXIT
 
@@ -118,9 +133,15 @@ grau "     sauber"
 
 # ── 5) Bauen (nutzt das vorhandene build-deploy.sh: Sicherung + Build + Test)
 echo "5/7  Bauen"
+SICHERUNGEN="$WURZEL/Kapbeni_Prod/_dist_backups"
+VOR_BUILD="$(ls -1dt "$SICHERUNGEN"/dist_* 2>/dev/null | head -1 || true)"
 bash "$BUILD_SKRIPT" >/tmp/kapbeni-build.log 2>&1 \
   || { rot "     Build fehlgeschlagen — siehe /tmp/kapbeni-build.log"; tail -15 /tmp/kapbeni-build.log; exit 1; }
-grep -q "$NEU" "$FRONTEND"/dist/assets/index-*.js 2>/dev/null \
+NACH_BUILD="$(ls -1dt "$SICHERUNGEN"/dist_* 2>/dev/null | head -1 || true)"
+[ -n "$NACH_BUILD" ] && [ "$NACH_BUILD" != "$VOR_BUILD" ] && DIST_SICHERUNG="$NACH_BUILD"
+# Auf die Nummer in Anfuehrungszeichen pruefen: vite backt sie als "1.2.3" ins
+# Bundle, ohne das fuehrende v aus der JSX-Zeile.
+grep -q "\"$NEU\"" "$FRONTEND"/dist/assets/index-*.js 2>/dev/null \
   && grau "     v$NEU steht im Bundle" \
   || { rot "     v$NEU fehlt im Bundle — vite.config.ts liest VERSION nicht."; exit 1; }
 
@@ -129,10 +150,21 @@ echo "6/7  Dienste"
 for d in kapbeni-api kapbeni-admin; do
   pm2 reload "$d" --update-env >/dev/null 2>&1 && grau "     $d neu geladen" || rot "     $d liess sich nicht neu laden"
 done
+# Nach einem reload braucht der Dienst einen Moment, bis der Port wieder
+# offen ist. Sofortiges Pruefen meldete sonst 000, obwohl alles in Ordnung war.
+pruefe() {
+  local ziel="$1" code=000 i
+  for i in $(seq 1 15); do
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "$ziel" 2>/dev/null || true)"
+    [ -z "$code" ] && code=000
+    [ "$code" = "200" ] && break
+    sleep 1
+  done
+  printf '     %-38s HTTP %s\n' "$ziel" "$code"
+  [ "$code" = "200" ]
+}
 for z in "http://127.0.0.1:3001/api/health" "http://127.0.0.1:3002/admin" "http://127.0.0.1:3003/"; do
-  C=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 "$z" || echo 000)
-  printf '     %-38s HTTP %s\n' "$z" "$C"
-  [ "$C" = "200" ] || { rot "     $z antwortet nicht mit 200 — Abbruch vor dem Push."; exit 1; }
+  pruefe "$z" || { rot "     $z antwortet nicht mit 200 — Abbruch vor dem Push."; exit 1; }
 done
 
 # ── 7) Veroeffentlichen ───────────────────────────────────────────────────
