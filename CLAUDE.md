@@ -30,6 +30,7 @@ nginx. Backend: drei Node-Dienste unter PM2 plus Postgres, Redis und Meilisearch
 
 **Wichtige Pfade**
 ```
+/opt/kapbeni/CLAUDE.md              diese Datei — Projektgedächtnis
 /opt/kapbeni/Kapbeni_Prod/src/      Frontend-Quelle (src/) + Build (dist/)
 /opt/kapbeni/api/src/routes/        API-Endpunkte
 /opt/kapbeni/admin/server.js        Express-Admin (eigene Identitätsebene!)
@@ -438,9 +439,11 @@ kapbeni.com zeigt `v1.1.0`, Tags `v1.0.0`/`v1.1.0` auf `origin/main`.
 (Ablauf, Rollback, Freeze, Geheimnisse), `CHANGELOG.md` (neueste zuerst), und diese Datei
 als laufender Stand.
 
-**Offen gelassen:** `CLAUDE.md` liegt weiterhin unter `Kapbeni_Prod/`, nicht an der
-Repo-Wurzel — der Pfad war so vorgegeben. Beim Cankartim-Vorbild liegt sie an der Wurzel;
-ein Verschieben wäre eine bewusste Entscheidung, kein Nebeneffekt.
+**Nachgezogen:** Diese Datei liegt jetzt an der Repo-Wurzel (`/opt/kapbeni/CLAUDE.md`)
+statt unter `Kapbeni_Prod/` — verschoben mit `git mv`, die Historie bleibt also erhalten.
+Damit entspricht sie dem Cankartim-Vorbild und wird von Werkzeugen gefunden, die im
+Arbeitsverzeichnis nach `CLAUDE.md` suchen. Die Verweise in `README.md` (3) und
+`CHANGELOG.md` (1) sind mitgezogen.
 
 ---
 

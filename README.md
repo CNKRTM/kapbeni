@@ -11,7 +11,7 @@ betrieben auf einem eigenen Server unter [kapbeni.com](https://kapbeni.com).
 
 | Datei | Inhalt |
 |---|---|
-| [`Kapbeni_Prod/CLAUDE.md`](Kapbeni_Prod/CLAUDE.md) | **Laufender Projektstand** — Architektur, Styleguide, Chronik jeder Änderung, Backlog. Wird bei jedem Auftrag gepflegt. |
+| [`CLAUDE.md`](CLAUDE.md) | **Laufender Projektstand** — Architektur, Styleguide, Chronik jeder Änderung, Backlog. Wird bei jedem Auftrag gepflegt. |
 | [`DEPLOY.md`](DEPLOY.md) | Wie ausgerollt wird, was `deploy.sh` tut, Rollback, Freeze/Restore |
 | [`CHANGELOG.md`](CHANGELOG.md) | Versionen chronologisch, neueste zuerst |
 | [`VERSION`](VERSION) | Aktuelle Version — einzige Quelle, wird von Frontend und Admin gelesen |
@@ -57,11 +57,10 @@ betrieben auf einem eigenen Server unter [kapbeni.com](https://kapbeni.com).
 ```
 /opt/kapbeni/
 ├── VERSION                  Versionsnummer — eine Quelle für alles
+├── CLAUDE.md                Projektgedächtnis (Architektur, Chronik, Backlog)
 ├── deploy.sh                Version erhöhen, bauen, committen, taggen, pushen
 ├── ecosystem.config.js      PM2-Prozesse
-├── Kapbeni_Prod/
-│   ├── CLAUDE.md            Projektgedächtnis (Architektur, Chronik, Backlog)
-│   └── src/                 Frontend-Quelle; `dist/` entsteht beim Bauen
+├── Kapbeni_Prod/src/        Frontend-Quelle; `dist/` entsteht beim Bauen
 ├── api/src/routes/          API-Endpunkte
 ├── admin/server.js          Express-Admin
 └── kyc/main.py              KYC-Dienst
@@ -105,4 +104,4 @@ Dienste neu, committet, taggt und pusht. Einzelheiten in [`DEPLOY.md`](DEPLOY.md
   `Kapbeni_Prod/src/src/api/index.ts`.
 - Styleguide ist verbindlich: nur bestehende Schriften, Farben, Abstände und
   Komponentenformen verwenden. Die vollständige Liste steht in
-  [`Kapbeni_Prod/CLAUDE.md`](Kapbeni_Prod/CLAUDE.md), Abschnitt 2.
+  [`CLAUDE.md`](CLAUDE.md), Abschnitt 2.

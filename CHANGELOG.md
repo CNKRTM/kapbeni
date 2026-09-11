@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.1.2 — 2026-09-11
+
+CLAUDE.md an die Repo-Wurzel verschoben, Verweise nachgezogen
+
 ## 1.1.1 — 2026-09-11
 
 CLAUDE.md: GitHub-Anbindung und Versionierung dokumentiert
@@ -15,7 +19,7 @@ Versionierung sichtbar in Fußzeile und Admin
 Erste versionierte Fassung. Der Stand war zu diesem Zeitpunkt bereits im
 Betrieb; diese Version markiert den Beginn der Versionierung, nicht den Beginn
 des Projekts. Die vollständige Vorgeschichte steht in
-[`Kapbeni_Prod/CLAUDE.md`](Kapbeni_Prod/CLAUDE.md), Abschnitt 3.
+[`CLAUDE.md`](CLAUDE.md), Abschnitt 3.
 
 Enthalten ist unter anderem der Stand vom 10./11. September 2026:
 
