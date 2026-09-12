@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import OnayModal from './OnayModal'
 import { X, Sparkles, ChevronDown } from 'lucide-react'
 import { CITIES } from '../data/cities'
-import { Listing } from '../api'
+import { Listing, ve } from '../api'
 import { useKategoriAgac, mitAnzahl } from '../data/kategoriAgac'
 
 
@@ -12,8 +12,23 @@ import { useKategoriAgac, mitAnzahl } from '../data/kategoriAgac'
 // Absenden in eine Fehlermeldung statt beim Auswaehlen.
 const FOTO_MAX = 8
 const FOTO_BYTE = 10 * 1024 * 1024
-const VIDEO_BYTE = 20 * 1024 * 1024
+// Bis zu dieser Groesse nimmt der Server ein Video an; alles ueber
+// VIDEO_ZIEL_BYTE rechnet er auf 720p herunter, statt es abzulehnen.
+// Dieselben Zahlen stehen in api/src/routes/ilanlar.js und api/src/lib/video.js.
+const VIDEO_BYTE = 100 * 1024 * 1024
+const VIDEO_ZIEL_BYTE = 20 * 1024 * 1024
 const VIDEO_TYPEN = ['video/mp4', 'video/webm', 'video/quicktime']
+
+/** Zwei tuerkische Ortsnamen vergleichen, ohne an Schreibweise zu scheitern
+ *  ('Hakkâri' vs 'Hakkari', 'İstanbul' vs 'Istanbul'). Dieselbe Faltung wie in
+ *  api/src/routes/iller.js. */
+const tuerkischGleich = (a: string, b: string) => {
+  const karte: Record<string, string> = { 'İ':'i','I':'i','ı':'i','Ş':'s','ş':'s','Ğ':'g','ğ':'g',
+    'Ü':'u','ü':'u','Ö':'o','ö':'o','Ç':'c','ç':'c','Â':'a','â':'a','Î':'i','î':'i','Û':'u','û':'u' }
+  const f = (v: string) => String(v || '')
+    .replace(/[İIıŞşĞğÜüÖöÇçÂâÎîÛû]/g, (c) => karte[c]).toLowerCase().replace(/[^a-z0-9]/g, '')
+  return f(a) === f(b)
+}
 
 /**
  * Ein Bild in der Maske ist entweder ein Bestandsbild (liegt schon auf dem
@@ -102,6 +117,8 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
   const [video, setVideo] = useState<File | null>(null)
   const [videoVorschau, setVideoVorschau] = useState<string | null>(vorgabe?.videoUrl || null)
   const [videoBestand, setVideoBestand] = useState<boolean>(!!vorgabe?.videoUrl)
+  const [videoHinweis, setVideoHinweis] = useState<string | null>(null)
+  const [konumLaeuft, setKonumLaeuft] = useState(false)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [speichert, setSpeichert] = useState(false)
 
@@ -170,6 +187,69 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
     })
   }
 
+  /**
+   * Standort des Geraets ermitteln und Şehir/İlçe daraus vorbelegen.
+   *
+   * Die Umrechnung von Koordinaten in Namen macht der eigene Server
+   * (GET /api/iller/konum) und nicht der Browser: so geht die Position des
+   * Nutzers nicht direkt an einen Dritten, und der Server prueft das Ergebnis
+   * gegen die Tabellen iller/ilceler.
+   *
+   * Verweigert der Nutzer die Freigabe, bleibt alles wie es ist — die Auswahl
+   * von Hand funktioniert unveraendert weiter.
+   */
+  const konumuKullan = () => {
+    if (!navigator.geolocation) {
+      setErrors((p) => ({ ...p, konum: 'Tarayıcınız konum özelliğini desteklemiyor.' }))
+      return
+    }
+    setKonumLaeuft(true)
+    setErrors((p) => { const { konum, ...rest } = p; return rest })
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const d = await ve.get<{ il: string; ilce: string | null }>(
+            `/iller/konum?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
+          )
+          // Der Server liefert den Namen aus iller/ilceler. Das Auswahlfeld
+          // speist sich aber aus data/cities.ts, und beide Listen weichen an
+          // einzelnen Stellen ab (Schreibweise, fehlende Provinz). Deshalb
+          // vergleichend suchen statt blind setzen.
+          const stadt = Object.keys(CITIES).find((c) => tuerkischGleich(c, d.il))
+          if (!stadt) {
+            setErrors((p) => ({ ...p, konum: `Konumunuz bulundu (${d.il}), ancak listede yok. Lütfen elle seçin.` }))
+            return
+          }
+          setCity(stadt)
+          const bezirk = d.ilce ? (CITIES[stadt] || []).find((x) => tuerkischGleich(x, d.ilce!)) : null
+          setDistrict(bezirk || '')
+          setErrors((p) => {
+            const { sehir, konum, ...rest } = p
+            return d.ilce && !bezirk
+              ? { ...rest, konum: `${stadt} seçildi. İlçe (${d.ilce}) listede bulunamadı, lütfen seçin.` }
+              : rest
+          })
+        } catch (err: any) {
+          setErrors((p) => ({ ...p, konum: err?.message || 'Konum belirlenemedi. Lütfen elle seçin.' }))
+        } finally {
+          setKonumLaeuft(false)
+        }
+      },
+      (err) => {
+        setKonumLaeuft(false)
+        // Ausdrueckliche Meldung statt stillem Nichtstun — in Discover.tsx
+        // merkt der Nutzer bis heute nicht, warum nichts passiert.
+        setErrors((p) => ({
+          ...p,
+          konum: err.code === err.PERMISSION_DENIED
+            ? 'Konum izni verilmedi. Şehir ve ilçeyi elle seçebilirsiniz.'
+            : 'Konum alınamadı. Lütfen elle seçin.',
+        }))
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 }
+    )
+  }
+
   const handleVideo = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = (e.target.files || [])[0]
     if (e.target) e.target.value = ''
@@ -179,10 +259,15 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
       return
     }
     if (f.size > VIDEO_BYTE) {
-      setErrors((p) => ({ ...p, video: `Video en fazla 20MB olabilir (seçilen: ${(f.size / 1048576).toFixed(1)}MB).` }))
+      setErrors((p) => ({ ...p, video: `Video en fazla 100MB olabilir (seçilen: ${(f.size / 1048576).toFixed(1)}MB).` }))
       return
     }
     setErrors((p) => { const { video, ...rest } = p; return rest })
+    // Kein Fehler, sondern ein Hinweis: das Video wird beim Hochladen
+    // verkleinert. Frueher stand hier eine Ablehnung.
+    setVideoHinweis(f.size > VIDEO_ZIEL_BYTE
+      ? `Video ${(f.size / 1048576).toFixed(0)}MB — yüklenirken otomatik olarak küçültülecek. Bu biraz sürebilir.`
+      : null)
     // Nur eigene Objekt-URLs freigeben; eine Server-URL darf nicht widerrufen werden.
     if (videoVorschau && !videoBestand) URL.revokeObjectURL(videoVorschau)
     setVideo(f)
@@ -195,6 +280,7 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
     setVideo(null)
     setVideoBestand(false)
     setVideoVorschau(null)
+    setVideoHinweis(null)
     setErrors((p) => { const { video, ...rest } = p; return rest })
   }
 
@@ -431,7 +517,13 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
                 <span className="text-[11px] text-gray-500">Video ekle</span>
               </button>
             )}
-            <p className="text-[11px] text-gray-400 mt-2">1 video, en fazla 20MB. MP4, WebM veya MOV.</p>
+            <p className="text-[11px] text-gray-400 mt-2">1 video, en fazla 100MB. MP4, WebM veya MOV. Büyük videolar otomatik küçültülür.</p>
+            {videoHinweis && (
+              <p className="text-[11px] text-secondary mt-1 flex items-start gap-1">
+                <i className="ti ti-info-circle" style={{ fontSize: 13, marginTop: 1 }} />
+                {videoHinweis}
+              </p>
+            )}
             {errors.video && <span className="text-red-500 text-xs mt-1 block">{errors.video}</span>}
           </div>
 
@@ -516,6 +608,19 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
           </div>
 
           {/* City & District */}
+          <div className="flex items-center justify-between mb-1.5">
+            <label className={labelCls + ' mb-0'}>Konum</label>
+            <button
+              type="button"
+              onClick={konumuKullan}
+              disabled={konumLaeuft}
+              className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-primary border border-gray-200 hover:border-primary rounded-lg px-2.5 py-1 transition-colors cursor-pointer disabled:opacity-50"
+            >
+              <i className="ti ti-current-location" style={{ fontSize: 14 }} />
+              {konumLaeuft ? 'Alınıyor…' : 'Konumu Kullan'}
+            </button>
+          </div>
+          {errors.konum && <span className="text-secondary text-xs mb-2 block">{errors.konum}</span>}
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={labelCls}>Şehir</label>

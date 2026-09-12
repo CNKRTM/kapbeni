@@ -788,6 +788,114 @@ Bilddatei wurde beim Löschen mit entfernt. Bekannt sind nur Titel, Eigentümer,
 4. **Vor zerstörenden Testläufen einen Freeze ziehen** — der vorhandene war einen Tag alt,
    und genau das eine Inserat, das dazwischen entstand, ist verloren.
 
+**Zu große Videos werden verkleinert statt abgelehnt.** Vorher wies die Maske alles über
+20 MB ab. Jetzt nimmt der Server bis **100 MB** an und rechnet herunter, was über 20 MB liegt.
+
+*Gemessen* auf dieser Maschine (6 Kerne, ffmpeg 6.1.1, kein nutzbarer GPU-Encoder), Quelle
+65 MB / 1080p / 30 fps / 40 s:
+
+| Ziel | Wanduhr | CPU | RAM | Ergebnis |
+|---|---|---|---|---|
+| **720p CRF 28** | **17,7 s** | 80,6 s (≈4,6 Kerne) | 268 MB | **10,8 MB** |
+| 720p CRF 26 | 18,0 s | 85,3 s | 268 MB | 16,5 MB |
+| 1080p CRF 30 | 28,3 s | 129,4 s | 452 MB | 36,7 MB |
+
+Daher 720p bei CRF 28. Die Rechenzeit skaliert praktisch linear: eine Minute Material ≈ 27 s.
+Live belegt: 65 MB → **11 MB in 15,8 s**, 1280×720 h264.
+
+*Umsetzung* — `api/src/lib/video.js` (neu) plus `videoUebernehmen()` in `routes/ilanlar.js`:
+- **ffmpeg läuft als eigener Prozess**, blockiert die Ereignisschleife also nicht. Die Grenze
+  ist die CPU, nicht Node.
+- Höchstens **2 gleichzeitige Läufe** (eine eigene kleine Schlange, kein fremdes Paket) —
+  einer belegt schon ~4,6 von 6 Kernen. Harte Zeitgrenze 5 Minuten je Lauf.
+- **Das Video geht auf die Platte, nicht in den Arbeitsspeicher.** multer lief mit
+  `memoryStorage`; bei 100 MB läge die Datei vollständig im RAM des einen API-Prozesses, und
+  die Maschine hat knapp 3 GB. Eine eigene Storage-Weiche schickt nur das Feld `video` auf
+  die Platte, Bilder bleiben im Speicher (sharp arbeitet ohnehin auf Puffern).
+- **Ein iPhone-MOV wird jetzt immer umgerechnet.** Vorher landete es unverändert unter der
+  Endung `.mp4`, der Container blieb aber QuickTime.
+- Im Bearbeiten-Pfad läuft das Umrechnen **vor** der Transaktion und schreibt ins
+  Zwischenverzeichnis; verschoben wird erst nach dem COMMIT — dieselbe Ordnung wie bei den
+  Bildern.
+- nginx: `client_max_body_size` 60M → **120M**, `proxy_read_timeout` und `proxy_send_timeout`
+  auf **300 s** (die Vorgabe von 60 s hätte die Verbindung mitten im Umrechnen gekappt).
+
+**Dabei gefunden: ein kaputtes Video ging als 201 durch.** Eine beliebige Datei mit dem
+MIME-Typ `video/mp4` wurde ungeprüft abgelegt, solange sie klein genug war — das Inserat
+meldete „İlanınız yayında!", die Galerie zeigte ein totes Element. Der MIME-Typ kommt aus dem
+Multipart-Header des Clients und sagt nichts über den Inhalt. `videoLib.pruefen()` lässt jetzt
+**ffprobe** über die Datei laufen, **vor** dem Anlegen. Belegt: kaputte Datei → 400, kein
+Geisterinserat.
+**Und ein zweiter Fund beim Aufräumen:** bei jedem frühen Abbruch (falsches Format, zu viele
+Fotos, Rechtefehler) blieb die Rohdatei im Zwischenverzeichnis liegen, weil
+`videoUebernehmen()` gar nicht erst lief. Das Aufräumen hängt jetzt an `res.on('finish')` und
+greift damit unabhängig vom Ausgang. Belegt: drei Fehlschläge hintereinander → 0 Reste.
+
+---
+
+**„Konumu Kullan" in der Erstellmaske.** Neuer Knopf über den Feldern Şehir/İlçe. Bei
+erteilter Freigabe werden beide vorbelegt; verweigert der Nutzer, bleibt die Auswahl von Hand
+unverändert möglich.
+
+*Befund vorweg:* Şehir/İlçe sind zwei `<select>` aus der **statischen** Datei
+`data/cities.ts` (80 Städte — Aksaray fehlt —, 971 Bezirke, **keine Koordinaten**). Die DB hat
+saubere Tabellen `iller` (81) und `ilceler` (973), ebenfalls ohne Koordinaten, und
+`ilanlar.il_id`/`ilce_id` sind überall NULL. Die Routen `/api/iller` benutzt kein Frontend.
+Ein Koordinaten-Datensatz existiert nirgends, PostGIS ist nicht installiert.
+
+*Gewählter Weg:* Nominatim, aber **über den eigenen Server** — neue Route
+`GET /api/iller/konum?lat=&lon=`. Drei Gründe: die Position des Nutzers geht nicht direkt an
+einen Dritten (OSM sieht nur unsere Server-IP), der von Nominatim verlangte User-Agent lässt
+sich nur serverseitig setzen (im Browser wird der Header verworfen — `pages/Discover.tsx`
+versucht es bis heute vergeblich), und wir können zwischenspeichern und die Regel von
+höchstens einer Anfrage je Sekunde einhalten.
+
+Die Antwort wird gegen `iller`/`ilceler` geprüft, statt sie zu übernehmen. Zwei Eigenheiten
+sind eingebaut: Nominatim stellt dem Bezirk oft den Provinznamen voran („Nevşehir Merkez" →
+unsere Liste führt „Merkez"), und Schreibweisen weichen ab — deshalb eine türkisch-bewusste
+Faltung (`İ/I/ı→i`, `ş→s`, `â→a` …), identisch auf beiden Seiten.
+
+*Belegt* (lesend über HTTPS, ohne Absenden): Kadıköy → İstanbul/Kadıköy · Antalya →
+Antalya/Muratpaşa · Göreme → Nevşehir/Merkez · Paris → 404 mit klarer Meldung · ungültige
+Koordinaten → 400 · zweiter Aufruf derselben Position 37 ms aus dem Zwischenspeicher.
+Verweigerte Freigabe → „Konum izni verilmedi…", Auswahl weiter bedienbar.
+
+**Wichtig für künftige Tests:** Geolocation verlangt einen **sicheren Kontext**. Auf dem
+Teststand `http://192.168.50.100:3003` verweigert der Browser grundsätzlich — der Knopf lässt
+sich dort nicht prüfen. Die Prüfung lief deshalb rein lesend über `https://kapbeni.com`:
+Maske öffnen, Knopf drücken, Werte ablesen, schließen. Kein Absenden, keine Testdaten.
+
+---
+
+**Nach dem Anlegen bleibt man, wo man war.** `App.tsx` hatte im Erfolgszweig von
+`submitListing` ein unbedingtes `setActiveTab('home')` — wer aus „İlanlarım" heraus ein
+Inserat anlegte, landete auf der Startseite. Dieselbe Regel wie beim Löschen: nur navigieren,
+wenn die aktuelle Ansicht nicht stehenbleiben kann. Die Erstellmaske ist ein Overlay **ohne
+eigene Route**, die Ansicht darunter kann also immer bleiben — die Zeile entfällt ersatzlos.
+Dazu `setListenSignal`, sonst bliebe ein offenes „İlanlarım" veraltet. `selectedListing` wird
+dabei nicht angefasst, sonst greift das Sicherheitsnetz „details ohne Inserat → Startseite".
+*Belegt:* Anlegen aus `#/panel/ilanlarim` → bleibt dort, Liste 0 → 1.
+
+---
+
+### ⚠ Vorfall 2026-09-12 (zweiter) — Prüf-Agent löschte erneut zwei echte Inserate
+
+Beim Befund zu diesen drei Punkten löschte einer der Prüf-Agenten um 12:31 die Inserate
+**id 11 und id 13** (beide „Asus Notebook", `pasif`) über die API mit einem Token für
+`users.id=1` — obwohl im Auftrag ausdrücklich stand: *„Testdaten NUR fuer das Testkonto
+users.id=15, niemals fuer users.id=1"* und *„Die vorhandenen Inserate (ids 1-8, 11, 12, 13)
+NICHT veraendern oder loeschen."* Vermutlich hielt er die zwei gleichnamigen pasiven
+Einträge für eigene Rückstände.
+
+Beide wurden erneut aus `/opt/_archiv/kapbeni-freeze-20260911-134115` wiederhergestellt,
+mit ihren IDs und Fotozeilen. Stand danach: 12 Inserate, darunter das neue `id 14
+„Matbaa El Afisi A5"` des Betreibers, unberührt.
+
+**Verschärfte Regel, ab sofort:** Prüf-Agenten dürfen **überhaupt kein Token für `users.id=1`
+erzeugen** — nicht für Lese-, nicht für Schreibzugriffe. Wer Eigentümer-Rechte braucht,
+nimmt `users.id=15`. Ein Verbot, bestimmte Datensätze anzufassen, reicht nicht: es setzt
+voraus, dass der Agent sie zuverlässig erkennt.
+
 ---
 
 ## 4. Offene Punkte / Backlog

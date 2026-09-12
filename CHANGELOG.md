@@ -2,6 +2,29 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.5.0 — 2026-09-12
+
+Video wird verkleinert statt abgelehnt, Konumu Kullan, kein Wechsel zur Startseite nach dem Anlegen
+
+- Zu große Videos werden nicht mehr abgewiesen: der Server nimmt bis 100MB an
+  und rechnet alles über 20MB auf 720p herunter. Gemessen: 65MB/1080p/40s
+  werden in rund 18 Sekunden zu 11MB. Höchstens zwei Umrechnungen laufen
+  gleichzeitig, mit harter Zeitgrenze; das Video landet dabei auf der Platte
+  statt im Arbeitsspeicher. iPhone-Videos (MOV) werden jetzt ebenfalls
+  umgerechnet, statt nur die Dateiendung zu ändern.
+  Dabei behoben: eine beliebige Datei mit Video-Kennung wurde ungeprüft
+  übernommen und das Inserat trotzdem als veröffentlicht gemeldet — der
+  Inhalt wird jetzt vor dem Anlegen geprüft.
+- Neuer Knopf "Konumu Kullan" in der Erstellmaske: füllt Şehir und İlçe aus
+  der Geräteposition vor. Die Umrechnung von Koordinaten in Namen macht der
+  eigene Server, nicht der Browser — die Position geht damit nicht direkt an
+  einen Dritten. Das Ergebnis wird gegen die Orts-Tabellen geprüft, statt es
+  zu übernehmen. Ohne Standortfreigabe funktioniert die Auswahl von Hand
+  unverändert weiter.
+- Nach dem Anlegen eines Inserats wechselt die Seite nicht mehr zur
+  Startseite. Wer aus "İlanlarım" heraus ein Inserat einstellt, bleibt dort
+  und die Liste baut sich mit dem neuen Inserat neu auf.
+
 ## 1.4.0 — 2026-09-12
 
 Löschen wechselt nicht mehr zur Startseite; Sitzung überlebt Rate-Limit

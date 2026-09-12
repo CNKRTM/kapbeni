@@ -450,9 +450,16 @@ export default function App() {
       await ilanlarApi.create(form)
       setShowSellModal(false)
       showToast('İlanınız başarıyla yayınlandı!')
+      // Dieselbe Regel wie beim Loeschen: nur navigieren, wenn die aktuelle
+      // Ansicht nicht stehenbleiben kann. Die Erstellmaske ist ein Overlay
+      // ohne eigene Route — die Ansicht darunter kann IMMER bleiben. Vorher
+      // stand hier setActiveTab('home'): wer aus "İlanlarım" heraus ein
+      // Inserat anlegte, wurde auf die Startseite geworfen.
+      // selectedListing wird dabei NICHT angefasst, sonst greift das
+      // Sicherheitsnetz "details ohne Inserat -> Startseite".
       fetchListings()
-      invalidateKategoriAgac()   // Kategorie-Zaehler sofort aktualisieren
-      setActiveTab('home')
+      setListenSignal((n) => n + 1)   // Panel "İlanlarım" neu aufbauen
+      invalidateKategoriAgac()        // Kategorie-Zaehler sofort aktualisieren
     } catch (err: any) {
       if (err.message === 'Unauthorized') {
         setShowSellModal(false)

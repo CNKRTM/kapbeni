@@ -8,6 +8,7 @@ const { authMiddleware, kycGerekli } = require('../middleware/auth');
 const ai = require('../services/ai.service');
 const jwt = require('jsonwebtoken');
 const meiliSync = require('../lib/meiliSync');
+const videoLib = require('../lib/video');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 
 // Bilder und Video kommen im selben Formular, brauchen aber verschiedene
@@ -25,8 +26,33 @@ const VIDEO_TYPEN = { 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime
 // jedes Foto in der DB, waehrend der Verkaeufer einen 500er sieht.
 const FOTO_TYPEN = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/avif'];
 
-const storage = multer.memoryStorage();
-const upload = multer({ storage, limits: { fileSize: VIDEO_BYTE, files: FOTO_MAX + 1 } });
+// Videos duerfen jetzt groesser ankommen als sie am Ende sein sollen — was
+// darueber liegt, wird heruntergerechnet statt abgelehnt (lib/video.js).
+const VIDEO_ANNAHME_BYTE = 100 * 1024 * 1024;   // so viel nimmt der Server an
+const VIDEO_ZIEL_BYTE = videoLib.ZIEL_BYTE;     // 20 MB — darueber wird umgerechnet
+const TMP_DIR = `${process.env.UPLOAD_DIR}/tmp`;
+
+// Bilder bleiben im Arbeitsspeicher (klein, sharp arbeitet ohnehin auf Puffern).
+// Das VIDEO geht auf die Platte: bei memoryStorage laege eine 100-MB-Datei
+// vollstaendig im RAM des einen API-Prozesses, und die Maschine hat knapp 3 GB.
+// ffmpeg braucht ohnehin einen Dateipfad.
+const speicherImRam = multer.memoryStorage();
+const speicherAufPlatte = multer.diskStorage({
+  destination: (_req, _file, cb) => cb(null, `${process.env.UPLOAD_DIR}/tmp`),
+  filename: (_req, file, cb) =>
+    cb(null, `roh_${Date.now()}_${Math.round(Math.random() * 1e6)}${path.extname(file.originalname || '') || '.bin'}`),
+});
+const storage = {
+  _handleFile(req, file, cb) {
+    const ziel = file.fieldname === 'video' ? speicherAufPlatte : speicherImRam;
+    return ziel._handleFile(req, file, cb);
+  },
+  _removeFile(req, file, cb) {
+    const ziel = file.fieldname === 'video' ? speicherAufPlatte : speicherImRam;
+    return ziel._removeFile(req, file, cb);
+  },
+};
+const upload = multer({ storage, limits: { fileSize: VIDEO_ANNAHME_BYTE, files: FOTO_MAX + 1 } });
 const ilanFelder = upload.fields([
   { name: 'fotograflar', maxCount: FOTO_MAX },
   { name: 'video', maxCount: 1 },
@@ -35,7 +61,7 @@ const ilanFelder = upload.fields([
 // viele kommen. Ohne diesen Mantel landet der Fehler in der allgemeinen
 // Fehlerbehandlung und der Verkaeufer sieht einen 500er ohne Grund.
 const MULTER_TEXT = {
-  LIMIT_FILE_SIZE: 'Dosya çok büyük. Fotoğraf en fazla 10MB, video en fazla 20MB olabilir.',
+  LIMIT_FILE_SIZE: 'Dosya çok büyük. Fotoğraf en fazla 10MB, video en fazla 100MB olabilir.',
   LIMIT_FILE_COUNT: `En fazla ${FOTO_MAX} fotoğraf ve 1 video yükleyebilirsiniz.`,
   LIMIT_UNEXPECTED_FILE: `En fazla ${FOTO_MAX} fotoğraf ve 1 video yükleyebilirsiniz.`,
 };
@@ -54,14 +80,58 @@ function optionalerNutzer(req) {
 
 /** Groesse und Format der hochgeladenen Dateien pruefen — VOR jedem Schreiben.
  *  Rueckgabe: Fehlertext (tuerkisch) oder null, wenn alles in Ordnung ist. */
-function medienPruefen(fotos, video) {
+async function medienPruefen(fotos, video) {
   const zuGross = fotos.find(f => f.size > FOTO_BYTE);
   if (zuGross) return `Fotoğraf çok büyük: ${zuGross.originalname} (maks 10MB)`;
   const falsch = fotos.find(f => !FOTO_TYPEN.includes(f.mimetype));
   if (falsch) return `Fotoğraf biçimi desteklenmiyor: ${falsch.originalname}. JPEG, PNG veya WebP yükleyin.`;
   if (video && !VIDEO_TYPEN[video.mimetype])
     return 'Video biçimi desteklenmiyor. MP4, WebM veya MOV yükleyin.';
+  if (video) {
+    // Inhalt pruefen, nicht nur den mitgeschickten Typ — sonst wird eine
+    // beliebige kleine Datei als Video abgelegt und das Inserat trotzdem
+    // als erfolgreich gemeldet.
+    try { await videoLib.pruefen(video.path); }
+    catch (e) {
+      console.error('[video] ungueltige Datei:', e.message);
+      return 'Video dosyası okunamadı. Lütfen geçerli bir video yükleyin.';
+    }
+  }
   return null;
+}
+
+/**
+ * Das hochgeladene Video an seinen endgueltigen Platz bringen.
+ *
+ * Bis zur Zielgroesse wird es unveraendert uebernommen; darueber rechnet ffmpeg
+ * es auf 720p herunter, statt den Verkaeufer abzuweisen. Ein iPhone-MOV wird
+ * immer umgerechnet — frueher landete es unveraendert unter der Endung .mp4,
+ * der Container blieb aber QuickTime.
+ *
+ * Rueckgabe: { url, groesse, umgerechnet }. Wirft mit tuerkischem Text.
+ * Die Rohdatei wird in jedem Fall entfernt.
+ */
+async function videoUebernehmen(datei, uuid, uploadDir) {
+  const rohPfad = datei.path;
+  const mussUmrechnen = datei.size > VIDEO_ZIEL_BYTE || datei.mimetype === 'video/quicktime';
+  const endung = mussUmrechnen ? 'mp4' : VIDEO_TYPEN[datei.mimetype];
+  const name = `${uuid}_video.${endung}`;
+  const zielPfad = `${uploadDir}/${name}`;
+  try {
+    if (!mussUmrechnen) {
+      fs.copyFileSync(rohPfad, zielPfad);
+      return { url: `/uploads/ilanlar/${name}`, groesse: datei.size, umgerechnet: false };
+    }
+    const last = videoLib.auslastung();
+    if (last.wartend > 0) console.log(`[video] ${last.wartend} Auftrag/Auftraege warten`);
+    const groesse = await videoLib.umrechnen(rohPfad, zielPfad);
+    return { url: `/uploads/ilanlar/${name}`, groesse, umgerechnet: true };
+  } catch (e) {
+    console.error('[video] Umrechnen fehlgeschlagen:', e.message);
+    throw new Error('Video işlenemedi. Lütfen başka bir dosya deneyin.');
+  } finally {
+    try { if (fs.existsSync(rohPfad)) fs.unlinkSync(rohPfad); } catch { /* schon weg */ }
+  }
 }
 
 /**
@@ -97,7 +167,19 @@ async function dateienEntfernen(urls, uuid) {
 }
 
 const ilanUpload = (req, res, next) => ilanFelder(req, res, (err) => {
-  if (!err) return next();
+  if (!err) {
+    // Die Rohdatei des Videos liegt im Zwischenverzeichnis. Bei Erfolg raeumt
+    // videoUebernehmen() sie ab — aber bei jedem frueheren Abbruch (ungueltiges
+    // Format, zu viele Fotos, Rechtefehler) laeuft die Funktion nie. Deshalb
+    // haengt das Aufraeumen am Ende der Anfrage, egal wie sie ausgeht.
+    const roh = ((req.files && req.files.video) || [])[0];
+    if (roh && roh.path) {
+      res.on('finish', () => {
+        try { if (fs.existsSync(roh.path)) fs.unlinkSync(roh.path); } catch { /* schon weg */ }
+      });
+    }
+    return next();
+  }
   const text = MULTER_TEXT[err.code];
   if (text) return res.status(400).json({ hata: text });
   return res.status(400).json({ hata: 'Dosya yüklenemedi.' });
@@ -311,7 +393,7 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     const videoDatei = ((req.files && req.files.video) || [])[0] || null;
 
     // Vor dem Anlegen pruefen, sonst stuende ein Inserat ohne Bilder in der DB.
-    const medienFehler = medienPruefen(fotoDateien, videoDatei);
+    const medienFehler = await medienPruefen(fotoDateien, videoDatei);
     if (medienFehler) return res.status(400).json({ hata: medienFehler });
     // AI Moderasyon — NVIDIA. Varsayilan: yayinla. Sadece net spam/dolandiricilik (cok dusuk skor) incelemeye alinir.
     const ai_sonuc = await ai.moderasyonYap(baslik, aciklama||'', fiyat);
@@ -338,15 +420,13 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     } else if (foto_url) {
       await query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,0,true)', [ilan.id, foto_url]);
     }
-    // Video roh ablegen — es gibt keine Transkodierung, deshalb die enge Grenze.
+    // Video ablegen — zu grosse Dateien werden heruntergerechnet statt abgelehnt.
     // has_video wird mitgefuehrt, damit der bestehende Filter "videolu=true"
     // aus GET /api/ilanlar endlich echte Treffer liefert.
     if (videoDatei) {
-      const vname = `${ilan.uuid}_video.${VIDEO_TYPEN[videoDatei.mimetype]}`;
-      fs.writeFileSync(`${uploadDir}/${vname}`, videoDatei.buffer);
-      const vurl = `/uploads/ilanlar/${vname}`;
-      await query('UPDATE ilanlar SET video_url=$1, has_video=true WHERE id=$2', [vurl, ilan.id]);
-      ilan.video_url = vurl; ilan.has_video = true;
+      const v = await videoUebernehmen(videoDatei, ilan.uuid, uploadDir);
+      await query('UPDATE ilanlar SET video_url=$1, has_video=true WHERE id=$2', [v.url, ilan.id]);
+      ilan.video_url = v.url; ilan.has_video = true;
     }
     await auditLog('ilan.olustur', 'api', { userId: req.user.id, hedefTip:'ilan', hedefId: ilan.id, detay: { ai_sonuc } });
     res.status(201).json({ ilan, ai_sonuc, mesaj: ilan_durum==='aktif' ? 'İlanınız yayında!' : 'İlanınız incelemeye alındı' });
@@ -374,7 +454,7 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
 
     const neueFotos = (req.files && req.files.fotograflar) || [];
     const videoDatei = ((req.files && req.files.video) || [])[0] || null;
-    const medienFehler = medienPruefen(neueFotos, videoDatei);
+    const medienFehler = await medienPruefen(neueFotos, videoDatei);
     if (medienFehler) return res.status(400).json({ hata: medienFehler });
 
     // Zielzustand der Galerie. `sirala` ist die vollstaendige Wunschreihenfolge:
@@ -481,8 +561,12 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
     let neueVideoUrl = alteVideoUrl;
     let videoName = null;
     if (videoDatei) {
-      videoName = `${ilan.uuid}_video.${VIDEO_TYPEN[videoDatei.mimetype]}`;
-      neueVideoUrl = `/uploads/ilanlar/${videoName}`;
+      // Wie bei den Bildern: das Umrechnen laeuft VOR der Transaktion und
+      // schreibt zunaechst nur ins Zwischenverzeichnis. Scheitert es, ist an
+      // Inserat und bisherigem Video nichts veraendert.
+      const v = await videoUebernehmen(videoDatei, ilan.uuid, TMP_DIR);
+      videoName = v.url.split('/').pop();
+      neueVideoUrl = v.url;
     } else if (videoEntfernen) {
       neueVideoUrl = null;
     }
@@ -520,6 +604,9 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
       await verbindung.query('COMMIT');
     } catch (e) {
       await verbindung.query('ROLLBACK').catch(() => {});
+      // Das umgerechnete Video liegt noch im Zwischenverzeichnis — wegraeumen,
+      // sonst sammeln sich dort Reste fehlgeschlagener Aenderungen.
+      if (videoName) { try { fs.unlinkSync(`${TMP_DIR}/${videoName}`); } catch { /* schon weg */ } }
       throw e;
     } finally {
       verbindung.release();
@@ -527,7 +614,7 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
 
     // ── Dateien erst nach dem COMMIT anfassen ──
     for (const f of fertige.values()) fs.writeFileSync(`${uploadDir}/${f.fname}`, f.daten);
-    if (videoDatei && videoName) fs.writeFileSync(`${uploadDir}/${videoName}`, videoDatei.buffer);
+    if (videoName) fs.renameSync(`${TMP_DIR}/${videoName}`, `${uploadDir}/${videoName}`);
     if (entfallen.length) await dateienEntfernen(entfallen.map(f => f.url), ilan.uuid);
     if (alteVideoUrl && alteVideoUrl !== neueVideoUrl) await dateienEntfernen([alteVideoUrl], ilan.uuid);
 
