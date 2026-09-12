@@ -636,6 +636,26 @@ Bearbeiten aus dem Auswahlfeld und wäre beim Speichern verloren gegangen.
 laufenden System auslösbar; die Gegenprüfung zeigte, dass er ihn nur in einer isolierten
 Instanz reproduzieren konnte. Behoben wurde er trotzdem — die Ursache war echt.
 
+**„Favorilerim" riss die ganze Seite weiß.** Von der Gegenprüfung gefunden, bestand schon
+vorher. Ursache: `GET /api/favoriler` antwortet mit `{ ilanlar: [...] }`, der Client sagte
+aber `ve.get<Listing[]>` zu — eine Typzusage, die TypeScript nicht prüfen kann, weil sie
+erst zur Laufzeit gilt. Das Dashboard setzte das **Objekt** unverändert als Liste:
+`favoriler.length` war `undefined`, der Leerzustand griff deshalb nicht, und der
+Else-Zweig rief `.map(...)` auf einem Objekt auf. Belegt mit `A.map is not a function` und
+einer Seite mit Textlänge 0 — React reißt bei einem Fehler im Rendern den ganzen Baum ab,
+also verschwindet auch Navigation und Fußzeile.
+
+Behoben an der Wurzel: `favorilerApi.getAll()` packt jetzt aus **und** bildet über
+`ilanZuListing` ab. Beides war nötig — die Rohzeilen tragen `baslik`/`fiyat`, nicht
+`title`/`price`; ohne die Abbildung hätten die Karten leere Titel und „0 ₺" gezeigt.
+Zusätzlich eine Wache beim Setzen und beim Rendern (`Array.isArray`), damit eine geänderte
+Antwortform nie wieder die Seite mitreißt.
+
+**Gegenprobe für die übrigen Reiter:** Alle Endpunkte des Dashboards wurden mit ihrer
+tatsächlichen Antwort verglichen. `/teklifler`, `/sikayet/benim`, `/kayitli-aramalar` und
+`/degerlendirme/son` liefern Arrays; `/kazanc` und `/ilanlar/benim` liefern Objekte, werden
+dort aber korrekt ausgepackt. `/favoriler` war die einzige Fehlstelle.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -648,8 +668,9 @@ Instanz reproduzieren konnte. Behoben wurde er trotzdem — die Ursache war echt
 - **Neue Inserate landen nicht im Suchindex**: `meiliSync.syncListing()` wird beim Anlegen
   (`POST /api/ilanlar`) nicht aufgerufen, nur beim Bearbeiten und über den nächtlichen Lauf.
   Eine Suche nach einem frisch angelegten Inserat findet es deshalb nicht.
-- `Dashboard`-Reiter „Favorilerim" reißt die Seite weiß (von der Gegenprüfung gefunden,
-  **nicht** von diesen Änderungen verursacht — bestand vorher schon).
+- Es gibt **keine Error Boundary**: ein Fehler beim Rendern nimmt die gesamte Seite mit,
+  statt nur den betroffenen Bereich. Der Weißseiten-Fall in „Favorilerim" war deshalb so
+  folgenreich. Eine Boundary um die Reiter-Inhalte wäre der nächste sinnvolle Schritt.
 - Dateien ohne Inserat: vier Bilder vom 22.07. liegen verwaist unter
   `/uploads/ilanlar/`. Seit dem Lösch-Fix entstehen keine neuen mehr, die alten bleiben.
 - Bearbeiten erfasst nur die Felder der Maske. `kargo_var`, `elden_teslim`, `kargo_ucreti`,

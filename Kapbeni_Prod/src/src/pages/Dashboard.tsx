@@ -100,7 +100,12 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
         })))
       }).catch(() => {}).finally(done)
     } else if (tab === 'favorilerim') {
-      favorilerApi.getAll().then((d: any) => setFavoriler((d || []) as Listing[])).catch(() => {}).finally(done)
+      // Zusaetzlich absichern: eine unerwartete Antwortform darf nie wieder
+      // die ganze Seite mitreissen, auch wenn sich die Route erneut aendert.
+      favorilerApi.getAll()
+        .then((d) => setFavoriler(Array.isArray(d) ? d : []))
+        .catch(() => setFavoriler([]))
+        .finally(done)
     } else if (tab === 'degerlendirmeler') {
       Promise.all([
         degerlendirmeApi.getLast(20).catch(() => []),
@@ -273,7 +278,7 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
       )}
 
       {!loading && tab === 'favorilerim' && (
-        favoriler.length === 0
+        !Array.isArray(favoriler) || favoriler.length === 0
           ? <div style={emptyStyle}><i className="ti ti-heart" style={{ fontSize: 40, display: 'block', marginBottom: 12 }} />Henüz favori ilanınız yok</div>
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
               {favoriler.map((l: any) => <ProductCard key={l.id} listing={l} isGridView={true} onSelect={() => onSelectProduct(l)} onToggleFavorite={() => {}} />)}

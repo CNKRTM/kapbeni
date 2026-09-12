@@ -86,7 +86,19 @@ export const mesajlarApi = {
 
 // ---- Favoriler ----
 export const favorilerApi = {
-  getAll: () => ve.get<Listing[]>('/favoriler'),
+  /**
+   * Die Route antwortet mit `{ ilanlar: [...] }`, nicht mit einem Array — die
+   * frühere Typzusage `Listing[]` war schlicht falsch. Das Dashboard setzte
+   * das Objekt direkt als Liste: `length` war undefined, der Leerzustand griff
+   * nicht, und `.map(...)` warf beim Rendern. Ergebnis war eine weisse Seite.
+   * Hier wird ausgepackt UND abgebildet, damit Aufrufer echte Listings
+   * bekommen — die Rohzeilen tragen baslik/fiyat, nicht title/price.
+   */
+  getAll: async (): Promise<Listing[]> => {
+    const d = await ve.get<any>('/favoriler')
+    const roh = Array.isArray(d) ? d : (d && Array.isArray(d.ilanlar) ? d.ilanlar : [])
+    return roh.map(ilanZuListing)
+  },
   add: (id: string) => ve.post(`/favoriler/${id}`),
   remove: (id: string) => ve.del(`/favoriler/${id}`),
 }

@@ -2,6 +2,19 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.2.1 — 2026-09-12
+
+Favorilerim-Weißseite behoben
+
+Der Dashboard-Reiter "Favorilerim" riss beim Öffnen die gesamte Seite weiß.
+GET /api/favoriler antwortet mit { ilanlar: [...] }, der Client erwartete ein
+Array und rief .map() auf dem Objekt auf — der Fehler beim Rendern nahm den
+ganzen React-Baum mit, also auch Navigation und Fußzeile.
+favorilerApi.getAll() packt jetzt aus und bildet die Rohzeilen auf Listings ab
+(sonst hätten die Karten leere Titel und 0 ₺ gezeigt); zusätzlich eine
+Array-Prüfung beim Setzen und beim Rendern. Alle übrigen Dashboard-Endpunkte
+wurden gegengeprüft — Favorilerim war die einzige Fehlstelle.
+
 ## 1.2.0 — 2026-09-12
 
 Inserate bearbeiten, Mobil-Upload abgesichert, echtes Löschen
