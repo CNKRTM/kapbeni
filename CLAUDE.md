@@ -896,6 +896,95 @@ erzeugen** — nicht für Lese-, nicht für Schreibzugriffe. Wer Eigentümer-Rec
 nimmt `users.id=15`. Ein Verbot, bestimmte Datensätze anzufassen, reicht nicht: es setzt
 voraus, dass der Agent sie zuverlässig erkennt.
 
+**Bilder-Modal (Lightbox) auf der Detailseite.** Ein Klick auf das Produktbild öffnet die
+Bilder gross: durchblätterbar mit Pfeilen, Pfeiltasten, Wischen und Vorschaukacheln;
+schliessbar per X, Klick daneben und Escape. Der Hintergrund scrollt nicht mit.
+
+*Keine zweite Datenquelle:* Die Lightbox nutzt dieselbe Liste `stationen` wie die Galerie
+auf der Seite. Dafür musste sie aber erst erreichbar werden — sie stand in einer **sofort
+ausgeführten Funktion mitten im JSX**, und `stationen`, `i` und `springe` lebten nur
+innerhalb dieses Render-Ausdrucks. Aus einem `useEffect` (Tastatur) oder einem über
+`createPortal` gerenderten Modal war daran nicht heranzukommen. Jetzt auf Komponentenebene:
+`stationen` als `useMemo`, `springe` als `useCallback`.
+
+**Dabei ein bestehender Fehler behoben:** `springe` rechnete mit dem rohen `aktiv` statt mit
+dem geklammerten Index. Liefert die Detail-Antwort weniger Stationen als vorher (Foto
+gelöscht, Video entfernt), stand `aktiv` ausserhalb — und der Pfeil sprang von einer
+unsichtbaren Position aus weiter.
+
+*Einzelheiten:* Nur Fotos öffnen die Lightbox, beim Video nicht — dort würde der Klick mit
+den eingebauten Bedienelementen kollidieren. Die Hülle folgt `components/OnayModal.tsx`
+(Backdrop-Klick, `stopPropagation`, `role="dialog"`/`aria-modal`, Escape) und rendert über
+`createPortal` an `document.body` wie die übrigen neun Overlays — sonst hinge sie im
+Detail-Container mit seinen Radien und `overflow-hidden` fest. z-Index **100**: belegt waren
+bis dahin 30/40/50/60/70/80/90/95 und 200 (Paket-Modal), das aber nie gleichzeitig offen ist.
+Wischen und Scrollsperre gab es im Projekt bisher nirgends; beides ist bewusst schlicht
+gehalten (waagerechte Strecke ab 50 px, `body.overflow` mit Wiederherstellung beim Schliessen).
+
+*Belegt:* Öffnen → „1 / 2", 2 Kacheln, Scrollsperre aktiv. Pfeil vor → „2 / 2", Pfeiltaste ←
+→ „1 / 2", aktive Kachel wandert mit. Escape, Klick daneben und X schliessen, Scrollsperre
+wird aufgehoben. Auf 390 px: Tippen öffnet, Wischen ← blättert vor, Wischen → zurück, kein
+waagerechter Überlauf. Der Überzug misst `srgb(25,25,25)` — genau die 10 % Durchschein von
+`bg-black/90`.
+
+---
+
+**Wasserzeichen auf allen hochgeladenen Inseratsbildern.** Serverseitig beim Verarbeiten,
+nicht als CSS-Überlagerung — die liesse sich mit einem Rechtsklick umgehen, weil `/uploads/`
+die Originaldatei direkt ausliefert.
+
+*Neu: `api/src/lib/bild.js`.* Beide sharp-Ketten (Anlegen `ilanlar.js:416`, Bearbeiten
+`:549`) waren **wortgleich** und wurden zu einem Helfer zusammengezogen. Zwei Kopien hätten
+sonst irgendwann auseinandergedriftet, und Bilder aus dem Anlegen sähen anders aus als aus
+dem Bearbeiten. Der Helfer gibt immer einen **Puffer** zurück; der Bearbeiten-Pfad braucht
+das so, weil dort erst nach dem COMMIT geschrieben wird.
+
+*Werte, an echten Produktfotos verglichen* (Auto, Telefon, Sessel):
+
+| Deckkraft | Wirkung |
+|---|---|
+| 16 % | auf hellen Flächen fast verschwunden |
+| **22 %** | **überall lesbar, Produkt vollständig sichtbar** |
+| 28 % | legt sich spürbar über die Ware |
+
+Gewählt: **22 %, diagonal −30°, 65 % der Bildbreite, mittig**. Vorlage ist
+`logo-footer.png` (heller Schriftzug, rotes Zeichen) — `logo-navbar.png` ist dunkelblau und
+verschwindet auf dunklen Fotos; bei der hellen Fassung trägt wenigstens das Rot überall.
+
+*Kosten, gemessen an einem 4000×3000-Bild über acht Durchläufe:*
+
+```
+ohne Wasserzeichen  216 ms je Bild, 30 KB
+mit  Wasserzeichen  266 ms je Bild, 35 KB
+Aufschlag           +49 ms (+23 %),  Datei +15 %
+```
+
+Bei acht Bildern gut 0,4 s — neben der Upload-Dauer nicht wahrnehmbar. Das Zeichen kommt
+**nach** dem Skalieren und **vor** der WebP-Kodierung, es gibt also keinen zweiten
+Kodierdurchgang. Das gedrehte, abgedunkelte Logo wird je Bildgrösse einmal erzeugt und
+wiederverwendet (Zwischenspeicher auf 40 Einträge begrenzt).
+
+**Stolperstein beim Bauen:** Durch die Drehung wächst der Rahmen des Logos — ein 2:1-Logo
+bei 65 % Bildbreite ist nach 30° höher als ein querformatiges Bild, und sharp lehnt ein
+Overlay ab, das grösser ist als das Ziel (`Image to composite must have same dimensions or
+smaller`). Das Zeichen wird jetzt auf 92 % der Bildfläche begrenzt.
+
+**Zweiter Fund, mitbehoben:** Keine der sharp-Ketten rief `.rotate()` auf. Ohne das verwirft
+sharp die **EXIF-Ausrichtung**, und WebP trägt kein Orientierungs-Tag — ein hochkant
+aufgenommenes Handyfoto blieb dauerhaft quer. Für das Wasserzeichen doppelt wichtig: es sässe
+sonst verdreht im Bild.
+
+**Nicht angefasst:** Avatare (`users.js:14`, 400×400 mit `fit:'cover'` und runder Darstellung
+— ein Logo wäre unlesbar oder verdeckte das Gesicht) und KYC-Bilder (laufen gar nicht durch
+sharp, der Python-Dienst rechnet auf dem Rohbild).
+
+**Kein rückwirkender Lauf** — und die Zahlen stützen das deutlich: von 14 Zeilen in
+`ilan_fotograflar` zeigen nur **3** auf lokale Dateien, 9 auf fremde Adressen (Unsplash,
+Google-Usercontent) und 2 enthalten Freitext statt eines Pfads. Von den 7 WebP auf der Platte
+sind 4 verwaist. Ein Nachtrag beträfe also genau drei Dateien, würde aber unumkehrbar in
+vorhandene Bilder schreiben. Wenn es später doch gewünscht ist: eigenes Skript mit Sicherung
+und Trockenlauf.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -942,6 +1031,13 @@ voraus, dass der Agent sie zuverlässig erkennt.
 - Scrollposition wird beim Zurückgehen nicht wiederhergestellt.
 
 **Daten/Inhalt**
+- Zwei Zeilen in `ilan_fotograflar` (ids 11 und 13) enthalten in der Spalte `url` keinen
+  Pfad, sondern den Freitext „i5 Ismelnci Asus". `POST /api/ilanlar` übernimmt das Feld
+  `foto_url` ungeprüft — deshalb konnte das überhaupt entstehen. Eine Prüfung auf eine
+  brauchbare URL fehlt dort weiterhin.
+- Vier der sieben WebP unter `/uploads/ilanlar` sind verwaist (keine Zeile verweist darauf).
+- Die meisten Inseratsbilder liegen gar nicht bei uns, sondern sind externe Unsplash- und
+  Google-Usercontent-Adressen — sie bekommen folglich auch kein Wasserzeichen.
 - `hero_slider` enthält 7 gepflegte Slides, `GET /api/slider` liefert sie — **kein Bundle ruft
   sie ab**, die Startseite zeigt hartkodierte Slides. Texte tragen noch die alte Marke.
 - 88 hartkodierte Unsplash-Bilder + Google-Usercontent als Platzhalter.

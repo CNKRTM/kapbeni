@@ -9,6 +9,7 @@ const ai = require('../services/ai.service');
 const jwt = require('jsonwebtoken');
 const meiliSync = require('../lib/meiliSync');
 const videoLib = require('../lib/video');
+const bildLib = require('../lib/bild');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 
 // Bilder und Video kommen im selben Formular, brauchen aber verschiedene
@@ -413,7 +414,9 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     if (fotoDateien.length) {
       for (let i = 0; i < fotoDateien.length; i++) {
         const fname = `${ilan.uuid}_${i}.webp`;
-        await sharp(fotoDateien[i].buffer).resize(1200,1200,{fit:'inside'}).webp({quality:80}).toFile(`${uploadDir}/${fname}`);
+        // Eine gemeinsame Kette fuer Anlegen und Bearbeiten (lib/bild.js):
+        // EXIF-Ausrichtung, Skalieren, Wasserzeichen, WebP.
+        fs.writeFileSync(`${uploadDir}/${fname}`, await bildLib.inseratsBildVerarbeiten(fotoDateien[i].buffer));
         await query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,$3,$4)',
           [ilan.id, `/uploads/ilanlar/${fname}`, i, i===0]);
       }
@@ -546,8 +549,7 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
     try {
       for (const z of ziel) {
         if (z.vorhanden) continue;
-        const daten = await sharp(neueFotos[z.neu].buffer)
-          .resize(1200, 1200, { fit: 'inside' }).webp({ quality: 80 }).toBuffer();
+        const daten = await bildLib.inseratsBildVerarbeiten(neueFotos[z.neu].buffer);
         fertige.set(z.neu, { fname: `${ilan.uuid}_${stempel}_${z.neu}.webp`, daten });
       }
     } catch {

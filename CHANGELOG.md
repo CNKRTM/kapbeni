@@ -2,6 +2,28 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.6.0 — 2026-09-12
+
+Bilder-Modal auf der Detailseite, Wasserzeichen auf hochgeladenen Bildern
+
+- Ein Klick auf das Produktbild öffnet jetzt ein Modal mit allen Bildern des
+  Inserats: durchblätterbar mit Pfeilen, Pfeiltasten, Wischen und
+  Vorschaukacheln, schließbar per X, Klick daneben und Escape; der
+  Hintergrund scrollt dabei nicht mit. Es ist dieselbe Bildliste wie in der
+  Galerie auf der Seite, keine zweite Datenquelle.
+  Dabei behoben: die Pfeile rechneten mit einem ungeklammerten Index und
+  konnten von einer unsichtbaren Position aus weiterspringen, wenn ein Bild
+  entfernt wurde.
+- Jedes hochgeladene Inseratsbild bekommt automatisch ein KapBeni-Wasserzeichen:
+  diagonal über das Bild, halbtransparent, aus dem vorhandenen Logo erzeugt.
+  Das passiert serverseitig beim Verarbeiten, ist also nicht per Rechtsklick zu
+  umgehen. Die Deckkraft wurde an echten Produktfotos gewählt, sodass die Ware
+  klar erkennbar bleibt. Der Aufschlag liegt bei rund 50 Millisekunden je Bild.
+  Bestehende Bilder bleiben unverändert; Profilbilder und KYC-Aufnahmen
+  bekommen bewusst kein Zeichen.
+  Dabei behoben: die Bildverarbeitung verwarf die EXIF-Ausrichtung — hochkant
+  aufgenommene Handyfotos blieben dauerhaft quer.
+
 ## 1.5.0 — 2026-09-12
 
 Video wird verkleinert statt abgelehnt, Konumu Kullan, kein Wechsel zur Startseite nach dem Anlegen

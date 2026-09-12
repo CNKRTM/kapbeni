@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Heart, Trash2, MapPin, MessageSquare, Phone, ShieldCheck, Check, Mail, ChevronDown, AlertTriangle } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { ArrowLeft, Heart, Trash2, X, MapPin, MessageSquare, Phone, ShieldCheck, Check, Mail, ChevronDown, AlertTriangle } from 'lucide-react'
 import { Listing, ve } from '../api'
 import { invalidateKategoriAgac } from '../data/kategoriAgac'
 import { useAuth } from '../context/AuthContext'
@@ -76,6 +77,75 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   // die weiter unten ohnehin geholt wird — keine zusaetzliche Anfrage.
   const [medien, setMedien] = useState<{ fotos: string[]; video: string | null }>({ fotos: [], video: null })
   const [aktiv, setAktiv] = useState(0)
+  const [lightbox, setLightbox] = useState(false)
+
+  // Stationen der Galerie: erst die Fotos, dann das Video (es gibt hoechstens
+  // eines). Solange die Detail-Antwort unterwegs ist, steht das Titelbild aus
+  // der Liste da, damit kein leerer Rahmen entsteht.
+  //
+  // Das stand frueher in einer sofort ausgefuehrten Funktion mitten im JSX.
+  // Dort war es aus einem useEffect (Tastatur) und aus einem ausserhalb
+  // gerenderten Modal nicht erreichbar — deshalb jetzt auf Komponentenebene.
+  const stationen = useMemo(() => {
+    const fotos = medien.fotos.length ? medien.fotos : (listing.image ? [listing.image] : [])
+    return [
+      ...fotos.map((u) => ({ art: 'foto' as const, url: u })),
+      ...(medien.video ? [{ art: 'video' as const, url: medien.video }] : []),
+    ]
+  }, [medien, listing.image])
+
+  const i = Math.min(aktiv, Math.max(0, stationen.length - 1))
+  const jetzt = stationen[i]
+  // Vom GEKLAMMERTEN Index aus weiterzaehlen, nicht vom rohen `aktiv`: liefert
+  // die Detail-Antwort weniger Stationen als vorher, stuende `aktiv` sonst
+  // ausserhalb und der Pfeil spraenge von einer unsichtbaren Position aus.
+  const springe = useCallback(
+    (d: number) => setAktiv(() => {
+      if (!stationen.length) return 0
+      const jetztIdx = Math.min(aktiv, stationen.length - 1)
+      return (jetztIdx + d + stationen.length) % stationen.length
+    }),
+    [aktiv, stationen.length]
+  )
+
+  // Tastatur — nur solange die Lightbox offen ist, damit die Pfeiltasten sonst
+  // das normale Scrollen nicht stoeren.
+  useEffect(() => {
+    if (!lightbox) return
+    const taste = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setLightbox(false)
+      else if (e.key === 'ArrowLeft') springe(-1)
+      else if (e.key === 'ArrowRight') springe(1)
+    }
+    document.addEventListener('keydown', taste)
+    return () => document.removeEventListener('keydown', taste)
+  }, [lightbox, springe])
+
+  // Hintergrund nicht mitscrollen lassen, solange die Lightbox offen ist.
+  useEffect(() => {
+    if (!lightbox) return
+    const vorher = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = vorher }
+  }, [lightbox])
+
+  // Wischen auf dem Telefon. Es gibt im Projekt noch keine Geste, deshalb
+  // bewusst schlicht: nur die waagerechte Strecke zaehlt, und erst ab 50 px.
+  const wischStart = useRef<{ x: number; y: number } | null>(null)
+  const wischAnfang = (e: React.TouchEvent) => {
+    const t = e.touches[0]
+    wischStart.current = { x: t.clientX, y: t.clientY }
+  }
+  const wischEnde = (e: React.TouchEvent) => {
+    const a = wischStart.current
+    wischStart.current = null
+    if (!a) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - a.x
+    const dy = t.clientY - a.y
+    if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return
+    springe(dx < 0 ? 1 : -1)
+  }
 
   useEffect(() => {
     let active = true
@@ -254,72 +324,74 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
           {/* Galerie — Fotos plus optionales Video. Solange die Detail-Antwort
               noch unterwegs ist, steht hier das Titelbild aus der Liste, damit
               es keinen leeren Rahmen und kein Springen gibt. */}
-          {(() => {
-            const fotos = medien.fotos.length ? medien.fotos : (listing.image ? [listing.image] : [])
-            const stationen = [...fotos.map((u) => ({ art: 'foto' as const, url: u })),
-              ...(medien.video ? [{ art: 'video' as const, url: medien.video }] : [])]
-            const i = Math.min(aktiv, Math.max(0, stationen.length - 1))
-            const jetzt = stationen[i]
-            const springe = (d: number) => setAktiv((p) => (p + d + stationen.length) % stationen.length)
-            return (
+          <div
+            className={`relative bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm aspect-square md:aspect-video lg:aspect-square flex items-center justify-center ${
+              jetzt?.art === 'foto' ? 'cursor-zoom-in' : ''
+            }`}
+            onTouchStart={wischAnfang}
+            onTouchEnd={wischEnde}
+          >
+            {jetzt?.art === 'video' ? (
+              <video src={jetzt.url} controls playsInline className="w-full h-full object-contain bg-black" />
+            ) : (
+              // Nur Fotos oeffnen die Lightbox. Beim Video wuerde der Klick mit
+              // den eingebauten Bedienelementen kollidieren.
+              <img
+                alt={listing.title}
+                className="w-full h-full object-cover"
+                src={jetzt?.url || listing.image}
+                referrerPolicy="no-referrer"
+                onClick={() => setLightbox(true)}
+              />
+            )}
+            <span className="absolute top-4 left-4 text-xs font-extrabold tracking-wide uppercase px-3 py-1 bg-primary text-white rounded shadow-sm pointer-events-none">
+              {listing.condition}
+            </span>
+            {stationen.length > 1 && (
               <>
-                <div className="relative bg-white border border-gray-100 rounded-3xl overflow-hidden shadow-sm aspect-square md:aspect-video lg:aspect-square flex items-center justify-center">
-                  {jetzt?.art === 'video' ? (
-                    <video src={jetzt.url} controls playsInline className="w-full h-full object-contain bg-black" />
-                  ) : (
-                    <img alt={listing.title} className="w-full h-full object-cover" src={jetzt?.url || listing.image} referrerPolicy="no-referrer" />
-                  )}
-                  <span className="absolute top-4 left-4 text-xs font-extrabold tracking-wide uppercase px-3 py-1 bg-primary text-white rounded shadow-sm">
-                    {listing.condition}
-                  </span>
-                  {stationen.length > 1 && (
-                    <>
-                      <button
-                        onClick={() => springe(-1)}
-                        aria-label="Önceki"
-                        className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 hover:text-primary transition-colors cursor-pointer"
-                      >
-                        <ChevronDown className="h-4 w-4 rotate-90" />
-                      </button>
-                      <button
-                        onClick={() => springe(1)}
-                        aria-label="Sonraki"
-                        className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 hover:text-primary transition-colors cursor-pointer"
-                      >
-                        <ChevronDown className="h-4 w-4 -rotate-90" />
-                      </button>
-                      <span className="absolute bottom-4 right-4 text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/60 text-white">
-                        {i + 1} / {stationen.length}
-                      </span>
-                    </>
-                  )}
-                </div>
-
-                {stationen.length > 1 && (
-                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                    {stationen.map((s, idx) => (
-                      <button
-                        key={s.url + idx}
-                        onClick={() => setAktiv(idx)}
-                        aria-label={s.art === 'video' ? 'Video' : `Fotoğraf ${idx + 1}`}
-                        className={`relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-colors cursor-pointer ${
-                          idx === i ? 'border-primary' : 'border-gray-100 hover:border-gray-300'
-                        }`}
-                      >
-                        {s.art === 'video' ? (
-                          <span className="w-full h-full bg-gray-900 flex items-center justify-center">
-                            <i className="ti ti-player-play-filled" style={{ color: '#fff', fontSize: 18 }} />
-                          </span>
-                        ) : (
-                          <img src={s.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                <button
+                  onClick={() => springe(-1)}
+                  aria-label="Önceki"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 hover:text-primary transition-colors cursor-pointer"
+                >
+                  <ChevronDown className="h-4 w-4 rotate-90" />
+                </button>
+                <button
+                  onClick={() => springe(1)}
+                  aria-label="Sonraki"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 w-9 h-9 rounded-full bg-white/95 border border-gray-100 shadow-sm flex items-center justify-center text-gray-600 hover:text-primary transition-colors cursor-pointer"
+                >
+                  <ChevronDown className="h-4 w-4 -rotate-90" />
+                </button>
+                <span className="absolute bottom-4 right-4 text-[11px] font-bold px-2.5 py-1 rounded-full bg-black/60 text-white pointer-events-none">
+                  {i + 1} / {stationen.length}
+                </span>
               </>
-            )
-          })()}
+            )}
+          </div>
+
+          {stationen.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+              {stationen.map((st, idx) => (
+                <button
+                  key={st.url + idx}
+                  onClick={() => setAktiv(idx)}
+                  aria-label={st.art === 'video' ? 'Video' : `Fotoğraf ${idx + 1}`}
+                  className={`relative w-16 h-16 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-colors cursor-pointer ${
+                    idx === i ? 'border-primary' : 'border-gray-100 hover:border-gray-300'
+                  }`}
+                >
+                  {st.art === 'video' ? (
+                    <span className="w-full h-full bg-gray-900 flex items-center justify-center">
+                      <i className="ti ti-player-play-filled" style={{ color: '#fff', fontSize: 18 }} />
+                    </span>
+                  ) : (
+                    <img src={st.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
           {/* İlan Özellikleri */}
           <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2">
@@ -563,6 +635,105 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
 
         </div>
       </div>
+
+      {/* Bilder-Modal (Lightbox).
+          Dieselbe Datenquelle wie die Galerie auf der Seite (stationen) — es
+          gibt bewusst keine zweite Liste, sonst liefen beide auseinander.
+          Ueber createPortal an document.body, wie die uebrigen Overlays des
+          Projekts; sonst haengt es im Detail-Container mit seinen Radien und
+          overflow-hidden fest. */}
+      {lightbox && jetzt && createPortal(
+        <div
+          className="fixed inset-0 z-[100] bg-black/90 flex flex-col"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Fotoğraflar"
+          onClick={() => setLightbox(false)}
+        >
+          {/* Kopfzeile: Zaehler links, Schliessen rechts */}
+          <div className="flex items-center justify-between px-4 py-3 text-white/90 flex-shrink-0">
+            <span className="text-sm font-bold">
+              {stationen.length > 1 ? `${i + 1} / ${stationen.length}` : ''}
+            </span>
+            <button
+              onClick={() => setLightbox(false)}
+              aria-label="Kapat"
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Bildflaeche. stopPropagation, damit ein Klick auf das Bild selbst
+              nicht schliesst — daneben schon. */}
+          <div
+            className="flex-1 min-h-0 relative flex items-center justify-center px-2"
+            onClick={(e) => e.stopPropagation()}
+            onTouchStart={wischAnfang}
+            onTouchEnd={wischEnde}
+          >
+            {jetzt.art === 'video' ? (
+              <video src={jetzt.url} controls playsInline autoPlay className="max-w-full max-h-full" />
+            ) : (
+              <img
+                src={jetzt.url}
+                alt={listing.title}
+                className="max-w-full max-h-full object-contain select-none"
+                referrerPolicy="no-referrer"
+                draggable={false}
+              />
+            )}
+
+            {stationen.length > 1 && (
+              <>
+                <button
+                  onClick={() => springe(-1)}
+                  aria-label="Önceki"
+                  className="absolute left-2 md:left-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <ChevronDown className="h-5 w-5 rotate-90" />
+                </button>
+                <button
+                  onClick={() => springe(1)}
+                  aria-label="Sonraki"
+                  className="absolute right-2 md:right-4 top-1/2 -translate-y-1/2 w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <ChevronDown className="h-5 w-5 -rotate-90" />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Vorschaukacheln — gleiche Form wie auf der Seite, nur auf dunklem Grund */}
+          {stationen.length > 1 && (
+            <div
+              className="flex gap-2 overflow-x-auto px-4 py-3 flex-shrink-0 justify-start md:justify-center"
+              style={{ scrollbarWidth: 'none' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              {stationen.map((st, idx) => (
+                <button
+                  key={st.url + idx}
+                  onClick={() => setAktiv(idx)}
+                  aria-label={st.art === 'video' ? 'Video' : `Fotoğraf ${idx + 1}`}
+                  className={`relative w-14 h-14 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-colors cursor-pointer ${
+                    idx === i ? 'border-primary' : 'border-white/25 hover:border-white/60'
+                  }`}
+                >
+                  {st.art === 'video' ? (
+                    <span className="w-full h-full bg-gray-900 flex items-center justify-center">
+                      <i className="ti ti-player-play-filled" style={{ color: '#fff', fontSize: 16 }} />
+                    </span>
+                  ) : (
+                    <img src={st.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>,
+        document.body
+      )}
 
       <OnayModal
         offen={loeschFrage}
