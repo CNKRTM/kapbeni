@@ -2,6 +2,24 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.3.0 — 2026-09-12
+
+Lösch-Bestätigung im Seitendesign, Navigation nach dem Löschen, Fehlergrenze
+
+- Die Lösch-Bestätigung ist kein natives Browser-confirm() mehr, sondern ein
+  eigenes Modal im bestehenden Design (weiße Karte, zwei gleich breite Knöpfe,
+  grau abbrechen / rot bestätigen). Gleicher Warntext wie zuvor. Umgestellt an
+  allen vier Stellen: Bearbeiten-Maske, Detailseite, Profilseite und
+  Admin-Tabelle. Escape und Klick daneben schließen.
+- Nach dem Löschen wechselt die Seite nicht mehr auf die Startseite. Wer aus
+  "İlanlarım" heraus löscht, bleibt dort und die Liste baut sich ohne das
+  gelöschte Inserat neu auf; von der Detailseite aus geht es in die Kategorie
+  zurück, aus der das Inserat geöffnet wurde, und erst als letztes zur
+  Startseite.
+- Neue Fehlergrenze um die Dashboard-Reiter: ein Fehler beim Rendern nimmt
+  nicht mehr die ganze Seite mit, sondern zeigt an Ort und Stelle eine Meldung
+  mit "Tekrar Dene"; Seitenleiste, Navigation und Fußzeile bleiben stehen.
+
 ## 1.2.1 — 2026-09-12
 
 Favorilerim-Weißseite behoben

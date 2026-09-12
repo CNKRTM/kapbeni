@@ -6,6 +6,7 @@ import { invalidateKategoriAgac } from '../data/kategoriAgac'
 import { useAuth } from '../context/AuthContext'
 import BenzerIlanlar from '../components/BenzerIlanlar'
 import PaylasMenu from '../components/PaylasMenu'
+import OnayModal from '../components/OnayModal'
 
 interface Props {
   listing: Listing
@@ -160,10 +161,11 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     }
   }
 
+  const [loeschFrage, setLoeschFrage] = useState(false)
+
   const handleDelete = async () => {
-    // Der Text sagt jetzt, was wirklich passiert: seit dem Fix loescht die
-    // Route endgueltig statt das Inserat nur auf 'pasif' zu setzen.
-    if (!confirm('Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?')) return
+    // Bestaetigung laeuft ueber OnayModal, nicht ueber window.confirm() —
+    // siehe components/OnayModal.tsx.
     setIsDeleting(true)
     try {
       await ve.del(`/ilanlar/${listing.id}`)
@@ -177,6 +179,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     } catch (err: any) {
       // Die API schreibt den Grund nach `hata`; der Client liest ihn seit dem
       // Fix in api/index.ts auch aus, statt immer 'Hata oluştu' zu melden.
+      setLoeschFrage(false)
       alert(err?.message === 'Unauthorized'
         ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.'
         : (err?.message || 'İlan silinemedi. Lütfen tekrar deneyin.'))
@@ -235,7 +238,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
           )}
           {isOwner && (
             <button
-              onClick={handleDelete}
+              onClick={() => setLoeschFrage(true)}
               disabled={isDeleting}
               className="h-10 px-3 rounded-full border border-red-200 bg-white flex items-center gap-1.5 text-sm font-semibold text-red-500 hover:text-red-700 hover:border-red-400 transition-all shadow-xs cursor-pointer disabled:opacity-50"
             >
@@ -560,6 +563,18 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
 
         </div>
       </div>
+
+      <OnayModal
+        offen={loeschFrage}
+        titel="İlanı sil"
+        text="Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?"
+        bestaetigen="Evet, sil"
+        gefaehrlich
+        icon="trash"
+        laeuft={isDeleting}
+        onBestaetigen={handleDelete}
+        onAbbrechen={() => setLoeschFrage(false)}
+      />
 
       {/* Benzer İlanlar — Auswahl kommt vom Server, siehe components/BenzerIlanlar.tsx */}
       {onSelectListing && onSelectCategory && listing.id && (

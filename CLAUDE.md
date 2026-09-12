@@ -656,6 +656,51 @@ tatsächlichen Antwort verglichen. `/teklifler`, `/sikayet/benim`, `/kayitli-ara
 `/degerlendirme/son` liefern Arrays; `/kazanc` und `/ilanlar/benim` liefern Objekte, werden
 dort aber korrekt ausgepackt. `/favoriler` war die einzige Fehlstelle.
 
+**Fehlergrenze um die Dashboard-Reiter** (`src/src/components/FehlerGrenze.tsx`). React
+bricht beim Fehler im Rendern den gesamten Baum ab — deshalb riss ein einzelner kaputter
+Reiter bisher die ganze Seite weiß, samt Navigation und Fußzeile. Jetzt erscheint an der
+Stelle des Reiters eine Meldung im Seitendesign („Bu bölüm yüklenemedi", mit *Tekrar Dene*),
+während Seitenleiste, Navigation und Fußzeile stehen bleiben. Der Schlüssel ist der Reiter,
+damit eine Meldung beim Wechseln verschwindet.
+
+**Ein erster Anlauf griff nicht, und der Grund ist lehrreich:** eine Fehlergrenze fängt nur
+Fehler im Render ihrer **Nachfahren**. Der fehlerhafte Ausdruck stand aber direkt im JSX von
+`Dashboard` selbst (`{favoriler.map(…)}`) — er wirft, während React *Dashboard* rendert, und
+die Grenze ist da noch gar nicht an der Reihe. Der Test zeigte weiterhin Textlänge 0.
+Behoben mit der Hülle `<Inhalt render={() => …}>`, die den Ausdruck erst in ihrem eigenen
+Render auswertet und ihn damit zu einem Kind-Render macht. Der Komponententyp bleibt stabil,
+es wird also nichts bei jedem Durchlauf neu eingehängt.
+*Belegt:* Der alte Favorilerim-Fehler wurde zum Test vorübergehend wieder eingebaut — vorher
+Textlänge 0 und `P.map is not a function`, nachher Meldung im Bereich, Navigation und
+Seitenleiste erhalten, Reiterwechsel räumt sie ab. Danach zurückgebaut; alle neun Reiter
+laden fehlerfrei.
+
+**Lösch-Bestätigung als eigenes Modal** (`src/src/components/OnayModal.tsx`) statt
+`window.confirm()`. Das native Fenster sieht auf jedem Gerät anders aus, schreibt
+„kapbeni.com says…" darüber und passt zu nichts auf dieser Seite; auf iOS lässt es sich
+zudem unterdrücken. Die Optik ist keine Neuerfindung, sondern dieselbe wie beim
+Şikayet-Dialog in `pages/Details.tsx`: dunkler Überzug, weiße Karte `rounded-2xl`, zwei
+gleich breite Knöpfe `rounded-xl` (grau abbrechen, rot bestätigen), Tabler-Icon im
+getönten Quadrat. Text unverändert übernommen. Escape und Klick daneben schließen,
+der bestätigende Knopf bekommt den Fokus.
+Umgestellt an **allen vier** Stellen, an denen ein Inserat gelöscht wird: Bearbeiten-Maske
+(`SellModal`), Detailseite (`Details`), Profilseite (`Profile`) und Admin-Tabelle
+(`AdminPanel`). Im Frontend gibt es jetzt kein `confirm()` mehr.
+*Achtung beim Nachbauen:* Beim Umstellen von `Profile.tsx` war die Bestätigung kurzzeitig
+ersatzlos entfernt — `deleteListing` löschte ohne Rückfrage. Beim Ersetzen eines `confirm()`
+immer prüfen, dass das Modal die Abfrage wirklich übernimmt.
+
+**Nach dem Löschen bleibt man, wo man war.** Vorher stand in zwei Pfaden fest
+`setActiveTab('home')` — wer aus „İlanlarım" heraus löschte, landete auf der Startseite und
+verlor den Ort, an dem er gerade arbeitete. Jetzt merkt sich `loeschHerkunftRef` beim
+Öffnen eines Inserats (`selectProduct`) und beim Öffnen der Bearbeiten-Maske, woher der
+Nutzer kam; nach dem Löschen führt der Weg dorthin zurück: `dashboard` → Panel,
+Reiter „İlanlarım"; `profil` → Profilseite; sonst in die gewählte Kategorie und erst als
+letztes auf die Startseite.
+*Belegt:* Löschen über „Düzenle" aus İlanlarım → bleibt auf `#/panel/ilanlarim`. Karte im
+Dashboard öffnen, auf der Detailseite „Sil" → ebenfalls zurück auf `#/panel/ilanlarim`
+(vorher landeten beide Wege auf `#/`). Abbrechen löscht nichts und lässt die Maske offen.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -668,9 +713,9 @@ dort aber korrekt ausgepackt. `/favoriler` war die einzige Fehlstelle.
 - **Neue Inserate landen nicht im Suchindex**: `meiliSync.syncListing()` wird beim Anlegen
   (`POST /api/ilanlar`) nicht aufgerufen, nur beim Bearbeiten und über den nächtlichen Lauf.
   Eine Suche nach einem frisch angelegten Inserat findet es deshalb nicht.
-- Es gibt **keine Error Boundary**: ein Fehler beim Rendern nimmt die gesamte Seite mit,
-  statt nur den betroffenen Bereich. Der Weißseiten-Fall in „Favorilerim" war deshalb so
-  folgenreich. Eine Boundary um die Reiter-Inhalte wäre der nächste sinnvolle Schritt.
+- Die Fehlergrenze schützt bislang nur die Dashboard-Reiter. Detailseite, Keşfet, Profil
+  und Einstellungen haben keine — dort nimmt ein Renderfehler weiterhin die Seite mit.
+  Dasselbe Muster (`FehlerGrenze` + `Inhalt`) ließe sich dort anwenden.
 - Dateien ohne Inserat: vier Bilder vom 22.07. liegen verwaist unter
   `/uploads/ilanlar/`. Seit dem Lösch-Fix entstehen keine neuen mehr, die alten bleiben.
 - Bearbeiten erfasst nur die Felder der Maske. `kargo_var`, `elden_teslim`, `kargo_ucreti`,

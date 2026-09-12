@@ -1,5 +1,6 @@
 // Dashboard — KapBeni Customer Area (overnight3, an echten Stack angepasst)
 import { useState, useEffect, useRef } from 'react'
+import FehlerGrenze, { Inhalt } from '../components/FehlerGrenze'
 import { useAuth } from '../context/AuthContext'
 import { ilanlarApi, favorilerApi, degerlendirmeApi, ve, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
@@ -251,6 +252,13 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
       {/* RECHTER CONTENT-BEREICH */}
       <main style={{ flex: 1, minWidth: 0 }}>
 
+      {/* Fehlergrenze um die Reiter-Inhalte: ein Fehler beim Rendern nimmt
+          sonst den gesamten React-Baum mit — Seitenleiste, Navigation und
+          Fußzeile inklusive (siehe "Favorilerim" in CLAUDE.md). Der Schlüssel
+          ist der Reiter, damit eine Meldung beim Wechseln verschwindet. */}
+      <FehlerGrenze schluessel={tab}>
+      <Inhalt render={() => (<>
+
       {loading && <div style={emptyStyle}>Yükleniyor...</div>}
 
       {!loading && tab === 'ilanlarim' && (
@@ -470,6 +478,8 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
           }
         </div>
       )}
+      </>)} />
+      </FehlerGrenze>
       </main>
     </div>
 

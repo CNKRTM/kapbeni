@@ -3,6 +3,7 @@ import { Package, PenLine, ShieldCheck, ShieldAlert, Smartphone, Check, LogOut, 
 import { ilanlarApi, Listing } from '../api'
 import { useAuth } from '../context/AuthContext'
 import ProductCard from '../components/ProductCard'
+import OnayModal from '../components/OnayModal'
 
 interface Props {
   onOpenKyc: () => void
@@ -49,18 +50,25 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
     })()
   }, [])
 
+  // Welches Inserat gerade zum Loeschen ansteht — gesetzt heisst: Modal offen.
+  const [loeschZiel, setLoeschZiel] = useState<string | null>(null)
+  const [loescht, setLoescht] = useState(false)
+
   const deleteListing = async (id: string) => {
-    // Seit dem Fix loescht die Route endgueltig — der Text muss das sagen.
-    if (!confirm('Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?')) return
+    setLoescht(true)
     try {
       await ilanlarApi.delete(id)
       setListings((prev) => prev.filter((l) => l.id !== id))
+      setLoeschZiel(null)
     } catch (err: any) {
+      setLoeschZiel(null)
       // Der Grund kommt jetzt aus dem Feld `hata` der API durch, statt immer
       // dieselbe nichtssagende Zeile zu zeigen.
       alert(err?.message === 'Unauthorized'
         ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.'
         : (err?.message || 'İlan silinemedi. Lütfen tekrar deneyin.'))
+    } finally {
+      setLoescht(false)
     }
   }
 
@@ -170,7 +178,7 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
                   onToggleFavorite={() => {}}
                 />
                 <button
-                  onClick={(e) => { e.stopPropagation(); deleteListing(listing.id) }}
+                  onClick={(e) => { e.stopPropagation(); setLoeschZiel(listing.id) }}
                   className="absolute top-2 right-2 z-10 flex items-center gap-1 text-xs text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 rounded-lg px-2 py-1 transition-colors bg-white shadow-sm"
                 >
                   <Trash2 size={12} /> Sil
@@ -184,6 +192,18 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
           </div>
         )}
       </div>
+
+      <OnayModal
+        offen={loeschZiel != null}
+        titel="İlanı sil"
+        text="Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?"
+        bestaetigen="Evet, sil"
+        gefaehrlich
+        icon="trash"
+        laeuft={loescht}
+        onBestaetigen={() => loeschZiel && deleteListing(loeschZiel)}
+        onAbbrechen={() => setLoeschZiel(null)}
+      />
     </div>
   )
 }

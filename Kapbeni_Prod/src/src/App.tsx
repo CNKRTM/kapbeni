@@ -164,6 +164,10 @@ export default function App() {
   const [showSellModal, setShowSellModal] = useState(false)
   // Bearbeiten benutzt dieselbe Maske; gesetzte Vorgabe = Bearbeiten-Modus.
   const [bearbeiteVorgabe, setBearbeiteVorgabe] = useState<IlanVorgabe | null>(null)
+  // Woher das Bearbeiten/Loeschen angestossen wurde. Danach richtet sich, wo
+  // der Nutzer nach dem Loeschen landet — aus "İlanlarım" heraus soll er dort
+  // bleiben, statt auf der Startseite zu stehen.
+  const loeschHerkunftRef = useRef<'dashboard' | 'details' | 'profil' | null>(null)
   // Wird nach Bearbeiten/Loeschen erhoeht; Ansichten mit eigener Liste
   // (Dashboard) laden daraufhin neu.
   const [listenSignal, setListenSignal] = useState(0)
@@ -469,8 +473,12 @@ export default function App() {
    * Zustandscode und die vollstaendige Fotoliste. Seit dem Eigentuemer-Fix
    * zaehlt dieser Aufruf die eigene Ansicht nicht mehr mit.
    */
-  const oeffneBearbeiten = async (ilanId: string) => {
+  const oeffneBearbeiten = async (ilanId: string, herkunft?: 'dashboard' | 'details') => {
     if (!isLoggedIn) { setShowAuthModal(true); return }
+    // 'details' bedeutet nur "von der Detailseite aus angestossen" — die
+    // eigentliche Herkunft hat selectProduct schon gesetzt und soll erhalten
+    // bleiben. Nur 'dashboard' ueberschreibt ausdruecklich.
+    if (herkunft === 'dashboard') loeschHerkunftRef.current = 'dashboard'
     try {
       const d = await ilanlarApiEdit.getOne(ilanId)
       if (!d || !d.uuid) { showToast('İlan yüklenemedi.'); return }
@@ -541,9 +549,26 @@ export default function App() {
       // gleich, bricht aber bei leerer Antwort ab — ohne das Filtern bliebe
       // das geloeschte Inserat sichtbar und das Loeschen saehe wirkungslos aus.
       setListings((prev) => prev.filter((l) => l.id !== uuid))
+
+      // Wohin danach? Frueher immer auf die Startseite — auch wenn das
+      // Loeschen aus "İlanlarım" kam. Der Nutzer verlor damit den Ort, an dem
+      // er gerade gearbeitet hat.
+      const herkunft = loeschHerkunftRef.current
+      loeschHerkunftRef.current = null
       if (selectedListing && selectedListing.id === uuid) {
         setSelectedListing(null)
-        setActiveTab('home')
+        if (herkunft === 'dashboard') {
+          // Aus dem Panel gekommen: dorthin zurueck, in denselben Reiter.
+          setDashboardTab('ilanlarim')
+          setActiveTab('dashboard')
+        } else if (herkunft === 'profil') {
+          setActiveTab('profile')
+        } else if (selectedCategory) {
+          // Von der Detailseite: in die Kategorie, aus der es kam.
+          setActiveTab('discover')
+        } else {
+          setActiveTab('home')
+        }
       }
       showToast('İlan silindi.')
       fetchListings()
@@ -602,6 +627,11 @@ export default function App() {
   }
 
   const selectProduct = (listing: Listing) => {
+    // Merken, von wo aus das Inserat geoeffnet wurde. Wird es spaeter aus der
+    // Detailansicht geloescht, kehrt der Nutzer genau dorthin zurueck statt
+    // auf der Startseite zu landen.
+    loeschHerkunftRef.current =
+      activeTab === 'dashboard' ? 'dashboard' : activeTab === 'profile' ? 'profil' : null
     setSelectedListing(listing)
     setActiveTab('details')
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1031,11 +1061,19 @@ export default function App() {
                 onHemenAl={hemenAl}
                 onViewSeller={(id) => { setSellerProfileId(id); setActiveTab('satici') }}
                 onSelectListing={selectProduct}
-                onEdit={oeffneBearbeiten}
+                onEdit={(id) => oeffneBearbeiten(id, 'details')}
                 onDeleted={(id) => {
                   setListings((prev) => prev.filter((l) => l.id !== id))
                   setSelectedListing(null)
-                  setActiveTab('home')
+                  // Zurueck, wo der Nutzer herkam: in die Kategorie, wenn eine
+                  // gewaehlt war, sonst ins Panel, wenn er von dort kam —
+                  // erst als letztes auf die Startseite.
+                  const h = loeschHerkunftRef.current
+                  if (h === 'dashboard') { setDashboardTab('ilanlarim'); setActiveTab('dashboard') }
+                  else if (h === 'profil') setActiveTab('profile')
+                  else if (selectedCategory) setActiveTab('discover')
+                  else setActiveTab('home')
+                  loeschHerkunftRef.current = null
                   fetchListings()
                   setListenSignal((n) => n + 1)
                 }}
@@ -1069,7 +1107,7 @@ export default function App() {
                 onNavigateSettings={() => setActiveTab('ayarlar')}
                 initialTab={dashboardTab}
                 onTabChange={setDashboardTab}
-                onEditListing={oeffneBearbeiten}
+                onEditListing={(id) => oeffneBearbeiten(id, 'dashboard')}
                 refreshSignal={listenSignal}
               />
             </motion.div>

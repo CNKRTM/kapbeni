@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import OnayModal from './OnayModal'
 import { X, Sparkles, ChevronDown } from 'lucide-react'
 import { CITIES } from '../data/cities'
 import { Listing } from '../api'
@@ -67,7 +68,8 @@ interface Props {
   vorgabe?: IlanVorgabe | null
   /** Muss werfen, wenn das Speichern scheitert — die Maske faengt das ab. */
   onSave?: (aenderung: IlanAenderung) => Promise<void> | void
-  onDelete?: (uuid: string) => void
+  /** Darf werfen — die Maske zeigt den Grund dann im Formular. */
+  onDelete?: (uuid: string) => Promise<void> | void
 }
 
 /** Zustandscode der DB -> der exakte Wert im Durum-Select.
@@ -277,10 +279,21 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
     onAddListing(listing, dateien.length ? dateien : undefined, video)
   }
 
-  const handleDelete = () => {
+  // Bestaetigung ueber ein eigenes Modal statt window.confirm(): das native
+  // Fenster sieht auf jedem Geraet anders aus, schreibt "kapbeni.com says…"
+  // darueber und passt zu nichts auf dieser Seite.
+  const [loeschFrage, setLoeschFrage] = useState(false)
+  const [loescht, setLoescht] = useState(false)
+
+  const handleDelete = async () => {
     if (!vorgabe || !onDelete) return
-    if (!window.confirm('Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?')) return
-    onDelete(vorgabe.uuid)
+    setLoescht(true)
+    try { await Promise.resolve(onDelete(vorgabe.uuid)) }
+    catch (err: any) {
+      setLoeschFrage(false)
+      setErrors((prev) => ({ ...prev, speichern: err?.message || 'İlan silinemedi.' }))
+    }
+    finally { setLoescht(false) }
   }
 
   return (
@@ -590,7 +603,7 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
           {bearbeiten && onDelete && (
             <button
               type="button"
-              onClick={handleDelete}
+              onClick={() => setLoeschFrage(true)}
               className="w-full mt-1 flex items-center justify-center gap-2 border border-red-200 bg-white text-red-500 hover:text-red-700 hover:border-red-400 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer"
             >
               <i className="ti ti-trash" style={{ fontSize: 16 }} /> İlanı Sil
@@ -598,6 +611,18 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
           )}
         </form>
       </div>
+
+      <OnayModal
+        offen={loeschFrage}
+        titel="İlanı sil"
+        text="Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?"
+        bestaetigen="Evet, sil"
+        gefaehrlich
+        icon="trash"
+        laeuft={loescht}
+        onBestaetigen={handleDelete}
+        onAbbrechen={() => setLoeschFrage(false)}
+      />
     </div>
   )
 }

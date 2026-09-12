@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { ve } from '../api'
 import { useAuth } from '../context/AuthContext'
+import OnayModal from '../components/OnayModal'
 
 type AdminTab =
   | 'istatistik'
@@ -25,6 +26,16 @@ const th: React.CSSProperties = {
 const td: React.CSSProperties = { padding: '8px 12px', ...font, fontSize: 12, color: '#374151' }
 
 export default function AdminPanel() {
+  // uuid des Inserats, dessen Loeschung gerade bestaetigt werden soll.
+  const [loeschZiel, setLoeschZiel] = useState<string | null>(null)
+  const [loescht, setLoescht] = useState(false)
+  const loeschen = async () => {
+    if (!loeschZiel) return
+    setLoescht(true)
+    try { await ve.del(`/admin/ilanlar/${loeschZiel}`); setLoeschZiel(null); reload() }
+    catch (err: any) { setLoeschZiel(null); window.alert(err?.message || 'İlan silinemedi.') }
+    finally { setLoescht(false) }
+  }
   const { user } = useAuth()
   const [tab, setTab] = useState<AdminTab>('istatistik')
   const [data, setData] = useState<any>(null)
@@ -92,6 +103,7 @@ export default function AdminPanel() {
   const tableWrap: React.CSSProperties = { background: '#fff', borderRadius: 16, border: '1px solid #f0f0f0', overflow: 'auto' }
 
   return (
+    <>
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '16px 0' }}>
       <div style={{ ...font, fontWeight: 800, fontSize: 20, color: '#1a2e4a', marginBottom: 16 }}>
         <i className="ti ti-shield" style={{ marginRight: 8 }} />Admin Paneli
@@ -148,16 +160,12 @@ export default function AdminPanel() {
                   <td style={{ ...td, display: 'flex', gap: 6 }}>
                     {l.ilan_durum === 'aktif' && <button onClick={() => ve.patch(`/admin/ilanlar/${l.uuid}/durum`, { ilan_durum: 'pasif' }).then(() => reload())} style={btn('#fef2f2','#dc2626','#fca5a5')}>Pasif</button>}
                     {l.ilan_durum === 'pasif' && <button onClick={() => ve.patch(`/admin/ilanlar/${l.uuid}/durum`, { ilan_durum: 'aktif' }).then(() => reload())} style={btn('#f0fdf4','#15803d','#bbf7d0')}>Aktif</button>}
-                    <button onClick={() => {
-                        // Vorher: kein catch. Die Route gab es gar nicht, der
-                        // Aufruf lief in 404, das Promise verpuffte — der
-                        // Admin sah weder Meldung noch Wirkung. Die Route ist
-                        // jetzt da, der Fehlerfall wird trotzdem gezeigt.
-                        if (!window.confirm('Bu ilan kalıcı olarak silinecek. Emin misiniz?')) return
-                        ve.del(`/admin/ilanlar/${l.uuid}`)
-                          .then(() => reload())
-                          .catch((err: any) => window.alert(err?.message || 'İlan silinemedi.'))
-                      }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><i className="ti ti-trash" /></button>
+                    {/* Bestaetigung ueber OnayModal statt window.confirm — gleiche
+                        Oberflaeche wie im Rest der Seite. Das catch bleibt: die
+                        Route gab es frueher gar nicht, der Aufruf lief in 404 und
+                        das Promise verpuffte ohne jede Meldung. */}
+                    <button onClick={() => setLoeschZiel(l.uuid)}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><i className="ti ti-trash" /></button>
                   </td>
                 </tr>
               ))}
@@ -470,5 +478,17 @@ export default function AdminPanel() {
         </div>
       )}
     </div>
+      <OnayModal
+        offen={loeschZiel != null}
+        titel="İlanı sil"
+        text="Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?"
+        bestaetigen="Evet, sil"
+        gefaehrlich
+        icon="trash"
+        laeuft={loescht}
+        onBestaetigen={loeschen}
+        onAbbrechen={() => setLoeschZiel(null)}
+      />
+    </>
   )
 }
