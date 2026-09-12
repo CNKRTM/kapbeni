@@ -20,7 +20,16 @@ app.use(morgan('combined'));
 app.use('/uploads', express.static('/var/www/kapbeni/uploads'));
 
 // Rate limiting
-app.use('/api/auth', rateLimit({ windowMs: 15*60*1000, max: 20, message: { hata: 'Çok fazla istek' } }));
+//
+// Die enge Schranke gehoert auf die Zugangsdaten-Routen (Anmelden, Registrieren),
+// NICHT auf /api/auth als Ganzes: dort liegt auch GET /ben, das bei JEDEM
+// Seitenaufruf mitlaeuft. Mit 20 Anfragen je 15 Minuten war ein Nutzer nach rund
+// zwanzig Seitenaufrufen gesperrt — und weil das Frontend einen Fehlschlag von
+// /ben wie eine Abmeldung behandelte, flog er dabei aus seiner Sitzung.
+app.use(['/api/auth/giris', '/api/auth/kayit'],
+  rateLimit({ windowMs: 15*60*1000, max: 20, message: { hata: 'Çok fazla istek' } }));
+// /ben ist ein billiger, angemeldeter Lesezugriff — grosszuegiger, aber nicht offen.
+app.use('/api/auth/ben', rateLimit({ windowMs: 1*60*1000, max: 60 }));
 app.use('/api', rateLimit({ windowMs: 1*60*1000, max: 120 }));
 
 // Routes — hepsi /api/* altında

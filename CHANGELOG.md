@@ -2,6 +2,26 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.4.0 — 2026-09-12
+
+Löschen wechselt nicht mehr zur Startseite; Sitzung überlebt Rate-Limit
+
+- Nach dem Löschen aus "İlanlarım" bleibt man dort und die Liste baut sich
+  ohne das gelöschte Inserat neu auf. Der erste Anlauf merkte sich die
+  Herkunft in einem Ref — der ist nach jedem Neuladen der Seite weg, dann
+  landete man doch wieder auf der Startseite. Jetzt wird nur noch navigiert,
+  wenn die Detailansicht des gelöschten Inserats offen ist; dafür führt die
+  Browser-Historie zurück an den Ort, von dem der Nutzer kam (Panel,
+  Kategorie, Suche oder Profil). Ohne eigenen Verlauf geht es ins Panel.
+- Eigentliche Ursache des Symptoms behoben: ein Fehlschlag von
+  GET /api/auth/ben hat den Nutzer aus seiner Sitzung geworfen. Auf /api/auth
+  lag ein Limit von 20 Anfragen je 15 Minuten, und /auth/ben läuft bei jedem
+  Seitenaufruf mit — nach rund zwanzig Aufrufen kam 429, der Token wurde
+  gelöscht und man stand abgemeldet auf der Startseite. Das enge Limit gilt
+  jetzt nur noch für Anmelden und Registrieren; /auth/ben bekommt 60 je
+  Minute. Und nur eine echte Ablehnung (401) beendet die Sitzung — ein 429,
+  ein Serverfehler oder ein Netzaussetzer nicht mehr.
+
 ## 1.3.0 — 2026-09-12
 
 Lösch-Bestätigung im Seitendesign, Navigation nach dem Löschen, Fehlergrenze

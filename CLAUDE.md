@@ -701,6 +701,93 @@ letztes auf die Startseite.
 Dashboard öffnen, auf der Detailseite „Sil" → ebenfalls zurück auf `#/panel/ilanlarim`
 (vorher landeten beide Wege auf `#/`). Abbrechen löscht nichts und lässt die Maske offen.
 
+**Navigation nach dem Löschen — zweiter Anlauf, jetzt über die Browser-Historie.**
+Der erste Versuch merkte sich die Herkunft in einem Ref (`loeschHerkunftRef`). Das hielt
+nur, solange die Seite nicht neu geladen wurde — nach einem Reload oder beim Einstieg über
+einen geteilten Link war die Herkunft weg und der Nutzer landete doch wieder auf der
+Startseite. Der Ref ist entfernt.
+
+Jetzt gilt eine einzige Regel in `nachDemLoeschen()`: **nur navigieren, wenn gerade die
+Detailansicht genau dieses Inserats offen ist** — die kann nicht stehen bleiben. Wird aus
+einer Liste heraus gelöscht (Panel „İlanlarım", Profilseite), bleibt die Ansicht wie sie
+ist und nur die Liste baut sich neu auf. Für den Detailfall übernimmt der vorhandene
+`zurueck()`-Helfer: er nutzt die Browser-Historie und führt dorthin, wo der Nutzer wirklich
+herkam. Gibt es keinen eigenen Verlauf (Reload, geteilter Link), geht es ins Panel statt auf
+die Startseite — wer sein eigenes Inserat löscht, verwaltet Inserate.
+
+**Wichtig dabei:** `selectedListing` wird in diesem Zweig **nicht** geleert. Sonst sieht der
+Effect „details ohne Inserat → Startseite" den Zwischenzustand und springt nach Hause,
+bevor `popstate` die richtige Ansicht herstellt.
+
+*Belegt, live auf kapbeni.com:* Panel → Düzenle → Sil → `#/panel/ilanlarim` (Liste 7 → 6).
+Panel → Karte → Detail → Sil → `#/panel/ilanlarim`. Detail nach Seiten-Neuladen → Sil →
+`#/panel/ilanlarim`. Profilseite → Sil → `#/profil`. Kategorie → Detail → Sil →
+`#/kategori/elektronik`. Auf 390 px ebenso.
+
+**Dabei die eigentliche Ursache gefunden: ein Fehlschlag von `/api/auth/ben` warf den Nutzer
+aus seiner Sitzung.** `AuthContext` löschte den Token bei **jedem** Fehler:
+```js
+.catch(() => { localStorage.removeItem('sg_token'); setToken(null) })
+```
+Gleichzeitig lag auf `/api/auth` ein Limit von **20 Anfragen je 15 Minuten** — und
+`GET /auth/ben` läuft bei jedem Seitenaufruf mit. Nach rund zwanzig Seitenaufrufen kam 429,
+der Token flog raus, `isLoggedIn` ist `!!user` und damit false: der Nutzer sah sich plötzlich
+abgemeldet auf der Startseite. Das erklärt das gemeldete Symptom besser als jeder Redirect
+im Lösch-Handler.
+
+Zwei Korrekturen:
+- `api/src/index.js`: das enge Limit gilt jetzt nur für `/api/auth/giris` und
+  `/api/auth/kayit` (Zugangsdaten, Brute-Force-Schutz bleibt: 20 je 15 Minuten).
+  `/api/auth/ben` ist ein billiger, angemeldeter Lesezugriff und bekommt 60 je Minute.
+- `context/AuthContext.tsx`: nur eine **echte** Ablehnung (401) beendet die Sitzung. Bei
+  einem 429, 500 oder Netzaussetzer bleibt der Token liegen und es wird einmal nachgefasst.
+*Belegt:* 30 Aufrufe von `/auth/ben` → 30 × 200; 25 Fehlanmeldungen an `/auth/giris` →
+20 durchgelassen, 5 × 429.
+
+---
+
+### ⚠ Vorfall 2026-09-12 — vier echte Inserate durch einen Testfehler gelöscht
+
+**Was passiert ist.** Beim Prüfen der Lösch-Navigation habe ich Browser-Tests gegen die
+Live-Seite gefahren. Der Selektor griff daneben:
+```js
+[...document.querySelectorAll('div.relative')].filter(x => /ZZ Redirect/.test(x.innerText))
+```
+`div.relative` trifft nicht nur die einzelne Karte, sondern auch **jeden umschließenden
+Container**, dessen Text irgendwo „ZZ Redirect" enthält. `k[0]` war deshalb der äußerste
+Container, und `k[0].querySelector('img')` bzw. `…querySelector('button…')` landete auf der
+**ersten Karte im Raster** — nicht auf dem Testinserat.
+
+**Betroffen** (alle Konto `users.id=1`, laut `audit_log`):
+| id | Titel | Zustand | Zeit |
+|---|---|---|---|
+| 23 | Matbaa Isler A5 1000 Adet | pasif | 11:42:43 |
+| 13 | Asus Notebook | pasif | 11:42:55 |
+| 11 | Asus Notebook | pasif | 11:46:27 |
+| 12 | Asus Notebook | **aktif** | 12:04:31 |
+
+**Wiederhergestellt:** ids 11, 12, 13 samt Fotozeilen aus
+`/opt/_archiv/kapbeni-freeze-20260911-134115`, mit ihren ursprünglichen IDs, in einer
+Transaktion; `ilanlar_id_seq` nachgezogen. Der Bestand entspricht danach wieder exakt dem
+Freeze (11 Inserate, 9 aktiv, keine verwaisten Fotozeilen).
+
+**Nicht wiederherstellbar:** `Matbaa Isler A5 1000 Adet` (id 23, uuid
+`7753dd06-116a-48b1-80d5-08ed2c65ed0b`). Es wurde am 12.09. um 09:09 angelegt — nach dem
+letzten Freeze. Das `audit_log` hält nur das Moderationsergebnis fest, keinen Inhalt; die
+Bilddatei wurde beim Löschen mit entfernt. Bekannt sind nur Titel, Eigentümer, Zustand
+(`pasif`) und dass es ein Foto hatte.
+
+**Lehren, die ab jetzt gelten:**
+1. **Keine schreibenden Browser-Tests gegen kapbeni.com.** Der Teststand `:3003` liefert
+   dasselbe Bundle und dieselbe API; es gab keinen Grund, live zu testen.
+2. **Testdaten gehören dem Testkonto** (`users.id=15`), nie dem echten Konto. Dann trifft
+   ein danebengreifender Selektor im schlimmsten Fall wieder nur Testdaten.
+3. **Selektoren müssen die Karte treffen, nicht irgendeinen Vorfahren.** Verlässlich ist der
+   Weg über das Titel-Element und `closest()`, nicht ein Filter über `innerText` eines
+   Containers.
+4. **Vor zerstörenden Testläufen einen Freeze ziehen** — der vorhandene war einen Tag alt,
+   und genau das eine Inserat, das dazwischen entstand, ist verloren.
+
 ---
 
 ## 4. Offene Punkte / Backlog

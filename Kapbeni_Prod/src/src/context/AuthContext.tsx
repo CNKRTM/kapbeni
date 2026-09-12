@@ -20,11 +20,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('sg_token'))
 
   useEffect(() => {
-    if (localStorage.getItem('sg_token')) {
+    if (!localStorage.getItem('sg_token')) return
+    let abgebrochen = false
+
+    // Nur eine ECHTE Ablehnung beendet die Sitzung. Vorher loeschte jeder
+    // Fehlschlag den Token — ein 429 aus dem Rate-Limit, ein 500 oder ein
+    // Netzaussetzer genuegte, und der Nutzer war mitten im Arbeiten abgemeldet.
+    // Sichtbar wurde das als "ich bin ploetzlich wieder auf der Startseite".
+    const holen = (versuch: number) => {
       authApi.me()
-        .then((u) => { if (u) setUser(u) })
-        .catch(() => { localStorage.removeItem('sg_token'); setToken(null) })
+        .then((u) => { if (u && !abgebrochen) setUser(u) })
+        .catch((err: any) => {
+          if (abgebrochen) return
+          if (err?.message === 'Unauthorized') {
+            localStorage.removeItem('sg_token')
+            setToken(null)
+            return
+          }
+          // Voruebergehender Fehler: Sitzung behalten und einmal nachfassen.
+          if (versuch < 2) setTimeout(() => holen(versuch + 1), 2500)
+        })
     }
+    holen(1)
+    return () => { abgebrochen = true }
   }, [])
 
   const login = async (email: string, password: string) => {
