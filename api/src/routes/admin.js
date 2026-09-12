@@ -2,6 +2,9 @@ const express = require('express')
 const router = express.Router()
 const pool = require('../db/pool')
 const { requireAdmin } = require('../middleware/auth')
+const path = require('path')
+const fs = require('fs')
+require('dotenv').config({ path: '/etc/kapbeni.env' })
 
 router.use(requireAdmin)
 
@@ -44,6 +47,71 @@ router.get('/ilanlar', async (req, res) => {
      FROM ilanlar i LEFT JOIN kategoriler k ON k.id=i.kategori_id ${where}
      ORDER BY i.created_at DESC LIMIT $1 OFFSET $2`, params)
   res.json({ ilanlar })
+})
+
+// Der Papierkorb im AdminPanel ruft seit jeher DELETE /admin/ilanlar/:uuid —
+// diese Route gab es nie. Die Anfrage fiel in den 404-Catch-All, der Client
+// warf, und weil der Aufruf im AdminPanel kein catch hatte, passierte sichtbar
+// gar nichts: keine Meldung, keine Loeschung, die Zeile blieb stehen.
+//
+// Geloescht wird wie beim Eigentuemer-Pfad endgueltig, mit denselben Regeln:
+// Geschaeftsunterlagen behalten ihre Zeile und verlieren nur den Verweis,
+// Gebote gehen mit, Fotos und Dateien werden abgeraeumt.
+router.delete('/ilanlar/:uuid', async (req, res) => {
+  const k = String(req.params.uuid || '')
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k))
+    return res.status(404).json({ hata: 'İlan bulunamadı' })
+  // Die Existenzpruefung laeuft ueber den Pool, NICHT ueber eine eigene
+  // Verbindung: ein frueherer Entwurf gab sie im 404-Zweig frei und danach
+  // noch einmal im finally. pg wirft beim zweiten release() synchron, und
+  // zwar nach der bereits gesendeten Antwort — Express faengt das aus einem
+  // async-Handler nicht ab. Ein zweiter Klick auf den Papierkorb genuegte,
+  // um den Worker abzuschiessen.
+  const vorab = await pool.query('SELECT id, uuid, video_url FROM ilanlar WHERE uuid=$1', [k])
+  if (!vorab.rows[0]) return res.status(404).json({ hata: 'İlan bulunamadı' })
+  const ilan = vorab.rows[0]
+
+  const verbindung = await pool.pool.connect()
+  try {
+    const { rows: fotos } = await verbindung.query('SELECT url FROM ilan_fotograflar WHERE ilan_id=$1', [ilan.id])
+
+    await verbindung.query('BEGIN')
+    // Gleiche Schranke wie im Eigentuemer-Pfad: kein Loeschen, solange ein
+    // Geschaeft laeuft — sonst verschwindet der Vorgang fuer beide Seiten.
+    const offen = await verbindung.query(
+      "SELECT COUNT(*)::int AS n FROM islemler WHERE ilan_id=$1 AND durum = ANY($2::text[])",
+      [ilan.id, ['odeme_bekleniyor', 'aktif', 'askida', 'kargoya_verildi', 'itiraz_acildi']])
+    if (offen.rows[0].n > 0) {
+      await verbindung.query('ROLLBACK')
+      return res.status(409).json({ hata: 'Bu ilan için devam eden bir işlem var.' })
+    }
+    for (const t of ['odemeler','payments','islemler','degerlendirmeler','ilan_sikayetler','ilan_vitaminler','support_tickets'])
+      await verbindung.query(`UPDATE ${t} SET ilan_id=NULL WHERE ilan_id=$1`, [ilan.id])
+    await verbindung.query('DELETE FROM teklifler WHERE ilan_id=$1', [ilan.id])
+    await verbindung.query('DELETE FROM ilanlar WHERE id=$1', [ilan.id])
+    await verbindung.query('COMMIT')
+
+    const dir = `${process.env.UPLOAD_DIR}/ilanlar`
+    for (const u of [...fotos.map(f => f.url), ilan.video_url]) {
+      if (!u) continue
+      const ziel = path.join(dir, path.basename(u))
+      if (path.dirname(ziel) !== dir) continue
+      try { if (fs.existsSync(ziel)) fs.unlinkSync(ziel) } catch { /* schon weg */ }
+    }
+    try { await require('../lib/meiliSync').deleteListing(ilan.uuid) } catch { /* Index folgt spaeter */ }
+    // Ohne Eintrag im audit_log liesse sich hinterher nicht nachvollziehen,
+    // welcher Admin welches Inserat entfernt hat.
+    await pool.auditLog('ilan.sil', 'admin', {
+      adminId: req.user && req.user.id, hedefTip: 'ilan', hedefId: ilan.id,
+      detay: { uuid: ilan.uuid, baslik: ilan.baslik || null } })
+    res.json({ basarili: true, mesaj: 'İlan silindi' })
+  } catch (err) {
+    await verbindung.query('ROLLBACK').catch(() => {})
+    logSqlError(err, 'DELETE /admin/ilanlar/:uuid')
+    res.status(500).json({ hata: 'İlan silinemedi' })
+  } finally {
+    verbindung.release()
+  }
 })
 
 router.patch('/ilanlar/:uuid/durum', async (req, res) => {

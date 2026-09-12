@@ -148,7 +148,16 @@ export default function AdminPanel() {
                   <td style={{ ...td, display: 'flex', gap: 6 }}>
                     {l.ilan_durum === 'aktif' && <button onClick={() => ve.patch(`/admin/ilanlar/${l.uuid}/durum`, { ilan_durum: 'pasif' }).then(() => reload())} style={btn('#fef2f2','#dc2626','#fca5a5')}>Pasif</button>}
                     {l.ilan_durum === 'pasif' && <button onClick={() => ve.patch(`/admin/ilanlar/${l.uuid}/durum`, { ilan_durum: 'aktif' }).then(() => reload())} style={btn('#f0fdf4','#15803d','#bbf7d0')}>Aktif</button>}
-                    <button onClick={() => { if(window.confirm('Sil?')) ve.del(`/admin/ilanlar/${l.uuid}`).then(() => reload()) }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><i className="ti ti-trash" /></button>
+                    <button onClick={() => {
+                        // Vorher: kein catch. Die Route gab es gar nicht, der
+                        // Aufruf lief in 404, das Promise verpuffte — der
+                        // Admin sah weder Meldung noch Wirkung. Die Route ist
+                        // jetzt da, der Fehlerfall wird trotzdem gezeigt.
+                        if (!window.confirm('Bu ilan kalıcı olarak silinecek. Emin misiniz?')) return
+                        ve.del(`/admin/ilanlar/${l.uuid}`)
+                          .then(() => reload())
+                          .catch((err: any) => window.alert(err?.message || 'İlan silinemedi.'))
+                      }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><i className="ti ti-trash" /></button>
                   </td>
                 </tr>
               ))}

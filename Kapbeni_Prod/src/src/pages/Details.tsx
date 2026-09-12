@@ -19,6 +19,10 @@ interface Props {
   onSelectListing?: (listing: Listing) => void
   /** Kategorie-Chip unter "Benzer Ilanlar" — wechselt in die Kategorieansicht. */
   onSelectCategory?: (slug: string) => void
+  /** Bearbeiten — nur fuer den Ersteller sichtbar, siehe isOwner. */
+  onEdit?: (ilanId: string) => void
+  /** Nach erfolgreichem Loeschen: Liste bereinigen und Ansicht verlassen. */
+  onDeleted?: (ilanId: string) => void
 }
 
 // Gleiche Status-Farben und Etiketten wie im Panel (pages/Dashboard.tsx),
@@ -41,7 +45,7 @@ const REPORT_TYPES = [
   { v: 'diger', l: 'Diğer' },
 ]
 
-export default function Details({ listing, onBack, onToggleFavorite, onStartChat, onHemenAl, onViewSeller, onSelectListing, onSelectCategory }: Props) {
+export default function Details({ listing, onBack, onToggleFavorite, onStartChat, onHemenAl, onViewSeller, onSelectListing, onSelectCategory, onEdit, onDeleted }: Props) {
   const [showPhone, setShowPhone] = useState(false)
   const { user } = useAuth()
   const [isOwner, setIsOwner] = useState(false)
@@ -81,9 +85,13 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     setMedien({ fotos: [], video: null })
     setAktiv(0)
     if (!listing?.id) return
-    fetch(`/api/ilanlar/${listing.id}`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((data) => {
+    // Ueber den Client `ve`, NICHT ueber rohes fetch: die API kennt keinen
+    // Cookie-Pfad, `credentials:'include'` schickt also keinen Token mit. Ohne
+    // Authorization-Header greift die Eigentuemer-Ausnahme der Detail-Route
+    // nicht — der Eigentuemer bekaeme fuer sein eigenes zurueckgezogenes
+    // Inserat 404 und damit weder Düzenle noch Sil zu sehen.
+    ve.get<any>(`/ilanlar/${listing.id}`)
+      .then((data: any) => {
         if (!active || !data) return
         setSellerAvatar(data.avatar_url || null)
         setIsVerified(data.satici_kyc === 'onaylandi')
@@ -153,14 +161,25 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   }
 
   const handleDelete = async () => {
-    if (!confirm('Bu ilanı silmek istediğinizden emin misiniz?')) return
+    // Der Text sagt jetzt, was wirklich passiert: seit dem Fix loescht die
+    // Route endgueltig statt das Inserat nur auf 'pasif' zu setzen.
+    if (!confirm('Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?')) return
     setIsDeleting(true)
     try {
       await ve.del(`/ilanlar/${listing.id}`)
       invalidateKategoriAgac()   // Kategorie-Zaehler nach dem Loeschen auffrischen
-      onBack()
-    } catch {
-      alert('İlan silinemedi. Lütfen tekrar deneyin.')
+      // onDeleted nimmt das Inserat aus der Liste und geht zurueck. Frueher
+      // lief nur onBack() — die Startseite laedt ihre Liste aber nicht neu,
+      // das geloeschte Inserat stand danach weiter da und das Loeschen sah
+      // wirkungslos aus.
+      if (onDeleted) onDeleted(listing.id)
+      else onBack()
+    } catch (err: any) {
+      // Die API schreibt den Grund nach `hata`; der Client liest ihn seit dem
+      // Fix in api/index.ts auch aus, statt immer 'Hata oluştu' zu melden.
+      alert(err?.message === 'Unauthorized'
+        ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.'
+        : (err?.message || 'İlan silinemedi. Lütfen tekrar deneyin.'))
       setIsDeleting(false)
     }
   }
@@ -206,6 +225,14 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
           >
             <Heart className={`h-4.5 w-4.5 ${listing.isFavorite ? 'fill-primary text-primary' : 'text-gray-500'}`} />
           </button>
+          {isOwner && onEdit && (
+            <button
+              onClick={() => onEdit(listing.id)}
+              className="h-10 px-3 rounded-full border border-gray-200 bg-white flex items-center gap-1.5 text-sm font-semibold text-gray-600 hover:text-primary hover:border-primary transition-all shadow-xs cursor-pointer"
+            >
+              <i className="ti ti-pencil" style={{ fontSize: 16 }} /> Düzenle
+            </button>
+          )}
           {isOwner && (
             <button
               onClick={handleDelete}

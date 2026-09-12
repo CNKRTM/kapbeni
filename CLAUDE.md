@@ -445,11 +445,215 @@ Damit entspricht sie dem Cankartim-Vorbild und wird von Werkzeugen gefunden, die
 Arbeitsverzeichnis nach `CLAUDE.md` suchen. Die Verweise in `README.md` (3) und
 `CHANGELOG.md` (1) sind mitgezogen.
 
+### 2026-09-12
+
+**Punkt 1 — Inserate bearbeiten.** Befund vorweg: es existierte **nichts** dafür. Kein
+PUT/PATCH auf `/api/ilanlar/:uuid` (Gegenprobe: 26 Treffer für `UPDATE ilanlar` im Backend,
+kein einziger mit `baslik`, `aciklama` oder `kategori_id` im `SET`), keine Route zum
+Hinzufügen oder Löschen einzelner Fotos, keine für `video_url`, keine Bearbeiten-Oberfläche.
+Die einzige Inhaltsänderung überhaupt war `PATCH /api/ilanlar/:id/fiyat` — nur der Preis.
+
+*Neu: `PUT /api/ilanlar/:uuid`* (`api/src/routes/ilanlar.js`). Besitzprüfung wie im
+DELETE-Handler (`WHERE uuid=$1 AND user_id=$2`, 404 statt 403 — die user_id steckt in
+derselben Klausel). Ändert Titel, Beschreibung, Preis, Kategorie, Zustand, Ort sowie Fotos
+und Video. Leere Felder werden übergangen, damit Teiländerungen keine unbeteiligten Spalten
+leeren; `ilce` darf ausdrücklich geleert werden und geht deshalb einen eigenen Weg.
+
+*Fotos als Zielzustand statt als Einzelbefehle.* Das Feld `sirala` ist die vollständige
+Wunschreihenfolge: je Eintrag entweder die URL eines Bestandsbildes oder `#yeni:N` als
+Platzhalter für die N-te mitgeschickte Datei. Ein erster Entwurf nahm nur eine
+Behalten-Liste — damit landeten neue Fotos immer am Ende, und die Maske hätte eine
+Reihenfolge angezeigt, die das Ergebnis nicht hat. Fremde URLs werden verworfen, sonst ließe
+sich über das Feld ein Bild eines anderen Inserats einhängen. Belegt: neues Foto zwischen
+zwei Bestandsbilder und an die erste Stelle (wird dort Titelbild).
+
+*Die KI-Moderation läuft beim Bearbeiten bewusst nicht erneut* — sie ist ausgefallen (410)
+und würde über ihren freundlichen Rückfallwert ohnehin alles durchwinken (siehe Backlog).
+
+*Oberfläche:* `components/SellModal.tsx` dient beiden Zwecken; gesetzte `vorgabe` = Bearbeiten.
+Der **Bild-State musste dafür umgebaut werden**: vorher lagen Dateien und Vorschauen in zwei
+Feldern (`images: File[]`, `previews: string[]`), die stillschweigend gleich lang sein
+mussten. Bestandsbilder haben aber keine Datei. Die Folgen wären gewesen: Zähler zeigt 0/8
+bei acht Bildern, `handleFiles` überschreibt beim Hinzufügen eines einzigen Fotos alle
+Bestandsbilder, Entfernen trifft das falsche Bild, Sortierpfeile funktionieren gar nicht,
+und ohne Bildänderung ginge der **Unsplash-Platzhalter** als `foto_url` an die API. Jetzt
+eine Liste `Bild[]`, in der Bestandsbild und neue Datei nebeneinander stehen.
+
+*Drei Datendreher mitbehoben*, die jeden Wert auf dem Rückweg umgekippt hätten:
+- Zustand: `DURUM_ETIKET` liefert `'Az Kullanılmış'`, im Select steht aber
+  `'İkinci El - Az Kullanılmış'` — eigene Zuordnung `DURUM_ZU_OPTION`.
+- Kategorie: aus der API kommt **ein** Slug ohne Angabe der Ebene. Der Baum wird jetzt
+  rückwärts durchsucht (Effect, weil `useKategoriAgac()` asynchron nachliefert).
+- Ort: `sehir`/`ilce` werden getrennt übergeben statt über die zusammengeklebte
+  `location`-Zeichenkette, die in beiden Richtungen verschieden sortiert ist.
+
+*Erreichbar von zwei Stellen:* „Düzenle" auf der Detailseite neben „Sil", **nur wenn
+`isOwner`** — für alle anderen wird der Knopf gar nicht gerendert, nicht nur ausgegraut
+(belegt: unsichtbar ohne Anmeldung und für einen angemeldeten Fremden). Und als Overlay auf
+jeder Karte in `İlanlarım` (`pages/Dashboard.tsx`), links positioniert, damit er nicht auf
+dem Herz-Icon von `ProductCard` (`absolute top-2 right-2`) sitzt; Muster 1:1 von
+`pages/Profile.tsx` übernommen, `e.stopPropagation()`, sonst öffnet die Karte darunter.
+
+*Nebenwirkung beseitigt:* `GET /api/ilanlar/:uuid` zählte bei jedem Aufruf `goruntulenme`
+hoch — das Öffnen der eigenen Bearbeiten-Maske hätte die eigene Aufrufzahl gefälscht. Eigene
+Aufrufe zählen jetzt nicht mehr mit.
+
+---
+
+**Punkt 2 — Foto-Upload auf Handy und Tablet.** Die Vermutung traf nicht zu: **die
+Dateiauswahl funktionierte bereits** mit Kamera und Galerie.
+- `accept="image/jpeg,…"` blockiert die Kamera nicht; beide Plattformen entscheiden am
+  `image/`-Präfix.
+- Das fehlende `capture`-Attribut ist der **Grund** dafür, kein Mangel: `capture` nähme die
+  Galerie weg, statt die Kamera hinzuzufügen. Bewusst **nicht** nachgerüstet.
+- `className="hidden"` (`display:none`) blockiert `.click()` auf keiner Plattform, solange
+  der Klick in einer Nutzergeste liegt — tut er.
+- Drag&Drop gibt es im gesamten Frontend gar nicht (einziger Treffer: `draggable={false}`);
+  der Baustein war also nie „nur für Desktop" gebaut.
+- Dass `image/heic` in `accept` fehlt, ist ebenfalls richtig: genau deshalb liefert iOS
+  Mediathek-Fotos als JPEG.
+
+*Behoben wurden stattdessen die zwei echten Mängel:*
+1. **Serverseitig fehlte die Bild-MIME-Prüfung**, die es für Video längst gab — `multer`
+   lief ohne `fileFilter`. Ein HEIC, das den `accept`-Dialog umgeht (Dateien-App, anderer
+   Client), ließ `sharp` platzen (libvips ohne HEVC-Decoder); weil der `INSERT` **vor** der
+   Bildschleife läuft, blieb dann ein fotoloses Inserat in der DB stehen. Neu: `FOTO_TYPEN`
+   und die gemeinsame Prüfung `medienPruefen()`, die POST und PUT benutzen — **vor** jedem
+   Schreiben. Belegt: HEIC → 400 mit klarem Text, kein Geister-Inserat.
+2. **Die Bedienelemente auf den Vorschaukacheln waren 20 px** — unter dem WCAG-Minimum von
+   24 px, auf einer 80-px-Kachel dicht beieinander. Jetzt 28 px (Entfernen, beide
+   Sortierpfeile) und 32 px beim Video. Auf 390 px gemessen: Kachel 80 px, Knöpfe 26–28 px,
+   kein waagerechter Überlauf.
+
+---
+
+**Punkt 3 — Löschbutton reagierte nicht.** Es gibt **drei** Löschknöpfe; zwei waren kaputt.
+
+1. **AdminPanel** (`pages/AdminPanel.tsx:151`) — rief `DELETE /api/admin/ilanlar/:uuid`;
+   **diese Route existierte nicht**. Die Anfrage fiel in den 404-Catch-All, `ve` warf, es gab
+   kein `catch`, das Promise verpuffte, `reload()` lief nie. Weder Meldung noch Wirkung —
+   exakt das gemeldete Symptom. Route in `api/src/routes/admin.js` ergänzt, `catch` mit
+   sichtbarer Meldung im Panel nachgezogen.
+2. **Detailseite** — löschte zwar, rief danach aber nur `onBack()`. Die Startseite lädt ihre
+   Liste nicht neu (`fetchListings` läuft einmal beim Mounten) und spiegelt sie in
+   `localStorage`; das Inserat stand danach weiter da. Neu: `onDeleted` nimmt es aus der
+   Liste, verlässt die Ansicht und lädt nach.
+3. **Dashboard** hatte gar keinen Löschknopf — und hielt nach einer Löschung an anderer
+   Stelle seine eigene, veraltete Liste. Neu: `refreshSignal`, das App.tsx nach Bearbeiten
+   und Löschen erhöht. **Dabei ein zweiter Fehler:** der Ladeeffekt hing nur an `[tab]`, das
+   Leeren des Merkers blieb also wirkungslos — `loaded` gehört in die Abhängigkeiten.
+   Erst danach verschwand das gelöschte Inserat wirklich aus der Ansicht.
+
+*Und der Kernbefund:* `DELETE /api/ilanlar/:uuid` **löschte überhaupt nicht**, es setzte nur
+`ilan_durum='pasif'` — meldete aber „İlan kaldırıldı". Am laufenden System belegt: Zeile,
+Fotozeile und Bilddatei überlebten, `GET /:uuid` lieferte das „gelöschte" Inserat **ohne
+Token** an jeden mit dem Link aus und zählte die Aufrufe weiter hoch. Nach deiner
+Entscheidung wird jetzt **endgültig gelöscht**.
+
+**Sieben Fremdschlüssel auf `ilanlar` stehen auf NO ACTION** und hätten ein `DELETE`
+blockiert. Geschäftsunterlagen dürfen dabei nicht verschwinden, nur weil ein Verkäufer sein
+Inserat entfernt: `odemeler`, `payments`, `islemler`, `degerlendirmeler`, `ilan_sikayetler`,
+`ilan_vitaminler` und `support_tickets` behalten ihre Zeile und verlieren nur den Verweis
+(`ilan_id=NULL`, alle Spalten sind NULL-fähig). Gebote sind ohne Inserat gegenstandslos und
+gehen mit. Fotos, Favoriten, Chats, Warenkorb, Merkmale und Beobachter räumt die DB per
+CASCADE ab. Alles in **einer Transaktion**; die Dateien werden erst nach dem COMMIT
+entfernt, damit ein Rollback keine Bilder kostet. Belegt mit fünf tatsächlich belegten
+Blocker-Tabellen: Löschen lief durch, alle Unterlagen überlebten.
+
+Außerdem: `DELETE` mit numerischer ID gab vorher 500 mit rohem Postgres-Text
+(`invalid input syntax for type uuid`) — die Route prüft die Kennung jetzt wie die
+Detail-Route und antwortet 404.
+
+**Direktlink geschlossen:** `GET /api/ilanlar/:uuid` liefert für nicht aktive Inserate 404,
+außer für den Eigentümer (der seine Bearbeiten-Maske laden muss). Dafür wertet die Route den
+Token **optional** aus (`optionalerNutzer()`), statt auth-pflichtig zu werden.
+
+**Fehlermeldungen kamen nie an:** Die API antwortet mit dem Feld `hata`, der Client las nur
+`message` — es erschien immer der generische Text „Hata oluştu". `api/index.ts` liest jetzt
+`hata || message || error`. Erst dadurch sagt ein fehlgeschlagenes Löschen oder Speichern,
+woran es lag.
+
+**Adversariale Gegenprüfung vor dem Ausrollen — zehn bestätigte Funde, alle behoben.**
+Vier Prüfer gegen den Arbeitsbaum, jeder gemeldete Fund einzeln am laufenden System
+nachgestellt. Der Reihe nach, vom Schwersten:
+
+1. **PUT vernichtete Bestandsfotos, bevor die neuen geschrieben waren.** Die entfallenen
+   Zeilen und Dateien gingen zuerst weg, `sharp` lief erst danach. Brach es ab — etwa bei
+   einer Datei, die nur vorgibt ein Bild zu sein; der MIME-Typ kommt aus dem
+   Multipart-Header des Clients und ist frei setzbar — waren die alten Bilder
+   unwiederbringlich weg und das Inserat stand ohne jedes Bild weiter öffentlich da.
+   Jetzt: **erst alle neuen Bilder in den Speicher umwandeln**, dann die Datenbankarbeit in
+   **einer Transaktion** (samt `SELECT … FOR UPDATE`, weil zwei gleichzeitige Änderungen
+   sonst ein Inserat ohne Titelbild und mit Lücken in der Reihenfolge hinterließen),
+   Dateien ganz zuletzt. Belegt: kaputte Datei → 400, Foto und Datei unverändert erhalten.
+2. **`dateienEntfernen()` löschte Dateien fremder Inserate.** `POST /` übernimmt `foto_url`
+   unverändert als Fotozeile — dort ließ sich der Pfad der Bilddatei eines fremden Inserats
+   eintragen und über ein eigenes Wegwerf-Inserat löschen. Jetzt zwei Schranken: der
+   Dateiname **muss** mit der uuid des eigenen Inserats beginnen, und keine andere Zeile
+   darf die URL noch führen. Belegt am Titelbild eines fremden Inserats: überlebt PUT und
+   DELETE.
+3. **Löschen zerstörte laufende Geschäfte.** Ein Inserat mit offener Treuhand-Transaktion
+   ließ sich jederzeit entfernen. Die Belegzeile überlebte zwar, fiel aber aus
+   `GET /api/islemler/benim` heraus (INNER JOIN auf `ilanlar`) — der Vorgang verschwand für
+   Käufer **und** Verkäufer, das Geld hing, und der Chatverlauf ging per CASCADE mit. Ein
+   Verkäufer hätte nach einer Beschwerde die Beweislage löschen können. Jetzt **409**,
+   solange eine Transaktion in `odeme_bekleniyor`, `aktif`, `askida`, `kargoya_verildi`
+   oder `itiraz_acildi` steht — in beiden Löschpfaden, auch im Admin.
+4. **Die Direktlink-Sperre war zu breit.** `!== 'aktif'` traf auch `askida` (setzt der Kauf),
+   `satildi` und `moderasyonda`. Der Käufer verlor die Seite des gekauften Objekts in dem
+   Moment, in dem er kaufte. Jetzt nur `pasif`.
+5. **`Details.tsx` holte die Daten ohne Token** (rohes `fetch` mit `credentials:'include'` —
+   die API kennt keinen Cookie-Pfad). Die Eigentümer-Ausnahme griff damit ausgerechnet auf
+   der Seite nicht, für die sie gedacht war: beim eigenen zurückgezogenen Inserat gab es
+   404, `isOwner` blieb false, und Düzenle **und** Sil verschwanden. Jetzt über `ve`.
+6. **Der Admin-Papierkorb riss den API-Prozess mit.** Im 404-Zweig wurde die Verbindung
+   freigegeben und danach noch einmal im `finally`; `pg` wirft beim zweiten `release()`
+   synchron, nach der bereits gesendeten Antwort — Express fängt das aus einem
+   async-Handler nicht ab. Ein Doppelklick genügte. Jetzt läuft die Existenzprüfung über
+   den Pool, die eigene Verbindung wird genau einmal freigegeben. Belegt: drei Klicks
+   hintereinander, API lebt.
+7. **Der Speichern-Knopf blieb nach einem Fehlschlag dauerhaft auf „Kaydediliyor…".**
+   `setSpeichert(true)` hatte keine Gegenstelle, und `setBearbeiteVorgabe(p => p)` löste
+   kein Neurendern aus. Der Nutzer konnte die Maske nur noch schließen — und verlor dabei
+   genau die Eingaben, die der Fehlerzweig schützen sollte. Jetzt gibt `onSave` ein
+   Versprechen zurück, die Maske fängt den Fehler, zeigt ihn im Formular und gibt den Knopf
+   frei.
+8. **`#yeni:00` umging die Entdoppelung** — zwei Fotozeilen auf dieselbe Datei. Wird jetzt
+   über die Zahl entdoppelt, nicht über die Zeichenkette.
+9. **Keine Wertprüfung:** `fiyat=0` und negative Preise wurden gespeichert, ein zu langer
+   Titel erzeugte einen 500er mit rohem Postgres-Text. Jetzt 400 mit klarer Meldung für
+   Preis, Titellänge und Zustandscode; rohe SQL-Meldungen gehen nicht mehr an den Aufrufer.
+10. **Gelöschte Inserate blieben im Suchindex** und wurden über `/api/arama` weiter
+    ausgeliefert. `meiliSync.deleteListing()` läuft jetzt beim Löschen (beide Pfade),
+    `syncListing()` beim Bearbeiten. **Die Admin-Löschung schrieb außerdem keinen
+    `audit_log`-Eintrag** — jetzt schon.
+
+Kleinere Nachzüge: Profilseite warnte noch mit dem alten, harmlosen Text vor der jetzt
+endgültigen Löschung; ein gespeicherter Bezirk, den `data/cities.ts` nicht kennt, fiel beim
+Bearbeiten aus dem Auswahlfeld und wäre beim Speichern verloren gegangen.
+
+*Widerlegt und deshalb nicht geändert:* Ein Prüfer hielt den Prozessabsturz (Fund 6) für am
+laufenden System auslösbar; die Gegenprüfung zeigte, dass er ihn nur in einer isolierten
+Instanz reproduzieren konnte. Behoben wurde er trotzdem — die Ursache war echt.
+
 ---
 
 ## 4. Offene Punkte / Backlog
 
 **Funktional**
+- `DELETE /api/ilanlar/:uuid` löscht endgültig — es gibt **kein** „vorübergehend zurückziehen"
+  mehr in der Oberfläche. Die Route `PUT /:id/yeniden` (wieder veröffentlichen) existiert
+  weiterhin, wird aber von keiner Ansicht benutzt. Drei Inserate stehen noch auf `pasif`
+  (ids 11, 13, 23) und sind nur noch für ihren Eigentümer sichtbar.
+- **Neue Inserate landen nicht im Suchindex**: `meiliSync.syncListing()` wird beim Anlegen
+  (`POST /api/ilanlar`) nicht aufgerufen, nur beim Bearbeiten und über den nächtlichen Lauf.
+  Eine Suche nach einem frisch angelegten Inserat findet es deshalb nicht.
+- `Dashboard`-Reiter „Favorilerim" reißt die Seite weiß (von der Gegenprüfung gefunden,
+  **nicht** von diesen Änderungen verursacht — bestand vorher schon).
+- Dateien ohne Inserat: vier Bilder vom 22.07. liegen verwaist unter
+  `/uploads/ilanlar/`. Seit dem Lösch-Fix entstehen keine neuen mehr, die alten bleiben.
+- Bearbeiten erfasst nur die Felder der Maske. `kargo_var`, `elden_teslim`, `kargo_ucreti`,
+  `pazarlik` und `teklife_acik` kennt die Tabelle, aber weder Anlege- noch Bearbeiten-Maske.
 - Teklif: keine Gegenangebote möglich (Verkäufer kann nur annehmen/ablehnen). Für eine
   echte Verhandlungshistorie bräuchte es eine Tabelle `teklif_karsi` o. ä. plus UI.
 - `DestekMerkezi.tsx` ruft `/destek/tickets/:id` und `…/mesaj` auf — **dafür gibt es keine

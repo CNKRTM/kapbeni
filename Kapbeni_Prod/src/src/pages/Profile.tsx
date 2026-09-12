@@ -50,12 +50,17 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
   }, [])
 
   const deleteListing = async (id: string) => {
-    if (!confirm('Bu ilanı silmek istediğinizden emin misiniz?')) return
+    // Seit dem Fix loescht die Route endgueltig — der Text muss das sagen.
+    if (!confirm('Bu ilan kalıcı olarak silinecek. Fotoğrafları ve videosu da kaldırılacak. Emin misiniz?')) return
     try {
       await ilanlarApi.delete(id)
       setListings((prev) => prev.filter((l) => l.id !== id))
-    } catch {
-      alert('İlan silinemedi. Lütfen tekrar deneyin.')
+    } catch (err: any) {
+      // Der Grund kommt jetzt aus dem Feld `hata` der API durch, statt immer
+      // dieselbe nichtssagende Zeile zu zeigen.
+      alert(err?.message === 'Unauthorized'
+        ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.'
+        : (err?.message || 'İlan silinemedi. Lütfen tekrar deneyin.'))
     }
   }
 

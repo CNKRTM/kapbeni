@@ -12,7 +12,7 @@ import {
   Check,
   Lightbulb,
 } from 'lucide-react'
-import { ve, ilanZuListing } from './api'
+import { ve, ilanZuListing, ilanlarApi as ilanlarApiEdit } from './api'
 
 import Navbar from './components/Navbar'
 import CategoryNav from './components/CategoryNav'
@@ -36,6 +36,7 @@ import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 
 import SellModal from './components/SellModal'
+import type { IlanVorgabe, IlanAenderung } from './components/SellModal'
 import AuthModal from './components/AuthModal'
 import DestekMerkezi from './components/DestekMerkezi'
 import KYCModal from './modals/KYCModal'
@@ -161,6 +162,11 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState(initialNav?.q ?? '')
   const [selectedCategory, setSelectedCategory] = useState<string | null>(initialNav?.kategori ?? null)
   const [showSellModal, setShowSellModal] = useState(false)
+  // Bearbeiten benutzt dieselbe Maske; gesetzte Vorgabe = Bearbeiten-Modus.
+  const [bearbeiteVorgabe, setBearbeiteVorgabe] = useState<IlanVorgabe | null>(null)
+  // Wird nach Bearbeiten/Loeschen erhoeht; Ansichten mit eigener Liste
+  // (Dashboard) laden daraufhin neu.
+  const [listenSignal, setListenSignal] = useState(0)
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [destekOpen, setDestekOpen] = useState(false)
   const [destekTab, setDestekTab] = useState<'taleplerim' | 'yeni' | 'oneriler'>('taleplerim')
@@ -454,6 +460,97 @@ export default function App() {
       } else {
         showToast('İlan verilemedi: ' + (err.message || ''))
       }
+    }
+  }
+
+  /**
+   * Bearbeiten oeffnen. Die Anfangswerte kommen aus GET /api/ilanlar/:uuid und
+   * NICHT aus der Liste: nur der Detailaufruf liefert kategori_slug, den
+   * Zustandscode und die vollstaendige Fotoliste. Seit dem Eigentuemer-Fix
+   * zaehlt dieser Aufruf die eigene Ansicht nicht mehr mit.
+   */
+  const oeffneBearbeiten = async (ilanId: string) => {
+    if (!isLoggedIn) { setShowAuthModal(true); return }
+    try {
+      const d = await ilanlarApiEdit.getOne(ilanId)
+      if (!d || !d.uuid) { showToast('İlan yüklenemedi.'); return }
+      setBearbeiteVorgabe({
+        uuid: d.uuid,
+        baslik: d.baslik || '',
+        aciklama: d.aciklama || '',
+        fiyat: d.fiyat ?? '',
+        kategoriSlug: d.kategori_slug || null,
+        durum: d.durum || 'ikinci_el',
+        sehir: d.sehir || '',
+        ilce: d.ilce || '',
+        fotograflar: (d.fotograflar || []).map((f: any) => f.url).filter(Boolean),
+        videoUrl: d.video_url || null,
+      })
+    } catch (err: any) {
+      showToast(err?.message === 'Unauthorized' ? 'Lütfen giriş yapın.' : (err?.message || 'İlan yüklenemedi.'))
+    }
+  }
+
+  const speichereAenderung = async (a: IlanAenderung) => {
+    try {
+      const condMap: Record<string, string> = {
+        Sıfır: 'sifir', 'Sıfır Ayarında': 'sifir',
+        'İkinci El - Az Kullanılmış': 'az_kullanilmis',
+        'İkinci El - Çok Temiz': 'ikinci_el', 'İkinci El': 'ikinci_el',
+      }
+      const form = new FormData()
+      form.append('baslik', a.baslik)
+      form.append('aciklama', a.aciklama)
+      form.append('fiyat', String(a.fiyat))
+      form.append('durum', condMap[a.durum] || 'ikinci_el')
+      form.append('sehir', a.sehir)
+      form.append('ilce', a.ilce)
+      const katId = dbIdVonSlug(kategorilerRef, a.kategoriSlug || null)
+      if (katId != null) form.append('kategori_id', String(katId))
+      form.append('sirala', JSON.stringify(a.sirala))
+      a.neueDateien.forEach((f) => form.append('fotograflar', f))
+      if (a.video) form.append('video', a.video)
+      if (a.videoEntfernen) form.append('video_kaldir', '1')
+
+      await ilanlarApiEdit.update(a.uuid, form)
+      setBearbeiteVorgabe(null)
+      showToast('İlan güncellendi!')
+      fetchListings()
+      setListenSignal((n) => n + 1)
+      invalidateKategoriAgac()
+      // Steht die Detailansicht offen, muss sie die neuen Werte zeigen.
+      if (selectedListing && selectedListing.id === a.uuid) {
+        try { setSelectedListing(ilanZuListing(await ilanlarApiEdit.getOne(a.uuid))) } catch { /* Liste reicht */ }
+      }
+    } catch (err: any) {
+      // Weiterwerfen: die Maske faengt es, zeigt den Grund im Formular und
+      // gibt den Knopf wieder frei. Sie bleibt dabei offen, die Eingaben
+      // bleiben erhalten.
+      throw new Error(err?.message === 'Unauthorized'
+        ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.'
+        : (err?.message || 'İlan güncellenemedi.'))
+    }
+  }
+
+  /** Endgueltiges Loeschen. Die Bestaetigung hat der Aufrufer schon eingeholt. */
+  const loescheIlan = async (uuid: string) => {
+    try {
+      await ilanlarApiEdit.delete(uuid)
+      setBearbeiteVorgabe(null)
+      // Sofort aus der lokalen Liste nehmen: fetchListings() laeuft zwar
+      // gleich, bricht aber bei leerer Antwort ab — ohne das Filtern bliebe
+      // das geloeschte Inserat sichtbar und das Loeschen saehe wirkungslos aus.
+      setListings((prev) => prev.filter((l) => l.id !== uuid))
+      if (selectedListing && selectedListing.id === uuid) {
+        setSelectedListing(null)
+        setActiveTab('home')
+      }
+      showToast('İlan silindi.')
+      fetchListings()
+      setListenSignal((n) => n + 1)
+      invalidateKategoriAgac()
+    } catch (err: any) {
+      showToast(err?.message === 'Unauthorized' ? 'Lütfen giriş yapın.' : (err?.message || 'İlan silinemedi.'))
     }
   }
 
@@ -934,6 +1031,14 @@ export default function App() {
                 onHemenAl={hemenAl}
                 onViewSeller={(id) => { setSellerProfileId(id); setActiveTab('satici') }}
                 onSelectListing={selectProduct}
+                onEdit={oeffneBearbeiten}
+                onDeleted={(id) => {
+                  setListings((prev) => prev.filter((l) => l.id !== id))
+                  setSelectedListing(null)
+                  setActiveTab('home')
+                  fetchListings()
+                  setListenSignal((n) => n + 1)
+                }}
                 onSelectCategory={(slug) => {
                   setSelectedCategory(slug)
                   setSelectedListing(null)
@@ -964,6 +1069,8 @@ export default function App() {
                 onNavigateSettings={() => setActiveTab('ayarlar')}
                 initialTab={dashboardTab}
                 onTabChange={setDashboardTab}
+                onEditListing={oeffneBearbeiten}
+                refreshSignal={listenSignal}
               />
             </motion.div>
           )}
@@ -1015,6 +1122,20 @@ export default function App() {
 
       {showSellModal && (
         <SellModal onClose={() => setShowSellModal(false)} onAddListing={submitListing} />
+      )}
+
+      {/* Dieselbe Maske im Bearbeiten-Modus. Eigene Instanz statt eines
+          Umschalters, damit die Anfangswerte beim Oeffnen frisch gesetzt
+          werden — die Maske liest sie nur einmal beim Mounten. */}
+      {bearbeiteVorgabe && (
+        <SellModal
+          key={bearbeiteVorgabe.uuid}
+          onClose={() => setBearbeiteVorgabe(null)}
+          onAddListing={submitListing}
+          vorgabe={bearbeiteVorgabe}
+          onSave={speichereAenderung}
+          onDelete={loescheIlan}
+        />
       )}
       {destekOpen && (
         <DestekMerkezi

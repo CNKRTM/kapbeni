@@ -1,5 +1,5 @@
 // Dashboard — KapBeni Customer Area (overnight3, an echten Stack angepasst)
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { ilanlarApi, favorilerApi, degerlendirmeApi, ve, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
@@ -15,9 +15,18 @@ interface Props {
   initialTab?: string
   /** Meldet den Reiterwechsel nach oben — App.tsx braucht ihn fuer die Browser-History. */
   onTabChange?: (tab: string) => void
+  /** Bearbeiten aus "İlanlarım" heraus — oeffnet dieselbe Maske wie die Detailseite. */
+  onEditListing?: (ilanId: string) => void
+  /**
+   * Zaehler, den App.tsx nach dem Bearbeiten oder Loeschen erhoeht.
+   * Das Dashboard laedt je Reiter nur EINMAL (siehe `loaded`); ohne dieses
+   * Signal bliebe ein geloeschtes Inserat sichtbar stehen — genau das
+   * Symptom, das den Loeschknopf wirkungslos aussehen liess.
+   */
+  refreshSignal?: number
 }
 
-export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNavigateSettings, initialTab, onTabChange }: Props) {
+export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNavigateSettings, initialTab, onTabChange, onEditListing, refreshSignal }: Props) {
   const { user, logout } = useAuth()
   const [geriBildirimOpen, setGeriBildirimOpen] = useState(false)
   const [gbKategori, setGbKategori] = useState('oneri')
@@ -60,6 +69,18 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
     ? u.takma_ad
     : [u?.ad, u?.soyad].filter(Boolean).join(' ') || 'Kullanıcı'
 
+  // Aussen wurde etwas geaendert oder geloescht: den Merker leeren, damit der
+  // Ladeeffekt unten wieder greift.
+  const ersterLauf = useRef(true)
+  useEffect(() => {
+    if (ersterLauf.current) { ersterLauf.current = false; return }
+    setLoaded(new Set())
+  }, [refreshSignal])
+
+  // `loaded` gehoert in die Abhaengigkeiten: sonst laeuft dieser Effect nur bei
+  // einem Reiterwechsel, und das Leeren des Merkers durch refreshSignal
+  // bliebe wirkungslos. Eine Schleife entsteht nicht — nach dem Laden steht
+  // der Reiter wieder im Merker und der naechste Durchlauf bricht oben ab.
   useEffect(() => {
     if (loaded.has(tab)) return
     setLoading(true)
@@ -97,7 +118,7 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
     } else {
       done()
     }
-  }, [tab])
+  }, [tab, loaded])
 
   // Tekliflerim: lädt bei Tab-Wechsel und bei Rollen-Umschaltung (echtes Backend: GET /teklifler?rol=)
   useEffect(() => {
@@ -231,7 +252,23 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
         ilanlar.length === 0
           ? <div style={emptyStyle}><i className="ti ti-package" style={{ fontSize: 40, display: 'block', marginBottom: 12 }} />Henüz ilanınız yok</div>
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
-              {ilanlar.map(l => <ProductCard key={l.id} listing={l} isGridView={true} onSelect={() => onSelectProduct(l)} onToggleFavorite={() => {}} />)}
+              {ilanlar.map(l => (
+                // ProductCard hat keinen Platz fuer Aktionen — der Knopf liegt
+                // deshalb als Overlay darueber, genau wie in Profile.tsx.
+                // Links statt rechts, damit er nicht auf dem Herz-Icon der
+                // Karte sitzt (das steht auf absolute top-2 right-2).
+                <div key={l.id} className="relative">
+                  <ProductCard listing={l} isGridView={true} onSelect={() => onSelectProduct(l)} onToggleFavorite={() => {}} />
+                  {onEditListing && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onEditListing(l.id) }}
+                      className="absolute top-2 left-2 z-10 flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-primary bg-white/95 border border-gray-200 hover:border-primary rounded-lg px-2 py-1 shadow-sm transition-colors cursor-pointer"
+                    >
+                      <i className="ti ti-pencil" style={{ fontSize: 13 }} /> Düzenle
+                    </button>
+                  )}
+                </div>
+              ))}
             </div>
       )}
 

@@ -27,7 +27,12 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   if (res.status === 401) throw new Error('Unauthorized')
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error((err as { message?: string }).message || 'Hata oluştu')
+    // Die API antwortet mit dem Feld `hata` (tuerkisch), einzelne aeltere
+    // Routen mit `message` oder `error`. Vorher wurde nur `message` gelesen —
+    // deshalb kam beim Nutzer IMMER der nichtssagende Text "Hata oluştu" an,
+    // auch wenn der Server genau geschrieben hatte, was fehlt.
+    const e = err as { hata?: string; message?: string; error?: string }
+    throw new Error(e.hata || e.message || e.error || 'Hata oluştu')
   }
   if (res.status === 204) return undefined as T
   return res.json()
@@ -40,6 +45,7 @@ export const ve = {
   patch: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PATCH', body }),
   del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   postForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'POST', body }),
+  putForm: <T>(path: string, body: FormData) => request<T>(path, { method: 'PUT', body }),
 }
 
 // ---- Auth ----
@@ -61,7 +67,12 @@ export const ilanlarApi = {
     return ve.get<any>(`/ilanlar${qs}`)
   },
   getMine: () => ve.get<any>('/ilanlar/benim'),
+  /** Vollstaendiger Datensatz samt Fotoliste — Quelle fuer die Bearbeiten-Maske.
+   *  Die Liste aus getMine() reicht dafuer nicht: ihr fehlen kategori_slug,
+   *  der Zustandscode und die Fotos. */
+  getOne: (id: string) => ve.get<any>(`/ilanlar/${id}`),
   create: (form: FormData) => ve.postForm<Listing>('/ilanlar', form),
+  update: (id: string, form: FormData) => ve.putForm<any>(`/ilanlar/${id}`, form),
   delete: (id: string) => ve.del(`/ilanlar/${id}`),
 }
 
