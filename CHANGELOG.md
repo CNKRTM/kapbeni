@@ -2,6 +2,21 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.6.1 — 2026-09-12
+
+Wasserzeichen nutzt das Navbar-Logo
+
+Als Quelle für das Wasserzeichen dient jetzt logo-navbar.png — dieselbe Grafik,
+die unter https://kapbeni.com/logo-navbar.png ausgeliefert wird. Die lokale
+Datei ist damit byte-identisch, deshalb bleibt es beim Dateipfad statt eines
+Netzabrufs bei jedem Upload.
+Der Alphakanal des PNG wird beim Einbetten erhalten: die Drehung bekommt einen
+vollständig durchsichtigen Hintergrund und die Deckkraft wird über den
+Alphakanal geregelt, nicht über eine Hintergrundfläche — es entsteht also kein
+Kasten um das Logo. An drei frisch hochgeladenen Bildern geprüft.
+Position, Deckkraft und Drehung unverändert: 22 Prozent, minus 30 Grad,
+65 Prozent der Bildbreite, mittig. Bestehende Bilder bleiben unverändert.
+
 ## 1.6.0 — 2026-09-12
 
 Bilder-Modal auf der Detailseite, Wasserzeichen auf hochgeladenen Bildern

@@ -40,10 +40,21 @@ const WZ_DECKKRAFT = 0.22;
 const WZ_ANTEIL = 0.65;     // Breite im Verhältnis zur Bildbreite
 const WZ_WINKEL = -30;      // diagonal quer über das Bild
 
-// logo-footer.png statt logo-navbar.png: der Schriftzug ist hell und das
-// Zeichen rot. Die Navbar-Fassung ist dunkelblau und verschwindet auf dunklen
-// Fotos; bei der hellen Fassung trägt wenigstens das Rot auf jedem Untergrund.
-const LOGO = path.join(__dirname, '..', '..', '..', 'Kapbeni_Prod', 'src', 'public', 'logo-footer.png');
+// Quelle ist das Navbar-Logo — dieselbe Grafik, die unter
+// https://kapbeni.com/logo-navbar.png ausgeliefert wird. Die lokale Datei ist
+// damit byte-identisch (SHA256 66c837ff…, 823692 B), deshalb der Dateipfad
+// statt eines Netzabrufs: das Wasserzeichen soll nicht davon abhängen, ob beim
+// Hochladen gerade eine Verbindung nach außen steht.
+//
+// Das PNG hat einen Alphakanal (srgba, 4 Kanäle); er wird beim Einbetten
+// erhalten — ensureAlpha() sichert ihn ab, die Drehung bekommt einen
+// vollständig durchsichtigen Hintergrund, und die Deckkraft wird über den
+// Alphakanal geregelt statt über eine Hintergrundfläche.
+//
+// Anmerkung zur Lesbarkeit: der Schriftzug dieser Fassung ist dunkelblau
+// (#253147). Auf sehr dunklen Fotos tritt er zurück, das rote Zeichen trägt
+// dort. Die helle Fassung logo-footer.png verhielte sich genau umgekehrt.
+const LOGO = path.join(__dirname, '..', '..', '..', 'Kapbeni_Prod', 'src', 'public', 'logo-navbar.png');
 
 // Das gedrehte, abgedunkelte Logo wird je Zielbreite einmal erzeugt und
 // wiederverwendet — sonst rechnete jeder Upload es für jedes Bild neu.

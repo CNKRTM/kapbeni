@@ -985,6 +985,31 @@ sind 4 verwaist. Ein Nachtrag beträfe also genau drei Dateien, würde aber unum
 vorhandene Bilder schreiben. Wenn es später doch gewünscht ist: eigenes Skript mit Sicherung
 und Trockenlauf.
 
+**Wasserzeichen nutzt jetzt das Navbar-Logo.** Quelle gewechselt von
+`logo-footer.png` auf `logo-navbar.png` — dieselbe Grafik, die unter
+`https://kapbeni.com/logo-navbar.png` ausgeliefert wird.
+
+*Zwei Klarstellungen zum Ausgangspunkt:* Das Wasserzeichen war **nie**
+programmatisch nachgebaut; es hat von Anfang an eine echte Logodatei verwendet, nur eben die
+helle Fassung. Und die Datei unter der URL ist **byte-identisch** mit der lokalen
+(SHA256 `66c837ff…`, 823 692 B) — deshalb bleibt es beim Dateipfad statt eines Netzabrufs:
+das Wasserzeichen soll nicht davon abhängen, ob beim Hochladen gerade eine Verbindung nach
+außen steht.
+
+*Transparenz geprüft:* `srgba`, 4 Kanäle, `hasAlpha=true`, mittleres Alpha 100. Der Kanal
+bleibt beim Einbetten erhalten — `ensureAlpha()` sichert ihn ab, die Drehung bekommt einen
+vollständig durchsichtigen Hintergrund, und die Deckkraft wird über den Alphakanal geregelt
+(`dest-in`) statt über eine Hintergrundfläche. Gegenprobe an drei Punkten im
+Wasserzeichenbereich eines fertigen Bildes: `srgb(196,196,192)`, `srgb(12,12,10)`,
+`srgb(153,156,162)` — natürliche Bildwerte, also kein deckender Kasten um das Logo.
+
+Position, Deckkraft und Drehung unverändert: 22 %, −30°, 65 % der Bildbreite, mittig.
+
+*Zur Lesbarkeit:* Der Schriftzug dieser Fassung ist dunkelblau (#253147) statt hell. Auf sehr
+dunklen Fotos tritt er zurück; dort tragen das rote Zeichen und die weiße Wagenkontur. Auf
+hellen Fotos ist er deutlich besser lesbar als die vorherige Fassung. An drei frisch
+hochgeladenen Bildern geprüft (hell, hell, dunkel).
+
 ---
 
 ## 4. Offene Punkte / Backlog
