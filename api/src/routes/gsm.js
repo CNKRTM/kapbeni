@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { query, auditLog } = require('../db/pool');
 const { authMiddleware } = require('../middleware/auth');
+const { telefonNormalize, TELEFON_HATA } = require('../lib/dogrula');
 const OTP = '123456'; // MVP-Sim (SMS-Provider = OFFENER PUNKT)
 
 router.get('/durum', authMiddleware, async (req,res)=>{
@@ -9,7 +10,18 @@ router.get('/durum', authMiddleware, async (req,res)=>{
 });
 router.post('/gonder', authMiddleware, async (req,res)=>{
   const { phone } = req.body||{};
-  if(phone) await query('UPDATE users SET phone=$1 WHERE id=$2',[phone, req.user.id]);
+  if(phone){
+    // Einheitlich E.164 speichern (Auftragssammlung F), sonst stuenden dieselben
+    // Nummern in verschiedenen Schreibweisen in users.phone.
+    const np = telefonNormalize(phone);
+    if(!np) return res.status(400).json({ hata: TELEFON_HATA });
+    try {
+      await query('UPDATE users SET phone=$1, phone_verified = (phone_verified AND phone=$1) WHERE id=$2',[np, req.user.id]);
+    } catch(e) {
+      if(String(e.message).includes('users_phone_key')) return res.status(409).json({ hata:'Bu telefon numarası zaten kullanılıyor' });
+      throw e;
+    }
+  }
   res.json({ ok:true, mesaj:'Doğrulama kodu telefonunuza gönderildi (MVP: 123456)' });
 });
 router.post('/dogrula', authMiddleware, async (req,res)=>{

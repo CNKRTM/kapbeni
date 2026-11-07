@@ -6,13 +6,8 @@ import { profileApi } from '../api'
 import { CITIES } from '../data/cities'
 import { ChevronDown } from 'lucide-react'
 
-function normalizePhone(n: string) {
-  let s = (n || '').replace(/\D/g, '')
-  if (s.startsWith('90') && s.length >= 12) s = s.slice(2)
-  if (s.length === 10 && s.startsWith('5')) s = '0' + s
-  if (s.length > 11) s = s.slice(0, 11)
-  return s
-}
+import TelefonInput from '../components/TelefonInput'
+import { telefonNormalize, TELEFON_HATA } from '../lib/dogrula'
 
 const CROP_SIZE = 280
 const OUTPUT_SIZE = 400
@@ -208,7 +203,7 @@ export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Prop
   const [takmaAdAktif, setTakmaAdAktif] = useState(user?.takma_ad_aktif === true)
   const [sehir, setSehir] = useState(user?.sehir || '')
   const [ilce, setIlce] = useState(user?.ilce || '')
-  const [phone, setPhone] = useState(normalizePhone(user?.phone || ''))
+  const [phone, setPhone] = useState(user?.phone || '')
   const [hakkinda, setHakkinda] = useState(user?.hakkinda || '')
 
   const isKyc = user?.kyc_durum === 'onaylandi' || user?.kyc_durumu === 'onaylandi'
@@ -237,6 +232,7 @@ export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Prop
 
   const handleSave = async () => {
     setSaveErr('')
+    if (phone.trim() && !telefonNormalize(phone)) { setSaveErr(TELEFON_HATA); return }
     setSaving(true)
     try {
       await profileApi.updateProfile({
@@ -246,7 +242,7 @@ export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Prop
         takma_ad_aktif: takmaAdAktif,
         sehir,
         ilce,
-        phone: normalizePhone(phone),
+        phone: telefonNormalize(phone) || '',
         hakkinda: hakkinda.trim(),
       })
       await refreshUser()
@@ -256,7 +252,7 @@ export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Prop
       setSaveErr(
         e?.message?.includes('kullanılıyor')
           ? 'Bu telefon numarası zaten kullanılıyor.'
-          : 'Kaydedilemedi. Lütfen tekrar deneyin.'
+          : (e?.message && e.message !== 'Unauthorized' ? e.message : 'Kaydedilemedi. Lütfen tekrar deneyin.')
       )
     } finally {
       setSaving(false)
@@ -448,20 +444,11 @@ export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Prop
               {/* Phone */}
               <div>
                 <label className={LABEL_CLS}>GSM Numarası</label>
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, '').slice(0, 11))}
-                  onBlur={() => setPhone((p) => normalizePhone(p))}
-                  maxLength={11}
-                  className={INPUT_CLS}
-                  placeholder="05XX XXX XX XX"
-                />
+                <TelefonInput value={phone} onChange={setPhone} className={INPUT_CLS} />
                 <p className="text-[11px] text-gray-400 mt-1">
-                  Numaranızı başında 0 ile veya 0 olmadan girebilirsiniz; her durumda <strong>05XXXXXXXXX</strong> olarak kaydedilir. (En fazla 11 hane)
+                  0532…, 532… veya +90 532… yazabilirsiniz; her durumda <strong>+90 5XX XXX XX XX</strong> olarak kaydedilir.
                 </p>
-                {!isPhone && phone.length === 11 && (
+                {!isPhone && !!telefonNormalize(phone) && telefonNormalize(phone) !== telefonNormalize(user?.phone || '') && (
                   <p className="text-[11px] text-amber-600 mt-1">
                     Numaranızı değiştirdiyseniz tekrar GSM doğrulaması yapmanız gerekir.
                   </p>

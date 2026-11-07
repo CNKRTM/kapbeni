@@ -4,30 +4,68 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { query, auditLog } = require('../db/pool');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
+const { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } = require('../lib/dogrula');
 
 const token = (user) => jwt.sign(
   { id: user.id, uuid: user.uuid, rol: user.rol, kaynak: 'api' },
   process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN }
 );
 
+// Gemeinsamer Kern fuer Bireysel- und Kurumsal-Registrierung.
+// Telefon wird hier auf E.164 gebracht (lib/dogrula.js) — vorher landete jede
+// Schreibweise ungeprueft in users.phone, und der Dublettencheck verglich roh.
+async function kayitOlustur(req, res, ekstra = {}) {
+  const { email, phone, password, ad, soyad, sehir, ilce } = req.body;
+  if (!email || !phone || !password) return res.status(400).json({ hata: 'Gerekli alanlar eksik' });
+  const np = telefonNormalize(phone);
+  if (!np) return res.status(400).json({ hata: TELEFON_HATA, alan: 'phone' });
+  const mail = String(email).trim().toLowerCase();
+  const mevcut = await query('SELECT id FROM users WHERE lower(email)=$1 OR phone=$2', [mail, np]);
+  if (mevcut.rows[0]) return res.status(409).json({ hata: 'Email veya telefon zaten kayıtlı' });
+  const hash = await bcrypt.hash(password, 12);
+  const sp = Object.keys(ekstra);
+  const { rows } = await query(
+    `INSERT INTO users(email,phone,password_hash,ad,soyad,sehir,ilce${sp.map(k => ',' + k).join('')})
+     VALUES($1,$2,$3,$4,$5,$6,$7${sp.map((_, i) => ',$' + (8 + i)).join('')}) RETURNING *`,
+    [mail, np, hash, ad, soyad, sehir, ilce, ...sp.map(k => ekstra[k])]
+  );
+  // musteri_no (KP-JJJJ-NNNNNNN) vergibt der DB-Trigger trg_musteri_no beim INSERT.
+  await auditLog('user.kayit', 'api', { userId: rows[0].id, ip: req.ip, detay: ekstra.hesap_tipi ? { hesap_tipi: ekstra.hesap_tipi } : undefined });
+  await query("UPDATE users SET kullanici_no='SG-'||LPAD(id::TEXT,8,'0') WHERE id=$1",[rows[0].id]);
+  girisKaydet(query, rows[0].id, req, true);
+  res.status(201).json({ token: token(rows[0]),
+    user: { id: rows[0].id, email: mail, ad, soyad, musteri_no: rows[0].musteri_no || null } });
+}
+
 // Kayıt
 router.post('/kayit', async (req, res) => {
+  try { await kayitOlustur(req, res); }
+  catch(e) { console.error('[auth/kayit]', e.message); res.status(500).json({ hata: 'Kayıt olunamadı. Lütfen tekrar deneyin.' }); }
+});
+
+// Kurumsal kayıt — AuthModal rief diese Route schon auf, sie fehlte aber (404).
+// VKN (10) oder TCKN (11, Şahıs şirketi) mit Pruefziffer.
+router.post('/kurumsal-kayit', async (req, res) => {
   try {
-    const { email, phone, password, ad, soyad, sehir, ilce } = req.body;
-    if (!email||!phone||!password) return res.status(400).json({ hata: 'Gerekli alanlar eksik' });
-    const mevcut = await query('SELECT id FROM users WHERE email=$1 OR phone=$2', [email, phone]);
-    if (mevcut.rows[0]) return res.status(409).json({ hata: 'Email veya telefon zaten kayıtlı' });
-    const hash = await bcrypt.hash(password, 12);
-    const { rows } = await query(
-      `INSERT INTO users(email,phone,password_hash,ad,soyad,sehir,ilce)
-       VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-      [email, phone, hash, ad, soyad, sehir, ilce]
-    );
-    await auditLog('user.kayit', 'api', { userId: rows[0].id, ip: req.ip });
-    await query("UPDATE users SET kullanici_no='SG-'||LPAD(id::TEXT,8,'0') WHERE id=$1",[rows[0].id]);
-    girisKaydet(query, rows[0].id, req, true);
-    res.status(201).json({ token: token(rows[0]), user: { id: rows[0].id, email, ad, soyad } });
-  } catch(e) { res.status(500).json({ hata: e.message }); }
+    const b = req.body || {};
+    const vkn = String(b.vkn || '').replace(/\D/g, '');
+    if (!String(b.firma_adi || '').trim()) return res.status(400).json({ hata: 'Firma adı zorunludur.', alan: 'firma_adi' });
+    if (!vergiNoGecerli(vkn)) return res.status(400).json({ hata: VKN_HATA, alan: 'vkn' });
+    const mersis = String(b.mersis_no || '').replace(/\D/g, '');
+    if (mersis && mersis.length !== 16) return res.status(400).json({ hata: 'MERSİS No 16 haneli olmalıdır.', alan: 'mersis_no' });
+    const yetkili = String(b.yetkili_kisi || '').trim();
+    // Name des Ansprechpartners als ad/soyad uebernehmen, damit Listen nicht leer sind.
+    const teile = yetkili.split(/\s+/).filter(Boolean);
+    req.body.ad = req.body.ad || teile.slice(0, -1).join(' ') || teile[0] || null;
+    req.body.soyad = req.body.soyad || (teile.length > 1 ? teile[teile.length - 1] : null);
+    await kayitOlustur(req, res, {
+      hesap_tipi: 'kurumsal', firma_adi: String(b.firma_adi).trim().slice(0, 255), vkn,
+      vergi_dairesi: String(b.vergi_dairesi || '').trim().slice(0, 120) || null,
+      mersis_no: mersis || null, yetkili_kisi: yetkili.slice(0, 255) || null,
+      sektor: String(b.sektor || '').trim().slice(0, 100) || null,
+      ticari_adres: String(b.ticari_adres || '').trim() || null,
+    });
+  } catch(e) { console.error('[auth/kurumsal-kayit]', e.message); res.status(500).json({ hata: 'Kurumsal kayıt olunamadı. Lütfen tekrar deneyin.' }); }
 });
 
 // Giriş

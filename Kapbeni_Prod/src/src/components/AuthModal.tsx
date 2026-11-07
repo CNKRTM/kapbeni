@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { X, Mail, Lock, Eye, EyeOff, User, Phone, Building2, Briefcase } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ve } from '../api'
+import TelefonInput from './TelefonInput'
+import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
 
 const SEKTORLER = [
   'Elektronik', 'Beyaz Eşya', 'Mobilya & Dekorasyon', 'Giyim & Tekstil', 'Araç & Vasıta',
@@ -34,7 +36,7 @@ const INPUT_PASS = 'w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl te
 const LABEL = 'block text-xs font-bold text-gray-600 mb-1'
 
 export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
-  const { login, register } = useAuth()
+  const { login, register, loginWithToken, refreshUser } = useAuth()
   const [tab, setTab] = useState<Tab>(initialTab || 'giris')
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -56,6 +58,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
   const [firmaAdi, setFirmaAdi] = useState('')
   const [vkn, setVkn] = useState('')
   const [mersisNo, setMersisNo] = useState('')
+  const [vergiDairesi, setVergiDairesi] = useState('')
   const [yetkiliKisi, setYetkiliKisi] = useState('')
   const [sektor, setSektor] = useState('')
   const [kEmail, setKEmail] = useState('')
@@ -83,12 +86,8 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
     e.preventDefault()
     setError('')
     if (!regAd.trim() || !regSoyad.trim()) { setError('Ad ve Soyad zorunludur.'); return }
-    const digits = regPhone.replace(/\D/g, '')
-    const normalized = digits.length === 10 && digits.startsWith('5') ? '0' + digits : digits
-    if (!/^05[0-9]{9}$/.test(normalized)) {
-      setError('Lütfen geçerli bir GSM numarası girin (05XX XXX XX XX).')
-      return
-    }
+    const normalized = telefonNormalize(regPhone)
+    if (!normalized) { setError(TELEFON_HATA); return }
     setLoading(true)
     try {
       await register(`${regAd.trim()} ${regSoyad.trim()}`, regEmail, normalized, regPassword)
@@ -101,20 +100,22 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
   const handleKurumsal = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    if (vkn.replace(/\D/g, '').length < 10) { setError('Geçerli bir Vergi Kimlik No giriniz (10 hane).'); return }
-    const digits = kPhone.replace(/\D/g, '')
-    const normalized = digits.length === 10 && digits.startsWith('5') ? '0' + digits : digits
-    if (!/^05[0-9]{9}$/.test(normalized)) {
-      setError('Lütfen geçerli bir GSM numarası girin (05XX XXX XX XX).')
-      return
-    }
+    if (!vergiNoGecerli(vkn)) { setError(VKN_HATA); return }
+    if (mersisNo && mersisNo.length !== 16) { setError('MERSİS No 16 haneli olmalıdır.'); return }
+    const normalized = telefonNormalize(kPhone)
+    if (!normalized) { setError(TELEFON_HATA); return }
     setLoading(true)
     try {
-      await ve.post('/auth/kurumsal-kayit', {
-        firma_adi: firmaAdi, vkn, mersis_no: mersisNo, yetkili_kisi: yetkiliKisi,
+      const d = await ve.post<{ token: string; user: any }>('/auth/kurumsal-kayit', {
+        firma_adi: firmaAdi, vkn, vergi_dairesi: vergiDairesi, mersis_no: mersisNo, yetkili_kisi: yetkiliKisi,
         sektor, email: kEmail, phone: normalized, password: kPassword,
         ticari_adres: ticariAdres, hesap_tipi: 'kurumsal',
       })
+      // Die Route liefert wie /kayit einen Token — direkt angemeldet weitermachen.
+      if (d?.token) {
+        loginWithToken(d.token, d.user)
+        refreshUser().catch(() => {})
+      }
       onClose()
     } catch (err: any) {
       setError(err.message || 'Kurumsal kayıt olunamadı. Lütfen tekrar deneyin.')
@@ -234,14 +235,9 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
               </div>
               <div className="relative">
                 <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input
-                  type="tel" inputMode="numeric" maxLength={11} value={regPhone}
-                  onChange={(e) => {
-                    let v = e.target.value.replace(/\D/g, '')
-                    if (v.startsWith('5')) v = '0' + v
-                    setRegPhone(v.slice(0, 11))
-                  }}
-                  placeholder="Telefon (05XX XXX XX XX)" className={INPUT_ICON}
+                <TelefonInput
+                  value={regPhone} onChange={setRegPhone} hataGoster={false}
+                  placeholder="Telefon (+90 5XX XXX XX XX)" className={INPUT_ICON}
                 />
               </div>
               <div className="relative">
@@ -290,13 +286,17 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={LABEL}>Vergi Kimlik No (VKN) *</label>
-                  <input type="text" inputMode="numeric" maxLength={10} value={vkn} onChange={(e) => setVkn(e.target.value.replace(/\D/g, '').slice(0, 10))} placeholder="10 hane" required className={INPUT_PLAIN} />
+                  <label className={LABEL}>VKN / TCKN *</label>
+                  <input type="text" inputMode="numeric" maxLength={11} value={vkn} onChange={(e) => setVkn(e.target.value.replace(/\D/g, '').slice(0, 11))} placeholder="10 hane VKN" required className={INPUT_PLAIN} />
                 </div>
                 <div>
-                  <label className={LABEL}>MERSİS No</label>
-                  <input type="text" value={mersisNo} onChange={(e) => setMersisNo(e.target.value)} placeholder="opsiyonel" className={INPUT_PLAIN} />
+                  <label className={LABEL}>Vergi Dairesi</label>
+                  <input type="text" value={vergiDairesi} onChange={(e) => setVergiDairesi(e.target.value)} maxLength={120} placeholder="Örn: Kadıköy" className={INPUT_PLAIN} />
                 </div>
+              </div>
+              <div>
+                <label className={LABEL}>MERSİS No</label>
+                <input type="text" inputMode="numeric" maxLength={16} value={mersisNo} onChange={(e) => setMersisNo(e.target.value.replace(/\D/g, '').slice(0, 16))} placeholder="16 hane (opsiyonel)" className={INPUT_PLAIN} />
               </div>
               <div>
                 <label className={LABEL}>Yetkili Kişi *</label>
@@ -334,14 +334,9 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
                   <label className={LABEL}>Telefon *</label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                    <input
-                      type="tel" inputMode="numeric" maxLength={11} value={kPhone}
-                      onChange={(e) => {
-                        let v = e.target.value.replace(/\D/g, '')
-                        if (v.startsWith('5')) v = '0' + v
-                        setKPhone(v.slice(0, 11))
-                      }}
-                      placeholder="05XX XXX XXXX" className={INPUT_ICON}
+                    <TelefonInput
+                      value={kPhone} onChange={setKPhone} hataGoster={false}
+                      placeholder="+90 5XX XXX XX XX" className={INPUT_ICON}
                     />
                   </div>
                 </div>
@@ -356,7 +351,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
               </div>
               <div className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-2.5 text-xs text-gray-500 space-y-1">
                 <p>📋 <strong>Kurumsal Kural:</strong> Ticari ürün/hizmet ilanı verebilirsiniz. İkinci el bireysel satış için Bireysel Kayıt kullanın.</p>
-                <p>🔐 VKN, GİB veritabanında otomatik doğrulanır. Sahte bilgiler hesap iptaline neden olur.</p>
+                <p>🔐 VKN / TCKN kontrol haneleriyle doğrulanır, kurumsal hesaplar ayrıca incelenir. Sahte bilgiler hesap iptaline neden olur.</p>
               </div>
               <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Kayıt gönderiliyor...' : '🏢 Kurumsal Hesap Oluştur'}

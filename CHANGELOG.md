@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.9.0 — 2026-11-07
+
+F: Telefon einheitlich E.164 (+90 5XX), TCKN/VKN-Pruefziffer, Kurumsal-Kayit-Route, Vergi Dairesi, users.test_verisi
+
+- chore: Zeilenenden auf LF normalisiert, .gitattributes
+
 ## 1.8.0 — 2026-11-07
 
 Staging: Banner + noindex; alle KI-Funktionen auf Claude (Chat-Betrugserkennung mit Warnhinweis, Riskli Mesajlar im Admin); Betreiber Compendus Ltd. Şti. in Footer und Rechtsseiten (data/sirket.ts)

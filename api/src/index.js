@@ -26,7 +26,7 @@ app.use('/uploads', express.static('/var/www/kapbeni/uploads'));
 // Seitenaufruf mitlaeuft. Mit 20 Anfragen je 15 Minuten war ein Nutzer nach rund
 // zwanzig Seitenaufrufen gesperrt — und weil das Frontend einen Fehlschlag von
 // /ben wie eine Abmeldung behandelte, flog er dabei aus seiner Sitzung.
-app.use(['/api/auth/giris', '/api/auth/kayit'],
+app.use(['/api/auth/giris', '/api/auth/kayit', '/api/auth/kurumsal-kayit'],
   rateLimit({ windowMs: 15*60*1000, max: 20, message: { hata: 'Çok fazla istek' } }));
 // /ben ist ein billiger, angemeldeter Lesezugriff — grosszuegiger, aber nicht offen.
 app.use('/api/auth/ben', rateLimit({ windowMs: 1*60*1000, max: 60 }));

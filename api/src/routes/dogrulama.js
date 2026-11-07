@@ -5,15 +5,8 @@ const { authMiddleware } = require('../middleware/auth');
 const OTP='123456'; // MVP-Sim (SMS-Provider = OFFENER PUNKT #7)
 const SALT = process.env.JWT_SECRET || 'sg_salt';
 
-// TR TC Kimlik No Prüfziffer-Validierung
-function tcGecerli(tc){
-  if(!/^[1-9][0-9]{10}$/.test(tc)) return false;
-  const d=tc.split('').map(Number);
-  const t1=d[0]+d[2]+d[4]+d[6]+d[8], t2=d[1]+d[3]+d[5]+d[7];
-  if(((t1*7 - t2)%10+10)%10 !== d[9]) return false;
-  if((d.slice(0,10).reduce((a,b)=>a+b,0))%10 !== d[10]) return false;
-  return true;
-}
+// TR TC Kimlik No Prüfziffer-Validierung — gemeinsame Funktion aus lib/dogrula.js
+const { tcknGecerli: tcGecerli } = require('../lib/dogrula');
 
 router.get('/durum', authMiddleware, async (req,res)=>{
   const {rows}=await query('SELECT satici_dogrulama, e_devlet_dogrulandi, kimlik_dogrulama_tipi FROM users WHERE id=$1',[req.user.id]);

@@ -196,7 +196,14 @@ export interface User {
   hakkinda?: string
   firma_adi?: string
   vkn?: string
+  vergi_dairesi?: string
   mersis_no?: string
+  /** Kundennummer KP-JJJJ-NNNNNNN (Auftragssammlung L). */
+  musteri_no?: string
+  created_at?: string
+  durum?: string
+  silinme_istegi?: string | null
+  test_verisi?: boolean
   ticari_adres?: string
   yetkili_kisi?: string
   sektor?: string

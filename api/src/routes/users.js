@@ -24,18 +24,16 @@ router.get('/me', authMiddleware, async (req,res)=>{
   if(rows[0]) delete rows[0].password_hash;
   res.json(rows[0]||{});
 });
-function normPhone(p){
-  if(p==null||p==='') return null;
-  let d=String(p).replace(/\D/g,'');
-  if(d.startsWith('90') && d.length>=12) d=d.slice(2);
-  if(d.length===10 && d.startsWith('5')) d='0'+d;
-  if(d.length>11) d=d.slice(0,11);
-  return d;
-}
+// Telefon einheitlich als E.164 (+905XXXXXXXXX) — gemeinsame Regel aus lib/dogrula.js
+const { telefonNormalize, TELEFON_HATA } = require('../lib/dogrula');
 router.put('/profil', authMiddleware, async (req,res)=>{
   try{
     const {ad,soyad,hakkinda,phone,sehir,ilce,takma_ad,takma_ad_aktif}=req.body;
-    const np=normPhone(phone);
+    let np=null;
+    if(phone!=null && String(phone).trim()!==''){
+      np=telefonNormalize(phone);
+      if(!np) return res.status(400).json({hata:TELEFON_HATA, alan:'phone'});
+    }
     const cur=(await query('SELECT phone FROM users WHERE id=$1',[req.user.id])).rows[0];
     const phoneChanged = !!(np && cur && np!==cur.phone);
     await query(`UPDATE users SET ad=COALESCE($1,ad), soyad=COALESCE($2,soyad), hakkinda=COALESCE($3,hakkinda),

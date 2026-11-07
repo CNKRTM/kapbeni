@@ -1,6 +1,8 @@
 import { createPortal } from 'react-dom'
 import { useState } from 'react'
 import { Smartphone, X, Check } from 'lucide-react'
+import TelefonInput from '../components/TelefonInput'
+import { telefonNormalize, telefonGoster, TELEFON_HATA } from '../lib/dogrula'
 import { useAuth } from '../context/AuthContext'
 import { gsmApi } from '../api'
 
@@ -18,12 +20,14 @@ export default function GSMModal({ onClose }: Props) {
 
   const sendCode = async () => {
     setError('')
+    const np = telefonNormalize(phone)
+    if (!np) { setError(TELEFON_HATA); return }
     setLoading(true)
     try {
-      await gsmApi.gonder(phone.trim() || undefined)
+      await gsmApi.gonder(np)
       setState('code')
-    } catch {
-      setError('Kod gönderilemedi. Lütfen tekrar deneyin.')
+    } catch (e: any) {
+      setError(e?.message && e.message !== 'Unauthorized' ? e.message : 'Kod gönderilemedi. Lütfen tekrar deneyin.')
     } finally {
       setLoading(false)
     }
@@ -71,17 +75,16 @@ export default function GSMModal({ onClose }: Props) {
               <p className="text-sm text-gray-500">
                 Telefon numaranıza bir doğrulama kodu göndereceğiz.
               </p>
-              <input
-                type="tel"
+              <TelefonInput
                 value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="05XX XXX XX XX"
+                onChange={setPhone}
+                hataGoster={false}
                 className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/25 focus:border-primary outline-none"
               />
               {error && <p className="text-red-500 text-xs">{error}</p>}
               <button
                 onClick={sendCode}
-                disabled={loading || phone.trim().length < 10}
+                disabled={loading || !telefonNormalize(phone)}
                 className="w-full bg-primary hover:bg-primary/95 text-white py-3 rounded-xl font-bold text-sm disabled:opacity-50 active:scale-95 transition-all"
               >
                 {loading ? 'Gönderiliyor...' : 'Kodu Gönder'}
@@ -92,7 +95,7 @@ export default function GSMModal({ onClose }: Props) {
           {state === 'code' && (
             <>
               <p className="text-sm text-gray-500">
-                <strong>{phone}</strong> numarasına gönderilen 6 haneli kodu girin.
+                <strong>{telefonGoster(phone)}</strong> numarasına gönderilen 6 haneli kodu girin.
               </p>
               <input
                 type="text"

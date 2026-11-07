@@ -8,6 +8,8 @@ import {
 import { useAuth } from '../context/AuthContext'
 import { ve } from '../api'
 import { CITIES } from '../data/cities'
+import TelefonInput from '../components/TelefonInput'
+import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
 
 interface Props {
   onBack?: () => void
@@ -17,6 +19,7 @@ const INPUT_CLS =
   'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/25 focus:border-primary outline-none transition-all'
 const LABEL_CLS = 'block text-xs font-bold text-gray-700 mb-1.5'
 
+/** Adressen speichern noch die alte Schreibweise; fuer das Profil gilt E.164. */
 function normalizePhone(n: string) {
   let s = (n || '').replace(/\D/g, '')
   if (s.startsWith('90') && s.length >= 12) s = s.slice(2)
@@ -25,18 +28,10 @@ function normalizePhone(n: string) {
   return s
 }
 
+// Ueber den zentralen Client: der wirft mit dem tuerkischen Text aus `hata`,
+// statt wie vorher nur "patch failed", das dann still verschluckt wurde.
 async function saveSettings(data: Record<string, any>) {
-  const token = localStorage.getItem('sg_token') || ''
-  const res = await fetch('/api/ayarlar', {
-    method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(data),
-  })
-  if (!res.ok) throw new Error('patch failed')
-  return res.json().catch(() => null)
+  return ve.patch<any>('/ayarlar', data)
 }
 
 function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
@@ -57,7 +52,7 @@ function Toggle({ on, onToggle }: { on: boolean; onToggle: () => void }) {
 
 const DEFAULT_PROFILE = {
   ad: '', soyad: '', phone: '', hakkinda: '', sehir: '', ilce: '',
-  hesap_tipi: 'bireysel', firma_adi: '', vkn: '', mersis_no: '',
+  hesap_tipi: 'bireysel', firma_adi: '', vkn: '', vergi_dairesi: '', mersis_no: '',
   ticari_adres: '', yetkili_kisi: '', sektor: '', takma_ad: '',
   takma_ad_aktif: false,
 }
@@ -76,6 +71,7 @@ export default function Settings({ onBack }: Props) {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [phoneError, setPhoneError] = useState('')
+  const [saveError, setSaveError] = useState('')
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [editAddress, setEditAddress] = useState<any>(null)
@@ -86,13 +82,14 @@ export default function Settings({ onBack }: Props) {
     setProfile({
       ad: u.ad || '',
       soyad: u.soyad || '',
-      phone: normalizePhone(u.phone || ''),
+      phone: u.phone || '',
       hakkinda: u.hakkinda || '',
       sehir: u.sehir || '',
       ilce: u.ilce || '',
       hesap_tipi: u.hesap_tipi || 'bireysel',
       firma_adi: u.firma_adi || '',
       vkn: u.vkn || '',
+      vergi_dairesi: u.vergi_dairesi || '',
       mersis_no: u.mersis_no || '',
       ticari_adres: u.ticari_adres || '',
       yetkili_kisi: u.yetkili_kisi || '',
@@ -131,20 +128,26 @@ export default function Settings({ onBack }: Props) {
   }
 
   const validatePhone = (val: string) => {
-    const normalized = normalizePhone(val)
-    if (!normalized) { setPhoneError(''); return true }
-    if (/^05\d{9}$/.test(normalized)) { setPhoneError(''); return true }
-    setPhoneError('Geçerli GSM: 05XX XXX XX XX'); return false
+    if (!val.trim()) { setPhoneError(''); return true }
+    if (telefonNormalize(val)) { setPhoneError(''); return true }
+    setPhoneError(TELEFON_HATA); return false
   }
 
   const handleSaveProfile = async () => {
+    setSaveError('')
     if (profile.phone && !validatePhone(profile.phone)) return
+    if (profile.hesap_tipi === 'kurumsal' && profile.vkn.trim() && !vergiNoGecerli(profile.vkn)) {
+      setSaveError(VKN_HATA); return
+    }
+    if (profile.hesap_tipi === 'kurumsal' && profile.mersis_no.trim() && profile.mersis_no.replace(/\D/g, '').length !== 16) {
+      setSaveError('MERSİS No 16 haneli olmalıdır.'); return
+    }
     setSaving(true)
     try {
       const data: Record<string, any> = {
         ad: profile.ad.trim(),
         soyad: profile.soyad.trim(),
-        phone: normalizePhone(profile.phone),
+        phone: telefonNormalize(profile.phone) || '',
         hakkinda: profile.hakkinda.trim(),
         sehir: profile.sehir,
         ilce: profile.ilce,
@@ -154,8 +157,9 @@ export default function Settings({ onBack }: Props) {
       }
       if (profile.hesap_tipi === 'kurumsal') {
         data.firma_adi = profile.firma_adi.trim()
-        data.vkn = profile.vkn.trim()
-        data.mersis_no = profile.mersis_no.trim()
+        data.vkn = profile.vkn.replace(/\D/g, '')
+        data.vergi_dairesi = profile.vergi_dairesi.trim()
+        data.mersis_no = profile.mersis_no.replace(/\D/g, '')
         data.ticari_adres = profile.ticari_adres.trim()
         data.yetkili_kisi = profile.yetkili_kisi.trim()
         data.sektor = profile.sektor.trim()
@@ -164,7 +168,9 @@ export default function Settings({ onBack }: Props) {
       await refreshUser()
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
-    } catch {
+    } catch (err: any) {
+      // Grund sichtbar machen statt verschlucken (Auftragssammlung H/F).
+      setSaveError(err?.message === 'Unauthorized' ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.' : (err?.message || 'Kaydedilemedi.'))
     } finally {
       setSaving(false)
     }
@@ -315,22 +321,16 @@ export default function Settings({ onBack }: Props) {
             {/* GSM */}
             <div>
               <label className={LABEL_CLS}>GSM Numarası</label>
-              <input
-                type="tel"
-                inputMode="numeric"
+              <TelefonInput
                 value={profile.phone}
-                onChange={(e) => {
-                  patchProfile({ phone: e.target.value.replace(/\D/g, '').slice(0, 11) })
-                  validatePhone(e.target.value)
-                }}
-                onBlur={() => patchProfile({ phone: normalizePhone(profile.phone) })}
-                maxLength={11}
+                onChange={(v) => { patchProfile({ phone: v }); if (phoneError) validatePhone(v) }}
+                onGecerlilik={(ok) => setPhoneError(ok ? '' : TELEFON_HATA)}
+                hataGoster={false}
                 className={INPUT_CLS + (phoneError ? ' border-red-300 focus:border-red-400 focus:ring-red-200' : '')}
-                placeholder="05XX XXX XX XX"
               />
               {phoneError
                 ? <p className="text-red-500 text-xs mt-1">{phoneError}</p>
-                : <p className="text-[11px] text-gray-400 mt-1">Başında 0 ile veya 0 olmadan girebilirsiniz; her durumda <strong>05XXXXXXXXX</strong> olarak kaydedilir.</p>
+                : <p className="text-[11px] text-gray-400 mt-1">0532…, 532… veya +90 532… yazabilirsiniz; her durumda <strong>+90 5XX XXX XX XX</strong> olarak kaydedilir.</p>
               }
             </div>
 
@@ -374,25 +374,37 @@ export default function Settings({ onBack }: Props) {
                 </p>
                 {[
                   { key: 'firma_adi', label: 'Firma Adı', placeholder: 'Örn: ABC Ticaret Ltd. Şti.' },
-                  { key: 'vkn', label: 'Vergi Kimlik No (VKN)', placeholder: '10 haneli VKN' },
-                  { key: 'mersis_no', label: 'MERSİS No', placeholder: 'MERSİS numaranız' },
+                  { key: 'vkn', label: 'Vergi Kimlik No (VKN) / TCKN', placeholder: '10 haneli VKN veya şahıs şirketi için 11 haneli TCKN', sayi: 11 },
+                  { key: 'vergi_dairesi', label: 'Vergi Dairesi', placeholder: 'Örn: Kadıköy Vergi Dairesi' },
+                  { key: 'mersis_no', label: 'MERSİS No', placeholder: '16 haneli MERSİS numaranız', sayi: 16 },
                   { key: 'ticari_adres', label: 'Ticari Adres', placeholder: 'Tescilli adresiniz' },
                   { key: 'yetkili_kisi', label: 'Yetkili Kişi', placeholder: 'Ad Soyad' },
                   { key: 'sektor', label: 'Sektör', placeholder: 'Örn: Elektronik, Tekstil...' },
-                ].map((field) => (
-                  <div key={field.key}>
-                    <label className={LABEL_CLS}>{field.label}</label>
-                    <input
-                      value={(profile as any)[field.key]}
-                      onChange={(e) => patchProfile({ [field.key]: e.target.value })}
-                      placeholder={field.placeholder}
-                      className={INPUT_CLS}
-                    />
-                  </div>
-                ))}
+                ].map((field) => {
+                  const wert = String((profile as any)[field.key] || '')
+                  // Pruefziffer sofort zeigen, sobald die Laenge erreicht ist.
+                  const vknFalsch = field.key === 'vkn' && wert.length >= 10 && !vergiNoGecerli(wert)
+                  return (
+                    <div key={field.key}>
+                      <label className={LABEL_CLS}>{field.label}</label>
+                      <input
+                        value={wert}
+                        inputMode={field.sayi ? 'numeric' : undefined}
+                        maxLength={field.sayi || undefined}
+                        onChange={(e) => patchProfile({ [field.key]: field.sayi ? e.target.value.replace(/\D/g, '').slice(0, field.sayi) : e.target.value })}
+                        placeholder={field.placeholder}
+                        className={INPUT_CLS + (vknFalsch ? ' border-red-300 focus:border-red-400 focus:ring-red-200' : '')}
+                      />
+                      {vknFalsch && <p className="text-red-500 text-xs mt-1">{VKN_HATA}</p>}
+                    </div>
+                  )
+                })}
               </div>
             )}
 
+            {saveError && (
+              <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-sm text-red-600">{saveError}</div>
+            )}
             <button
               onClick={handleSaveProfile}
               disabled={saving}
