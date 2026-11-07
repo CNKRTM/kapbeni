@@ -54,7 +54,8 @@ const SZENARIEN = {
   // Verkaufsmaske: Zustand 4 Stufen, Merkmale der Kategorie dynamisch, Marke als Combobox.
   async satis(page, b) {
     await page.goto(`${BASIS}/#/`); await page.waitForTimeout(1500);
-    await page.locator('button[title="Sat"]').first().click();
+    // Mobil: Knopf mit title="Sat", Desktop: Knopf mit Text "Sat".
+    await page.locator('button[title="Sat"]:visible').or(page.getByRole('button', { name: 'Sat', exact: true })).first().click();
     await page.waitForTimeout(800);
     const durum = page.getByRole('combobox', { name: 'Durum' }).first();
     const opts = await durum.locator('option').allTextContents();
@@ -69,6 +70,23 @@ const SZENARIEN = {
     await page.getByRole('option', { name: 'Togg' }).click();
     pruefe(await page.getByRole('textbox', { name: 'KM' }).count() === 1, `${b}: Feld KM vorhanden`);
     await page.getByRole('textbox', { name: 'KM' }).scrollIntoViewIfNeeded();
+  },
+  // "Hızlı İlan Ver – 3 adımda": Leer-Zustand im Panel, Zurueck schliesst, am Ende Verkaufsmaske.
+  async hizli(page, b) {
+    await page.goto(`${BASIS}/#/panel/ilanlarim`); await page.waitForTimeout(1800);
+    const knopf = page.getByRole('button', { name: /Hızlı İlan Ver/ }).first();
+    pruefe(await knopf.count() === 1, `${b}: Knopf Hızlı İlan Ver im Panel`);
+    await knopf.click(); await page.waitForTimeout(300);
+    pruefe(await page.getByText('Adım 1/3').count() === 1, `${b}: Modal offen (Schritt 1)`);
+    await page.goBack(); await page.waitForTimeout(400);
+    pruefe(await page.getByText('Adım 1/3').count() === 0 && page.url().includes('#/panel/ilanlarim'), `${b}: Browser-Zurueck schliesst Modal, bleibt im Panel`);
+    await knopf.click(); await page.waitForTimeout(300);
+    await page.getByRole('button', { name: 'İleri' }).click();
+    pruefe(await page.getByText('Adım 2/3').count() === 1, `${b}: Schritt 2`);
+    await page.getByRole('button', { name: 'İleri' }).click();
+    await page.screenshot({ path: `${AUS}/hizli-adim3-${b.split('/')[1]}.png` });
+    await page.getByRole('button', { name: 'Şimdi ilan ver' }).click(); await page.waitForTimeout(800);
+    pruefe(await page.getByText('Hemen İlan Verin').count() === 1, `${b}: "Şimdi ilan ver" oeffnet die Verkaufsmaske`);
   },
 };
 

@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.13.0 — 2026-11-07
+
+M: Hızlı İlan Ver – 3 adımda (Modal im Kundenpanel, Zurueck schliesst, oeffnet die Verkaufsmaske)
+
 ## 1.12.0 — 2026-11-07
 
 M: Einheitlicher Zustand (sifir/yeni_gibi/az_kullanilmis/kullanilmis), Marke je Kategorie (EAV, 14 Listen), dynamische Merkmale in der Verkaufsmaske, Anzeige auf der Detailseite, Meili marka/durum, KI-Beschreibungsvorschlag

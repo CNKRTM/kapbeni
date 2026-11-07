@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { ilanlarApi, favorilerApi, degerlendirmeApi, ve, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
 import { UyelikChip } from '../components/UyeRozeti'
+import HizliIlanModal from '../components/HizliIlanModal'
 
 type Tab = 'ilanlarim' | 'tekliflerim' | 'favorilerim' | 'degerlendirmeler' | 'aramalar' | 'kazancim' | 'dogrulamalar' | 'guven' | 'sikayetlerim'
 
@@ -26,9 +27,12 @@ interface Props {
    * Symptom, das den Loeschknopf wirkungslos aussehen liess.
    */
   refreshSignal?: number
+  /** Oeffnet die Verkaufsmaske — fuer "Hızlı İlan Ver – 3 adımda". */
+  onOpenSell?: () => void
 }
 
-export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNavigateSettings, initialTab, onTabChange, onEditListing, refreshSignal }: Props) {
+export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNavigateSettings, initialTab, onTabChange, onEditListing, refreshSignal, onOpenSell }: Props) {
+  const [hizliOffen, setHizliOffen] = useState(false)
   const { user, logout } = useAuth()
   const [geriBildirimOpen, setGeriBildirimOpen] = useState(false)
   const [gbKategori, setGbKategori] = useState('oneri')
@@ -264,9 +268,32 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
 
       {loading && <div style={emptyStyle}>Yükleniyor...</div>}
 
+      {/* Hızlı İlan Ver – Kurzanleitung vor dem Inserieren (Auftragssammlung M) */}
+      {!loading && tab === 'ilanlarim' && onOpenSell && ilanlar.length > 0 && (
+        <div className="flex justify-end mb-3">
+          <button onClick={() => setHizliOffen(true)}
+            className="inline-flex items-center gap-1.5 border border-gray-200 hover:border-primary text-gray-700 hover:text-primary bg-white rounded-xl px-3 py-2 text-sm font-semibold transition-colors cursor-pointer">
+            <i className="ti ti-bolt" style={{ fontSize: 16 }} /> Hızlı İlan Ver – 3 adımda
+          </button>
+        </div>
+      )}
       {!loading && tab === 'ilanlarim' && (
         ilanlar.length === 0
-          ? <div style={emptyStyle}><i className="ti ti-package" style={{ fontSize: 40, display: 'block', marginBottom: 12 }} />Henüz ilanınız yok</div>
+          ? <div style={emptyStyle}>
+              <i className="ti ti-package" style={{ fontSize: 40, display: 'block', marginBottom: 12 }} />Henüz ilanınız yok
+              {onOpenSell && (
+                <div className="mt-4 flex flex-col sm:flex-row gap-2 justify-center">
+                  <button onClick={() => setHizliOffen(true)}
+                    className="inline-flex items-center justify-center gap-1.5 bg-primary hover:bg-primary/95 text-white rounded-xl px-4 py-2.5 text-sm font-semibold cursor-pointer">
+                    <i className="ti ti-bolt" style={{ fontSize: 16 }} /> Hızlı İlan Ver – 3 adımda
+                  </button>
+                  <button onClick={() => onOpenSell()}
+                    className="inline-flex items-center justify-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-800 rounded-xl px-4 py-2.5 text-sm font-semibold cursor-pointer">
+                    Doğrudan ilan ver
+                  </button>
+                </div>
+              )}
+            </div>
           : <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 12 }}>
               {ilanlar.map(l => (
                 // ProductCard hat keinen Platz fuer Aktionen — der Knopf liegt
@@ -521,6 +548,7 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
         </div>
       </div>
     )}
+    {onOpenSell && <HizliIlanModal offen={hizliOffen} onKapat={() => setHizliOffen(false)} onIlanVer={onOpenSell} />}
     </>
   )
 }

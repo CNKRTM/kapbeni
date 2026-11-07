@@ -1086,6 +1086,7 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <motion.div key="dashboard" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
               <Dashboard
+                onOpenSell={openSell}
                 onSelectProduct={selectProduct}
                 onOpenKyc={() => setShowKYCModal(true)}
                 onOpenGsm={() => setShowGSMModal(true)}
