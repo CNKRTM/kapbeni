@@ -10,7 +10,8 @@ import { LayoutGrid, List, X, ChevronDown, Bookmark, BookmarkCheck, SlidersHoriz
 import { Listing, ve } from '../api'
 import ProductCard from '../components/ProductCard'
 import { useKategoriAgac, mitAnzahl, type Category } from '../data/kategoriAgac'
-import { CITY_LIST } from '../data/cities'
+import IlIlceAlanlari from '../components/IlIlceAlanlari'
+import { tuerkischFalten } from '../data/iller'
 import { useAuth } from '../context/AuthContext'
 
 interface Props {
@@ -156,33 +157,24 @@ export default function Discover({
       .catch(() => {})
   }, [])
 
-  // ── "Konumumu Kullan" — Live-Logik: Nominatim Reverse Geocoding ──
+  // ── "Konumumu Kullan" — ueber den eigenen Server (GET /api/iller/konum) ──
+  // wie in der Verkaufsmaske: die Position geht nicht direkt an einen Dritten,
+  // und die Namen kommen geprueft aus den Tabellen iller/ilceler.
   const konumuKullan = () => {
     if (!navigator.geolocation) return
     setGeoLoading(true)
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         try {
-          const { latitude, longitude } = pos.coords
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=tr`,
-            { headers: { 'User-Agent': 'KapBeni/1.0 (kapbeni.com)' } }
-          )
-          const data = await res.json()
-          const il = data.address?.province || data.address?.city_district || data.address?.city || data.address?.state || ''
-          const ilceGeo = data.address?.county || data.address?.suburb || data.address?.village || ''
-          if (il) {
-            const match = CITY_LIST.find(
-              (ct) => ct.toLowerCase().includes(il.toLowerCase()) || il.toLowerCase().includes(ct.toLowerCase())
-            )
-            if (match) setCity(match)
-          }
-          if (ilceGeo) setIlce(ilceGeo)
-        } catch { /* silent */ }
+          const d = await ve.get<{ il: string; ilce: string | null }>(
+            `/iller/konum?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`)
+          if (d?.il) setCity(d.il)
+          setIlce(d?.ilce || '')
+        } catch { /* Auswahl von Hand bleibt moeglich */ }
         setGeoLoading(false)
       },
       () => setGeoLoading(false),
-      { timeout: 8000 }
+      { timeout: 10000, maximumAge: 5 * 60 * 1000 }
     )
   }
 
@@ -261,8 +253,9 @@ export default function Discover({
     }
 
     // Stadt
-    if (city !== 'Tüm Şehirler') arr = arr.filter(l => l.location.includes(city))
-    if (ilce.trim()) arr = arr.filter(l => l.location.toLowerCase().includes(ilce.toLowerCase()))
+    // Tuerkisch gefaltet vergleichen: die Combobox erlaubt freie Eingabe ("istanbul").
+    if (city !== 'Tüm Şehirler' && city.trim()) arr = arr.filter(l => tuerkischFalten(l.location).includes(tuerkischFalten(city)))
+    if (ilce.trim()) arr = arr.filter(l => tuerkischFalten(l.location).includes(tuerkischFalten(ilce)))
 
     // Preis
     if (minPrice) arr = arr.filter(l => l.price >= parseFloat(minPrice))
@@ -451,35 +444,22 @@ export default function Discover({
             {geoLoading ? 'Alınıyor...' : 'Konumumu Kullan'}
           </button>
         </div>
-        <div style={{ position: 'relative', marginBottom: 6 }}>
-          <select
-            value={city}
-            onChange={e => setCity(e.target.value)}
-            style={{
+        {/* Combobox aus /api/iller (81 İl, 973 İlçe) statt der statischen Liste */}
+        <div style={{ display: 'grid', gap: 6 }}>
+          <IlIlceAlanlari
+            ohneLabel
+            il={city === 'Tüm Şehirler' ? '' : city}
+            ilce={ilce}
+            onIl={(v) => setCity(v.trim() ? v : 'Tüm Şehirler')}
+            onIlce={setIlce}
+            inputCls="w-full"
+            inputStyle={{
               width: '100%', background: '#fff', border: '1.5px solid #e5e7eb',
-              borderRadius: 9, padding: '6px 28px 6px 10px',
-              fontSize: 12, color: '#374151', appearance: 'none',
-              fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer',
-              outline: 'none',
+              borderRadius: 9, padding: '6px 28px 6px 10px', fontSize: 12, color: '#374151',
+              fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none', boxSizing: 'border-box',
             }}
-          >
-            <option value="Tüm Şehirler">İl seçin</option>
-            {CITY_LIST.map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <ChevronDown style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} size={13} />
+          />
         </div>
-        <input
-          type="text"
-          placeholder="İlçe seçin veya yazın"
-          value={ilce}
-          onChange={e => setIlce(e.target.value)}
-          style={{
-            width: '100%', background: '#fff', border: '1.5px solid #e5e7eb',
-            borderRadius: 9, padding: '6px 10px', fontSize: 12,
-            fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none',
-            boxSizing: 'border-box',
-          }}
-        />
       </div>
 
       {/* Trennlinie */}

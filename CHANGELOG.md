@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.10.0 — 2026-11-07
+
+F: İl/İlçe-Combobox aus /api/iller (81 İl/973 İlçe) in Verkaufsmaske, Einstellungen, Profil und Filter; data/cities.ts entfernt
+
 ## 1.9.0 — 2026-11-07
 
 F: Telefon einheitlich E.164 (+90 5XX), TCKN/VKN-Pruefziffer, Kurumsal-Kayit-Route, Vergi Dairesi, users.test_verisi

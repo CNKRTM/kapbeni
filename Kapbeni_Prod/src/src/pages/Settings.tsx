@@ -3,11 +3,11 @@ import { createPortal } from 'react-dom'
 import {
   User, MapPin, CreditCard, Lock, Bell, Mail, ShieldCheck,
   AlertTriangle, ChevronRight, ArrowLeft, Check, PenLine, Trash2,
-  Building2, Info, LogOut, Plus, ChevronDown,
+  Building2, Info, LogOut, Plus,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ve } from '../api'
-import { CITIES } from '../data/cities'
+import IlIlceAlanlari from '../components/IlIlceAlanlari'
 import TelefonInput from '../components/TelefonInput'
 import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
 
@@ -283,39 +283,14 @@ export default function Settings({ onBack }: Props) {
 
             {/* İl / İlçe */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={LABEL_CLS}>İl</label>
-                <div className="relative">
-                  <select
-                    value={profile.sehir}
-                    onChange={(e) => patchProfile({ sehir: e.target.value, ilce: '' })}
-                    className={INPUT_CLS + ' appearance-none pr-9'}
-                  >
-                    <option value="">İl Seçin</option>
-                    {Object.keys(CITIES).sort((a, b) => a.localeCompare(b, 'tr')).map((c) => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-                </div>
-              </div>
-              <div>
-                <label className={LABEL_CLS}>İlçe</label>
-                <div className="relative">
-                  <select
-                    value={profile.ilce}
-                    onChange={(e) => patchProfile({ ilce: e.target.value })}
-                    disabled={!profile.sehir}
-                    className={INPUT_CLS + ' appearance-none pr-9 disabled:opacity-50'}
-                  >
-                    <option value="">İlçe Seçin</option>
-                    {profile.sehir && CITIES[profile.sehir]?.map((d) => (
-                      <option key={d} value={d}>{d}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-                </div>
-              </div>
+              <IlIlceAlanlari
+                il={profile.sehir}
+                ilce={profile.ilce}
+                onIl={(v) => patchProfile({ sehir: v })}
+                onIlce={(v) => patchProfile({ ilce: v })}
+                inputCls={INPUT_CLS}
+                labelCls={LABEL_CLS}
+              />
             </div>
 
             {/* GSM */}
@@ -484,39 +459,14 @@ export default function Settings({ onBack }: Props) {
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={LABEL_CLS}>İl</label>
-                    <div className="relative">
-                      <select
-                        value={editAddress.il || ''}
-                        onChange={(e) => setEditAddress({ ...editAddress, il: e.target.value, ilce: '' })}
-                        className={INPUT_CLS + ' appearance-none pr-9'}
-                      >
-                        <option value="">İl Seçin</option>
-                        {Object.keys(CITIES).sort((a, b) => a.localeCompare(b, 'tr')).map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-                    </div>
-                  </div>
-                  <div>
-                    <label className={LABEL_CLS}>İlçe</label>
-                    <div className="relative">
-                      <select
-                        value={editAddress.ilce || ''}
-                        onChange={(e) => setEditAddress({ ...editAddress, ilce: e.target.value })}
-                        disabled={!editAddress.il}
-                        className={INPUT_CLS + ' appearance-none pr-9 disabled:opacity-50'}
-                      >
-                        <option value="">İlçe Seçin</option>
-                        {editAddress.il && CITIES[editAddress.il]?.map((d: string) => (
-                          <option key={d} value={d}>{d}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-                    </div>
-                  </div>
+                  <IlIlceAlanlari
+                    il={editAddress.il || ''}
+                    ilce={editAddress.ilce || ''}
+                    onIl={(v) => setEditAddress((a: any) => ({ ...a, il: v }))}
+                    onIlce={(v) => setEditAddress((a: any) => ({ ...a, ilce: v }))}
+                    inputCls={INPUT_CLS}
+                    labelCls={LABEL_CLS}
+                  />
                 </div>
                 <div>
                   <label className={LABEL_CLS}>Açık Adres</label>

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import OnayModal from './OnayModal'
 import { X, Sparkles, ChevronDown } from 'lucide-react'
-import { CITIES } from '../data/cities'
 import { Listing, ve } from '../api'
 import { useKategoriAgac, mitAnzahl } from '../data/kategoriAgac'
+import IlIlceAlanlari from './IlIlceAlanlari'
+import { illerYukle, ilcelerYukle, tuerkischGleich } from '../data/iller'
 
 
 
@@ -18,17 +19,6 @@ const FOTO_BYTE = 10 * 1024 * 1024
 const VIDEO_BYTE = 100 * 1024 * 1024
 const VIDEO_ZIEL_BYTE = 20 * 1024 * 1024
 const VIDEO_TYPEN = ['video/mp4', 'video/webm', 'video/quicktime']
-
-/** Zwei tuerkische Ortsnamen vergleichen, ohne an Schreibweise zu scheitern
- *  ('Hakkâri' vs 'Hakkari', 'İstanbul' vs 'Istanbul'). Dieselbe Faltung wie in
- *  api/src/routes/iller.js. */
-const tuerkischGleich = (a: string, b: string) => {
-  const karte: Record<string, string> = { 'İ':'i','I':'i','ı':'i','Ş':'s','ş':'s','Ğ':'g','ğ':'g',
-    'Ü':'u','ü':'u','Ö':'o','ö':'o','Ç':'c','ç':'c','Â':'a','â':'a','Î':'i','î':'i','Û':'u','û':'u' }
-  const f = (v: string) => String(v || '')
-    .replace(/[İIıŞşĞğÜüÖöÇçÂâÎîÛû]/g, (c) => karte[c]).toLowerCase().replace(/[^a-z0-9]/g, '')
-  return f(a) === f(b)
-}
 
 /**
  * Ein Bild in der Maske ist entweder ein Bestandsbild (liegt schon auf dem
@@ -211,17 +201,17 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
           const d = await ve.get<{ il: string; ilce: string | null }>(
             `/iller/konum?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`
           )
-          // Der Server liefert den Namen aus iller/ilceler. Das Auswahlfeld
-          // speist sich aber aus data/cities.ts, und beide Listen weichen an
-          // einzelnen Stellen ab (Schreibweise, fehlende Provinz). Deshalb
-          // vergleichend suchen statt blind setzen.
-          const stadt = Object.keys(CITIES).find((c) => tuerkischGleich(c, d.il))
-          if (!stadt) {
+          // Server und Auswahlfeld lesen jetzt dieselben Tabellen (iller/ilceler).
+          // Trotzdem vergleichend suchen: so bleibt es robust gegen Schreibweisen.
+          const iller = await illerYukle()
+          const il = iller.find((c) => tuerkischGleich(c.ad, d.il))
+          if (!il) {
             setErrors((p) => ({ ...p, konum: `Konumunuz bulundu (${d.il}), ancak listede yok. Lütfen elle seçin.` }))
             return
           }
+          const stadt = il.ad
           setCity(stadt)
-          const bezirk = d.ilce ? (CITIES[stadt] || []).find((x) => tuerkischGleich(x, d.ilce!)) : null
+          const bezirk = d.ilce ? (await ilcelerYukle(il.kod)).find((x) => tuerkischGleich(x, d.ilce!)) : null
           setDistrict(bezirk || '')
           setErrors((p) => {
             const { sehir, konum, ...rest } = p
@@ -621,48 +611,19 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
             </button>
           </div>
           {errors.konum && <span className="text-secondary text-xs mb-2 block">{errors.konum}</span>}
+          {/* Combobox statt <select>: ein gespeicherter Bezirk, den die Liste
+              nicht kennt, bleibt als freier Text erhalten statt zu verschwinden. */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={labelCls}>Şehir</label>
-              <div className="relative">
-                <select
-                  value={city}
-                  onChange={(e) => { setCity(e.target.value); setDistrict('') }}
-                  className={selectCls}
-                >
-                  <option value="">Şehir Seçin</option>
-                  {Object.keys(CITIES).sort((a, b) => a.localeCompare(b, 'tr')).map((c) => (
-                    <option key={c} value={c}>{c}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-              </div>
-              {errors.sehir && <span className="text-red-500 text-xs mt-1 block">{errors.sehir}</span>}
-            </div>
-            <div>
-              <label className={labelCls}>İlçe</label>
-              <div className="relative">
-                <select
-                  value={district}
-                  onChange={(e) => setDistrict(e.target.value)}
-                  disabled={!city}
-                  className={`${selectCls} disabled:opacity-50`}
-                >
-                  <option value="">İlçe Seçin</option>
-                  {/* Ein gespeicherter Bezirk, den data/cities.ts nicht kennt,
-                      haette sonst kein passendes <option>: das Feld stuende
-                      leer da und beim Speichern waere der Wert weg. Deshalb
-                      wird er ergaenzt, solange er nicht ohnehin in der Liste steht. */}
-                  {district && !(city && CITIES[city]?.includes(district)) && (
-                    <option value={district}>{district}</option>
-                  )}
-                  {city && CITIES[city]?.map((d) => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-                <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-              </div>
-            </div>
+            <IlIlceAlanlari
+              il={city}
+              ilce={district}
+              onIl={setCity}
+              onIlce={setDistrict}
+              inputCls={inputCls}
+              labelCls={labelCls}
+              ilLabel="Şehir"
+              ilHata={errors.sehir}
+            />
           </div>
 
           {/* Description */}

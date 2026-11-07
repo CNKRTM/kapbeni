@@ -3,8 +3,7 @@ import { useState, useRef, useCallback } from 'react'
 import { X, User, Camera, ShieldCheck, ShieldAlert, Smartphone, Check, Info, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { profileApi } from '../api'
-import { CITIES } from '../data/cities'
-import { ChevronDown } from 'lucide-react'
+import IlIlceAlanlari from '../components/IlIlceAlanlari'
 
 import TelefonInput from '../components/TelefonInput'
 import { telefonNormalize, TELEFON_HATA } from '../lib/dogrula'
@@ -406,39 +405,14 @@ export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Prop
 
               {/* City/District */}
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={LABEL_CLS}>İl</label>
-                  <div className="relative">
-                    <select
-                      value={sehir}
-                      onChange={(e) => { setSehir(e.target.value); setIlce('') }}
-                      className={INPUT_CLS + ' appearance-none pr-9'}
-                    >
-                      <option value="">İl Seçin</option>
-                      {Object.keys(CITIES).sort((a, b) => a.localeCompare(b, 'tr')).map((c) => (
-                        <option key={c} value={c}>{c}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className={LABEL_CLS}>İlçe</label>
-                  <div className="relative">
-                    <select
-                      value={ilce}
-                      onChange={(e) => setIlce(e.target.value)}
-                      disabled={!sehir}
-                      className={INPUT_CLS + ' appearance-none pr-9 disabled:opacity-50'}
-                    >
-                      <option value="">İlçe Seçin</option>
-                      {sehir && (CITIES[sehir] || []).map((d: string) => (
-                        <option key={d} value={d}>{d}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
-                  </div>
-                </div>
+                <IlIlceAlanlari
+                  il={sehir}
+                  ilce={ilce}
+                  onIl={setSehir}
+                  onIlce={setIlce}
+                  inputCls={INPUT_CLS}
+                  labelCls={LABEL_CLS}
+                />
               </div>
 
               {/* Phone */}
