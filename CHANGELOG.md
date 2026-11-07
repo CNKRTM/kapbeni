@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.12.0 — 2026-11-07
+
+M: Einheitlicher Zustand (sifir/yeni_gibi/az_kullanilmis/kullanilmis), Marke je Kategorie (EAV, 14 Listen), dynamische Merkmale in der Verkaufsmaske, Anzeige auf der Detailseite, Meili marka/durum, KI-Beschreibungsvorschlag
+
 ## 1.11.0 — 2026-11-07
 
 L: Kundennummer KP-JJJJ-NNNNNNN (Sequenz+Trigger, Bestand nachgezogen), Abzeichen "… beri üye" bei Verkaeufer, Profil und Panel

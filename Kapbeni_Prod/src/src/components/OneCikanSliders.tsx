@@ -7,6 +7,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Sparkles, Bookmark, ChevronLeft, ChevronRight, Heart, MapPin } from 'lucide-react'
 import ProductCard from './ProductCard'
+import { DURUM_ETIKET, DURUM_KISA } from '../api'
 
 const FONT = { fontFamily: "'Plus Jakarta Sans', sans-serif" }
 
@@ -15,11 +16,8 @@ const FONT = { fontFamily: "'Plus Jakarta Sans', sans-serif" }
 const SUPER_PAGE_SIZE = 4
 const SUPER_INTERVAL = 5000
 const SUPER_INTERLEAVE = 4
-const CONDITION_MAP: Record<string, string> = {
-  sifir: 'Sıfır Ayarında',
-  az_kullanilmis: 'Az Kullanılmış',
-  ikinci_el: 'İkinci El',
-}
+// Zustandsetiketten zentral aus api/index.ts (einheitliche 4 Stufen, Auftragssammlung M)
+const CONDITION_MAP = DURUM_ETIKET
 
 function mapBoostedSuper(e: any) {
   return {
@@ -224,11 +222,7 @@ const MINI_PAGE_SIZE = 6
 const MINI_INTERVAL = 5000
 const MINI_START_DELAY = 2500
 const MINI_INTERLEAVE = 4
-const CONDITION_MAP_SHORT: Record<string, string> = {
-  sifir: 'Sıfır',
-  az_kullanilmis: 'Az Kull.',
-  ikinci_el: 'İkinci El',
-}
+const CONDITION_MAP_SHORT = DURUM_KISA
 
 function formatTL(n: number) {
   return new Intl.NumberFormat('tr-TR').format(n) + ' ₺'

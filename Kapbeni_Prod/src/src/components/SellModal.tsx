@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import OnayModal from './OnayModal'
 import { X, Sparkles, ChevronDown } from 'lucide-react'
-import { Listing, ve } from '../api'
-import { useKategoriAgac, mitAnzahl } from '../data/kategoriAgac'
+import { Listing, ve, DURUM_SECENEKLERI, DURUM_ETIKET } from '../api'
+import { useKategoriAgac, mitAnzahl, dbIdVonSlug } from '../data/kategoriAgac'
+import Combobox from './Combobox'
 import IlIlceAlanlari from './IlIlceAlanlari'
 import { illerYukle, ilcelerYukle, tuerkischGleich } from '../data/iller'
 
@@ -42,11 +43,30 @@ export interface IlanVorgabe {
   aciklama: string
   fiyat: number | string
   kategoriSlug: string | null
-  durum: string            // Rohcode: sifir | az_kullanilmis | ikinci_el
+  durum: string            // Code: sifir | yeni_gibi | az_kullanilmis | kullanilmis
   sehir: string
   ilce: string
   fotograflar: string[]    // URLs in Anzeigereihenfolge
   videoUrl: string | null
+  /** Kategorie-Merkmale { tanim_id: wert } aus GET /api/ilanlar/:uuid */
+  ozellikler?: Record<string, string>
+}
+
+/** Was die Maske zusaetzlich zum Listing an App.tsx gibt (Neu anlegen). */
+export interface IlanEkstra {
+  durum: string
+  ozellikler: Record<string, string>
+}
+
+/** Ein Merkmal-Feld aus GET /api/ilanlar/ozellikler/:kategori_id */
+interface OzellikTanim {
+  id: number
+  alan_adi: string
+  etiket: string
+  zorunlu: boolean
+  tip: 'secim' | 'metin' | 'sayi' | string
+  secenekler: string[]
+  serbest: boolean
 }
 
 /** Was die Maske beim Speichern eines bearbeiteten Inserats zurueckgibt. */
@@ -61,6 +81,7 @@ export interface IlanAenderung {
   ilce: string
   /** Vollstaendige Wunschreihenfolge: Bestands-URL oder "#yeni:N". */
   sirala: string[]
+  ozellikler: Record<string, string>
   neueDateien: File[]
   video: File | null
   videoEntfernen: boolean
@@ -68,7 +89,7 @@ export interface IlanAenderung {
 
 interface Props {
   onClose: () => void
-  onAddListing: (listing: Listing, images?: File[], video?: File | null) => void
+  onAddListing: (listing: Listing, images?: File[], video?: File | null, ekstra?: IlanEkstra) => void
   /** Gesetzt = Bearbeiten-Modus. Die Maske bleibt dieselbe, nur vorbefuellt. */
   vorgabe?: IlanVorgabe | null
   /** Muss werfen, wenn das Speichern scheitert — die Maske faengt das ab. */
@@ -77,14 +98,8 @@ interface Props {
   onDelete?: (uuid: string) => Promise<void> | void
 }
 
-/** Zustandscode der DB -> der exakte Wert im Durum-Select.
- *  DURUM_ETIKET aus api/index.ts taugt dafuer NICHT: es liefert
- *  'Az Kullanılmış', im Select steht aber 'İkinci El - Az Kullanılmış'. */
-const DURUM_ZU_OPTION: Record<string, string> = {
-  sifir: 'Sıfır Ayarında',
-  az_kullanilmis: 'İkinci El - Az Kullanılmış',
-  ikinci_el: 'İkinci El',
-}
+/** Alter Code aus der Zeit vor v1.12 -> neuer Code (die DB ist umgeschluesselt). */
+const DURUM_ALT: Record<string, string> = { ikinci_el: 'kullanilmis' }
 
 export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDelete }: Props) {
   const bearbeiten = !!vorgabe
@@ -96,9 +111,15 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
   const [subCategoryId, setSubCategoryId] = useState('')
   const [city, setCity] = useState(vorgabe?.sehir || 'İstanbul')
   const [district, setDistrict] = useState(vorgabe?.ilce || '')
+  // Zustand als Code (Auftragssammlung M). Neu: bewusst leer, der Verkaeufer waehlt.
   const [condition, setCondition] = useState(
-    vorgabe ? (DURUM_ZU_OPTION[vorgabe.durum] || 'İkinci El') : 'Sıfır Ayarında'
+    vorgabe ? (DURUM_ALT[vorgabe.durum] || vorgabe.durum || '') : ''
   )
+  // Kategorie-Merkmale (Marke, Modell, Yıl, KM …) je gewaehlter Kategorie.
+  const [tanimlar, setTanimlar] = useState<OzellikTanim[]>([])
+  const [ozellikDeger, setOzellikDeger] = useState<Record<string, string>>(vorgabe?.ozellikler || {})
+  const [kiOneri, setKiOneri] = useState<string | null>(null)
+  const [kiLaeuft, setKiLaeuft] = useState(false)
   const [imageUrl, setImageUrl] = useState('')
   const [description, setDescription] = useState(vorgabe?.aciklama || '')
   const [bilder, setBilder] = useState<Bild[]>(
@@ -127,6 +148,49 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
   const fileRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLInputElement>(null)
   const selectedCat = ALL_CATEGORIES.find((c) => c.id === categoryId)
+
+  // Merkmale der feinsten gewaehlten Kategorie laden. Die API haengt die Felder
+  // der Elternkategorien an (Marke steht meist auf der Hauptkategorie).
+  const kategorieDbId = dbIdVonSlug(ALL_CATEGORIES, subCategoryId || categoryId || null)
+  useEffect(() => {
+    if (!kategorieDbId) { setTanimlar([]); return }
+    let aktiv = true
+    ve.get<OzellikTanim[]>(`/ilanlar/ozellikler/${kategorieDbId}`)
+      .then((t) => {
+        if (!aktiv) return
+        const liste = Array.isArray(t) ? t : []
+        setTanimlar(liste)
+        // Werte, die zur neuen Kategorie nicht gehoeren, verwerfen — sonst
+        // gingen sie unsichtbar mit und die API wuerde sie ohnehin ignorieren.
+        const ids = new Set(liste.map((x) => String(x.id)))
+        setOzellikDeger((p) => Object.fromEntries(Object.entries(p).filter(([k]) => ids.has(k))))
+      })
+      .catch(() => { if (aktiv) setTanimlar([]) })
+    return () => { aktiv = false }
+  }, [kategorieDbId])
+
+  const ozellikSetzen = (id: number, v: string) => {
+    setOzellikDeger((p) => ({ ...p, [String(id)]: v }))
+    setErrors((p) => { const { ozellik, ...rest } = p; return rest })
+  }
+
+  // Beschreibungsvorschlag ueber die vorhandene KI-Route (Claude, ai.service.js).
+  const kiOner = async () => {
+    if (!title.trim()) { setErrors((p) => ({ ...p, title: 'Öneri için önce başlık girin.' })); return }
+    setKiLaeuft(true); setKiOneri(null)
+    try {
+      const marka = tanimlar.find((t) => t.alan_adi === 'marka')
+      const d = await ve.post<{ aciklama: string }>('/ilanlar/ai/aciklama-oner', {
+        baslik: [marka && ozellikDeger[String(marka.id)], title].filter(Boolean).join(' '),
+        durum: DURUM_ETIKET[condition] || '',
+        fiyat: price || '',
+      })
+      if (d?.aciklama) setKiOneri(d.aciklama)
+      else setErrors((p) => ({ ...p, description: 'Şu anda öneri oluşturulamadı. Lütfen kendiniz yazın.' }))
+    } catch (err: any) {
+      setErrors((p) => ({ ...p, description: err?.message === 'Unauthorized' ? 'Lütfen giriş yapın.' : 'Şu anda öneri oluşturulamadı.' }))
+    } finally { setKiLaeuft(false) }
+  }
 
   const selectCls = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm appearance-none focus:ring-2 focus:ring-primary/25 focus:border-primary outline-none transition-all'
   const inputCls = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/25 focus:border-primary outline-none transition-all'
@@ -281,6 +345,9 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
     if (!price || parseFloat(price) <= 0) errs.price = 'Lütfen geçerli bir fiyat girin.'
     if (!categoryId) errs.kategori = 'Lütfen kategori seçin.'
     if (!city) errs.sehir = 'Lütfen şehir seçin.'
+    if (!condition) errs.durum = 'Lütfen ürün durumunu seçin.'
+    const fehlend = tanimlar.filter((t) => t.zorunlu && !String(ozellikDeger[String(t.id)] || '').trim())
+    if (fehlend.length) errs.ozellik = `Zorunlu alan: ${fehlend.map((t) => t.etiket).join(', ')}`
     if (!description.trim() || description.trim().length < 10) errs.description = 'En az 10 karakter girin.'
     if (bilder.length === 0 && !(bearbeiten ? false : imageUrl.trim())) {
       errs.foto = bearbeiten ? 'En az 1 fotoğraf gerekli.' : 'En az 1 fotoğraf ekleyin veya görsel URL girin.'
@@ -288,6 +355,10 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
     if (Object.keys(errs).length > 0) { setErrors(errs); return }
 
     const slug = subCategoryId || categoryId
+    // Nur Felder der aktuellen Kategorie und nur ausgefuellte Werte schicken.
+    const ozellikler = Object.fromEntries(
+      tanimlar.map((t) => [String(t.id), String(ozellikDeger[String(t.id)] || '').trim()]).filter(([, v]) => v)
+    )
 
     // ── Bearbeiten ──
     if (bearbeiten && vorgabe && onSave) {
@@ -316,6 +387,7 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
         sehir: city,
         ilce: district,
         sirala,
+        ozellikler,
         neueDateien,
         video,
         // Nur melden, wenn wirklich ein Bestandsvideo weggenommen wurde —
@@ -350,9 +422,9 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
       sellerName: 'Siz',
       sellerPhone: '',
       isFavorite: false,
-      condition,
+      condition: DURUM_ETIKET[condition] || '',
     }
-    onAddListing(listing, dateien.length ? dateien : undefined, video)
+    onAddListing(listing, dateien.length ? dateien : undefined, video, { durum: condition, ozellikler })
   }
 
   // Bestaetigung ueber ein eigenes Modal statt window.confirm(): das native
@@ -569,6 +641,57 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
             )}
           </div>
 
+          {/* Kategorie-Merkmale — dynamisch je Kategorie (Auftragssammlung M).
+              Marke als Combobox (Liste + freie Eingabe), Auswahlfelder als
+              Select, Zahlen numerisch. */}
+          {tanimlar.length > 0 && (
+            <div className="grid grid-cols-2 gap-4">
+              {tanimlar.map((t) => {
+                const wert = ozellikDeger[String(t.id)] || ''
+                const etikett = (
+                  <label className={labelCls}>
+                    {t.etiket}{t.zorunlu && <span className="text-red-500"> *</span>}
+                  </label>
+                )
+                if (t.serbest) return (
+                  <div key={t.id} className={t.alan_adi === 'marka' ? 'col-span-2 sm:col-span-1' : ''}>
+                    {etikett}
+                    <Combobox value={wert} onChange={(v) => ozellikSetzen(t.id, v)} secenekler={t.secenekler}
+                      placeholder="Seçin veya yazın" className={inputCls} ariaLabel={t.etiket} />
+                  </div>
+                )
+                if (t.tip === 'secim') return (
+                  <div key={t.id}>
+                    {etikett}
+                    <div className="relative">
+                      <select value={wert} onChange={(e) => ozellikSetzen(t.id, e.target.value)} className={selectCls} aria-label={t.etiket}>
+                        <option value="">Seçin</option>
+                        {t.secenekler.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
+                    </div>
+                  </div>
+                )
+                return (
+                  <div key={t.id}>
+                    {etikett}
+                    <input
+                      type="text"
+                      inputMode={t.tip === 'sayi' ? 'numeric' : undefined}
+                      value={wert}
+                      maxLength={t.tip === 'sayi' ? 9 : 120}
+                      onChange={(e) => ozellikSetzen(t.id, t.tip === 'sayi' ? e.target.value.replace(/\D/g, '') : e.target.value)}
+                      placeholder={t.alan_adi === 'yil' ? 'Örn: 2019' : t.alan_adi === 'km' ? 'Örn: 85000' : ''}
+                      className={inputCls}
+                      aria-label={t.etiket}
+                    />
+                  </div>
+                )
+              })}
+              {errors.ozellik && <span className="col-span-2 text-red-500 text-xs -mt-2 block">{errors.ozellik}</span>}
+            </div>
+          )}
+
           {/* Price & Condition */}
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -585,15 +708,23 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
             <div>
               <label className={labelCls}>Durum</label>
               <div className="relative">
-                <select value={condition} onChange={(e) => setCondition(e.target.value)} className={selectCls}>
-                  <option value="Sıfır">Sıfır</option>
-                  <option value="Sıfır Ayarında">Sıfır Ayarında</option>
-                  <option value="İkinci El - Çok Temiz">İkinci El - Çok Temiz</option>
-                  <option value="İkinci El - Az Kullanılmış">İkinci El - Az Kullanılmış</option>
-                  <option value="İkinci El">İkinci El</option>
+                <select
+                  value={condition}
+                  onChange={(e) => { setCondition(e.target.value); setErrors((p) => { const { durum, ...rest } = p; return rest }) }}
+                  className={selectCls}
+                  aria-label="Durum"
+                >
+                  <option value="">Durum seçin</option>
+                  {DURUM_SECENEKLERI.map((d) => <option key={d.kod} value={d.kod}>{d.etiket}</option>)}
                 </select>
                 <ChevronDown className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 h-4 w-4 pointer-events-none" />
               </div>
+              {condition && (
+                <span className="text-[11px] text-gray-400 mt-1 block">
+                  {DURUM_SECENEKLERI.find((d) => d.kod === condition)?.aciklama}
+                </span>
+              )}
+              {errors.durum && <span className="text-red-500 text-xs mt-1 block">{errors.durum}</span>}
             </div>
           </div>
 
@@ -628,7 +759,30 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
 
           {/* Description */}
           <div>
-            <label className={labelCls}>Açıklama</label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className={labelCls + ' mb-0'}>Açıklama</label>
+              <button
+                type="button"
+                onClick={kiOner}
+                disabled={kiLaeuft}
+                className="flex items-center gap-1.5 text-xs font-semibold text-gray-600 hover:text-primary border border-gray-200 hover:border-primary rounded-lg px-2.5 py-1 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                {kiLaeuft ? 'Hazırlanıyor…' : 'KI ile açıklama öner'}
+              </button>
+            </div>
+            {kiOneri && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 mb-2">
+                <p className="text-xs text-gray-700 whitespace-pre-line">{kiOneri}</p>
+                <div className="flex gap-2 mt-2">
+                  <button type="button" onClick={() => { setDescription(kiOneri); setKiOneri(null) }}
+                    className="bg-primary text-white text-xs font-semibold px-3 py-1.5 rounded-lg">Kullan</button>
+                  <button type="button" onClick={() => setKiOneri(null)}
+                    className="bg-gray-100 text-gray-800 text-xs font-semibold px-3 py-1.5 rounded-lg">Kapat</button>
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1.5">Öneriyi kontrol edin; telefon, IBAN veya WhatsApp bilgisi eklemeyin.</p>
+              </div>
+            )}
             <textarea
               rows={4}
               value={description}

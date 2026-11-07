@@ -12,7 +12,7 @@ import {
   Check,
   Lightbulb,
 } from 'lucide-react'
-import { ve, ilanZuListing, ilanlarApi as ilanlarApiEdit } from './api'
+import { ve, ilanZuListing, ilanlarApi as ilanlarApiEdit, DURUM_ETIKET } from './api'
 
 import Navbar from './components/Navbar'
 import CategoryNav from './components/CategoryNav'
@@ -37,7 +37,7 @@ import Profile from './pages/Profile'
 import Settings from './pages/Settings'
 
 import SellModal from './components/SellModal'
-import type { IlanVorgabe, IlanAenderung } from './components/SellModal'
+import type { IlanVorgabe, IlanAenderung, IlanEkstra } from './components/SellModal'
 import AuthModal from './components/AuthModal'
 import DestekMerkezi from './components/DestekMerkezi'
 import KYCModal from './modals/KYCModal'
@@ -208,11 +208,7 @@ export default function App() {
       .then((data: any) => {
         const items = (data && data.ilanlar) || []
         if (!items.length) return
-        const condMap: Record<string, string> = {
-          sifir: 'Sıfır Ayarında',
-          az_kullanilmis: 'Az Kullanılmış',
-          ikinci_el: 'İkinci El',
-        }
+        const condMap = DURUM_ETIKET
         setListings(
           items.map((item: any, idx: number) => ({
             id: item.uuid,
@@ -226,7 +222,7 @@ export default function App() {
             sellerName: [item.ad, item.soyad].filter(Boolean).join(' ') || 'Satıcı',
             sellerPhone: item.phone || '',
             isFavorite: false,
-            condition: condMap[item.durum] || 'İkinci El',
+            condition: condMap[item.durum] || '',
           })),
         )
       })
@@ -419,21 +415,16 @@ export default function App() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  const submitListing = async (listing: Listing, files?: File[], video?: File | null) => {
+  const submitListing = async (listing: Listing, files?: File[], video?: File | null, ekstra?: IlanEkstra) => {
     try {
-      const condMap: Record<string, string> = {
-        Sıfır: 'sifir',
-        'Sıfır Ayarında': 'sifir',
-        'İkinci El - Az Kullanılmış': 'az_kullanilmis',
-        'İkinci El - Çok Temiz': 'ikinci_el',
-        'İkinci El': 'ikinci_el',
-      }
       const [sehir, ilce] = (listing.location || '').split(',').map((s: string) => s.trim())
       const form = new FormData()
       form.append('baslik', listing.title)
       form.append('aciklama', listing.description)
       form.append('fiyat', String(listing.price))
-      form.append('durum', condMap[listing.condition] || 'ikinci_el')
+      // Zustand kommt als Code aus der Maske (sifir | yeni_gibi | az_kullanilmis | kullanilmis)
+      if (ekstra?.durum) form.append('durum', ekstra.durum)
+      if (ekstra?.ozellikler) form.append('ozellikler', JSON.stringify(ekstra.ozellikler))
       form.append('sehir', sehir || '')
       form.append('ilce', ilce || '')
       // Ohne kategori_id landet das Inserat mit NULL in der DB und taucht in
@@ -488,7 +479,8 @@ export default function App() {
         aciklama: d.aciklama || '',
         fiyat: d.fiyat ?? '',
         kategoriSlug: d.kategori_slug || null,
-        durum: d.durum || 'ikinci_el',
+        durum: d.durum || '',
+        ozellikler: Object.fromEntries((d.ozellikler || []).map((o: any) => [String(o.tanim_id), String(o.deger)])),
         sehir: d.sehir || '',
         ilce: d.ilce || '',
         fotograflar: (d.fotograflar || []).map((f: any) => f.url).filter(Boolean),
@@ -501,16 +493,12 @@ export default function App() {
 
   const speichereAenderung = async (a: IlanAenderung) => {
     try {
-      const condMap: Record<string, string> = {
-        Sıfır: 'sifir', 'Sıfır Ayarında': 'sifir',
-        'İkinci El - Az Kullanılmış': 'az_kullanilmis',
-        'İkinci El - Çok Temiz': 'ikinci_el', 'İkinci El': 'ikinci_el',
-      }
       const form = new FormData()
       form.append('baslik', a.baslik)
       form.append('aciklama', a.aciklama)
       form.append('fiyat', String(a.fiyat))
-      form.append('durum', condMap[a.durum] || 'ikinci_el')
+      form.append('durum', a.durum || '')
+      form.append('ozellikler', JSON.stringify(a.ozellikler || {}))
       form.append('sehir', a.sehir)
       form.append('ilce', a.ilce)
       const katId = dbIdVonSlug(kategorilerRef, a.kategoriSlug || null)

@@ -1,4 +1,4 @@
-const { ilanlarIndex } = require('./meili')
+const { ilanlarIndex, meili } = require('./meili')
 // Echter DB-Helper dieses Servers: src/db/pool.js exportiert { query, pool, auditLog }
 const pool = require('../db/pool')
 
@@ -15,6 +15,9 @@ function toDoc(i) {
     ilce: i.ilce || '',
     ana_foto: i.ana_foto || '',
     ilan_durum: i.ilan_durum || 'aktif',
+    // Auftragssammlung M: Marke (EAV) und einheitlicher Zustand, filterbar
+    marka: i.marka || '',
+    durum: i.durum || '',
     created_at: i.created_at ? new Date(i.created_at).getTime() : Date.now(),
   }
 }
@@ -26,7 +29,9 @@ async function syncListing(uuidOrRow) {
     if (typeof uuidOrRow === 'string' || !uuidOrRow.kategori_slug) {
       const uuid = typeof uuidOrRow === 'string' ? uuidOrRow : uuidOrRow.uuid
       const r = await pool.query(
-        `SELECT i.uuid, i.baslik, i.aciklama, i.fiyat, i.kategori_id, i.sehir, i.ilce, i.ilan_durum, i.created_at,
+        `SELECT i.uuid, i.baslik, i.aciklama, i.fiyat, i.kategori_id, i.sehir, i.ilce, i.ilan_durum, i.created_at, i.durum,
+                (SELECT v.deger FROM ilan_ozellik_degerleri v JOIN kategori_ozellik_tanimlari t ON t.id=v.tanim_id
+                  WHERE v.ilan_id=i.id AND t.alan_adi='marka' LIMIT 1) AS marka,
                 k.ad AS kategori_ad, k.slug AS kategori_slug,
                 (SELECT url FROM ilan_fotograflar WHERE ilan_id=i.id AND ana_foto=true LIMIT 1) AS ana_foto
          FROM ilanlar i LEFT JOIN kategoriler k ON k.id=i.kategori_id WHERE i.uuid=$1`, [uuid])
@@ -44,10 +49,20 @@ async function deleteListing(uuid) {
   catch (err) { console.error('[Meili] delete:', err.message) }
 }
 
+// Filterbare Felder einmal setzen (idempotent). marka/durum kamen mit v1.12 dazu.
+const FILTERBAR = ['kategori_id', 'kategori_slug', 'sehir', 'fiyat', 'ilan_durum', 'marka', 'durum']
+async function einstellungenSetzen() {
+  try { await meili('PUT', '/indexes/ilanlar/settings/filterable-attributes', FILTERBAR) }
+  catch (err) { console.error('[Meili] settings:', err.message) }
+}
+
 async function reindexAll() {
   try {
+    await einstellungenSetzen()
     const r = await pool.query(
-      `SELECT i.uuid, i.baslik, i.aciklama, i.fiyat, i.kategori_id, i.sehir, i.ilce, i.ilan_durum, i.created_at,
+      `SELECT i.uuid, i.baslik, i.aciklama, i.fiyat, i.kategori_id, i.sehir, i.ilce, i.ilan_durum, i.created_at, i.durum,
+                (SELECT v.deger FROM ilan_ozellik_degerleri v JOIN kategori_ozellik_tanimlari t ON t.id=v.tanim_id
+                  WHERE v.ilan_id=i.id AND t.alan_adi='marka' LIMIT 1) AS marka,
               k.ad AS kategori_ad, k.slug AS kategori_slug,
               (SELECT url FROM ilan_fotograflar WHERE ilan_id=i.id AND ana_foto=true LIMIT 1) AS ana_foto
        FROM ilanlar i LEFT JOIN kategoriler k ON k.id=i.kategori_id

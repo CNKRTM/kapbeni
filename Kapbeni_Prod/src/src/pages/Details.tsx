@@ -58,6 +58,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   const [ilanNo, setIlanNo] = useState<string | null>(null)
   const [kurumsal, setKurumsal] = useState<any>(null)
   // Kundennummer + Registrierung des Verkaeufers (Auftragssammlung L)
+  const [ozellikler, setOzellikler] = useState<{ tanim_id: number; alan_adi: string; etiket: string; deger: string }[]>([])
+  const [durumEtiket, setDurumEtiket] = useState<string | null>(null)
   const [saticiBilgi, setSaticiBilgi] = useState<{ no: string | null; kayit: string | null }>({ no: null, kayit: null })
   const [sellerUuid, setSellerUuid] = useState<string | null>(null)
   const [ilanNumId, setIlanNumId] = useState<number | null>(null)
@@ -157,6 +159,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     setIlanNo(null)
     setKurumsal(null)
     setSaticiBilgi({ no: null, kayit: null })
+    setOzellikler([])
+    setDurumEtiket(null)
     setMedien({ fotos: [], video: null })
     setAktiv(0)
     if (!listing?.id) return
@@ -173,6 +177,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
         setIlanNo(data.ilan_no || null)
         setKurumsal({ hesap_tipi: data.hesap_tipi, firma_adi: data.firma_adi, vkn: data.vkn })
         setSaticiBilgi({ no: data.satici_musteri_no || null, kayit: data.satici_kayit_tarihi || null })
+        setOzellikler(Array.isArray(data.ozellikler) ? data.ozellikler : [])
+        setDurumEtiket(data.durum_etiket || null)
         setSellerUuid(data.satici_uuid || (data.user_id != null ? String(data.user_id) : null))
         setIlanNumId(data.id != null ? Number(data.id) : null)
         setTeslimat({ elden: !!data.teslimat_elden, kargo: !!data.teslimat_kargo })
@@ -349,9 +355,11 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
                 onClick={() => setLightbox(true)}
               />
             )}
-            <span className="absolute top-4 left-4 text-xs font-extrabold tracking-wide uppercase px-3 py-1 bg-primary text-white rounded shadow-sm pointer-events-none">
-              {listing.condition}
-            </span>
+            {(durumEtiket || listing.condition) && (
+              <span className="absolute top-4 left-4 text-xs font-extrabold tracking-wide uppercase px-3 py-1 bg-primary text-white rounded shadow-sm pointer-events-none">
+                {durumEtiket || listing.condition}
+              </span>
+            )}
             {stationen.length > 1 && (
               <>
                 <button
@@ -410,10 +418,21 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
                   <span className="text-xs font-bold text-gray-800 font-mono">#{ilanNo}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between px-5 py-3">
-                <span className="text-xs text-gray-500 font-medium">Durum</span>
-                <span className="text-xs font-bold text-gray-800">{listing.condition}</span>
-              </div>
+              {(durumEtiket || listing.condition) && (
+                <div className="flex items-center justify-between px-5 py-3">
+                  <span className="text-xs text-gray-500 font-medium">Durum</span>
+                  <span className="text-xs font-bold text-gray-800">{durumEtiket || listing.condition}</span>
+                </div>
+              )}
+              {/* Kategorie-Merkmale aus ilan_ozellik_degerleri (Marke, Modell, Yıl …) */}
+              {ozellikler.map((o) => (
+                <div key={o.tanim_id} className="flex items-center justify-between px-5 py-3">
+                  <span className="text-xs text-gray-500 font-medium">{o.etiket}</span>
+                  <span className="text-xs font-bold text-gray-800">
+                    {o.alan_adi === 'km' ? Number(o.deger).toLocaleString('tr-TR') : o.deger}
+                  </span>
+                </div>
+              ))}
               <div className="flex items-center justify-between px-5 py-3">
                 <span className="text-xs text-gray-500 font-medium">Kategori</span>
                 <span className="text-xs font-bold text-gray-800">{listing.category}</span>

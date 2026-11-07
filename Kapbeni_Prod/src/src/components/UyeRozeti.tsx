@@ -9,7 +9,7 @@ export function UyelikChip({ tarih, className = '' }: { tarih?: string | null; c
   const metin = uyelikMetni(tarih)
   if (!metin) return null
   return (
-    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200 ${className}`}>
+    <span className={`inline-flex items-center gap-1 whitespace-nowrap px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-100 text-gray-700 border border-gray-200 ${className}`}>
       <i className="ti ti-calendar-check" style={{ fontSize: 13 }} />
       {metin}
     </span>

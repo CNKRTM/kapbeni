@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import ProductCard from '../components/ProductCard'
 import OnayModal from '../components/OnayModal'
 import { UyelikChip, MusteriNo } from '../components/UyeRozeti'
+import { DURUM_ETIKET } from '../api'
 
 interface Props {
   onOpenKyc: () => void
@@ -23,11 +24,7 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
       try {
         const data = await ilanlarApi.getMine()
         const arr = ((data && data.ilanlar) || []).filter((l: any) => l.ilan_durum !== 'pasif')
-        const condMap: Record<string, string> = {
-          sifir: 'Sıfır Ayarında',
-          az_kullanilmis: 'Az Kullanılmış',
-          ikinci_el: 'İkinci El',
-        }
+        const condMap = DURUM_ETIKET
         setListings(
           arr.map((l: any) => ({
             id: l.uuid,
@@ -41,7 +38,7 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
             sellerName: user?.ad || 'Siz',
             sellerPhone: '',
             isFavorite: false,
-            condition: condMap[l.durum] || 'İkinci El',
+            condition: condMap[l.durum] || '',
           }))
         )
       } catch {

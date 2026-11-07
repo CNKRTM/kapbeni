@@ -225,9 +225,26 @@ export interface Listing {
   condition: string
 }
 
-/** Zustandsbezeichnungen der DB in die Anzeige uebersetzen. */
+/**
+ * Einheitlicher Zustand fuer alle Kategorien (Auftragssammlung M), 4 Stufen.
+ * Dieselben Codes prueft die API (api/src/lib/ozellik.js) und die DB
+ * (CHECK ilanlar_durum_check). 'ikinci_el' ist seit v1.12 auf 'kullanilmis'
+ * umgeschluesselt und steht hier nur noch, damit alte Zwischenstaende lesbar bleiben.
+ */
+export const DURUM_SECENEKLERI: { kod: string; etiket: string; aciklama: string }[] = [
+  { kod: 'sifir', etiket: 'Sıfır', aciklama: 'Hiç kullanılmamış, kutusu açılmamış' },
+  { kod: 'yeni_gibi', etiket: 'Yeni gibi', aciklama: 'Çok az kullanılmış, iz yok' },
+  { kod: 'az_kullanilmis', etiket: 'Az kullanılmış', aciklama: 'Hafif kullanım izleri olabilir' },
+  { kod: 'kullanilmis', etiket: 'Kullanılmış', aciklama: 'Belirgin kullanım izleri var' },
+]
 export const DURUM_ETIKET: Record<string, string> = {
-  sifir: 'Sıfır Ayarında', az_kullanilmis: 'Az Kullanılmış', ikinci_el: 'İkinci El',
+  sifir: 'Sıfır', yeni_gibi: 'Yeni gibi', az_kullanilmis: 'Az kullanılmış', kullanilmis: 'Kullanılmış',
+  ikinci_el: 'Kullanılmış',
+}
+/** Kurzform fuer enge Karten. */
+export const DURUM_KISA: Record<string, string> = {
+  sifir: 'Sıfır', yeni_gibi: 'Yeni gibi', az_kullanilmis: 'Az kull.', kullanilmis: 'Kullanılmış',
+  ikinci_el: 'Kullanılmış',
 }
 
 /**
@@ -250,7 +267,7 @@ export const ilanZuListing = (d: any): Listing => ({
   sellerName: [d.ad, d.soyad].filter(Boolean).join(' ') || 'Satıcı',
   sellerPhone: d.phone || '',
   isFavorite: false,
-  condition: DURUM_ETIKET[d.durum] || 'İkinci El',
+  condition: DURUM_ETIKET[d.durum] || '',
 })
 
 export interface Chat {

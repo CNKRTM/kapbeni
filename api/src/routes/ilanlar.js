@@ -8,6 +8,8 @@ const { authMiddleware, kycGerekli } = require('../middleware/auth');
 const ai = require('../services/ai.service');
 const jwt = require('jsonwebtoken');
 const meiliSync = require('../lib/meiliSync');
+// Zustand (4 Stufen) und Kategorie-Merkmale/Marke — Auftragssammlung M
+const ozellik = require('../lib/ozellik');
 const videoLib = require('../lib/video');
 const bildLib = require('../lib/bild');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
@@ -215,7 +217,10 @@ router.get('/', async (req, res) => {
     if (ucretsiz_kargo==='true') where.push("i.ucretsiz_kargo=true");
     if (elden_al==='true') where.push("i.elden_al_kartla_ode=true");
     if (kuponlu==='true') where.push("i.kuponlu=true");
-    if (durum){ where.push(`i.durum=$${p}`); params.push(durum); p++; }
+    if (durum && ozellik.DURUM_KODLARI.includes(String(durum))){ where.push(`i.durum=$${p}`); params.push(durum); p++; }
+    // Marke aus den Kategorie-Merkmalen (EAV), Gross-/Kleinschreibung egal.
+    if (req.query.marka){ where.push(`EXISTS (SELECT 1 FROM ilan_ozellik_degerleri v JOIN kategori_ozellik_tanimlari t ON t.id=v.tanim_id
+        WHERE v.ilan_id=i.id AND t.alan_adi='marka' AND lower(v.deger)=lower($${p}))`); params.push(String(req.query.marka)); p++; }
     const order = {
       'en-yeni':'i.created_at DESC', 'en-dusuk':'i.fiyat ASC', 'en-yuksek':'i.fiyat DESC',
       'en-cok-goruntulenen':'i.goruntulenme DESC',
@@ -317,10 +322,11 @@ router.get('/:uuid', async (req, res) => {
       return res.status(404).json({ hata: 'İlan bulunamadı' });
 
     const { rows: foto } = await query('SELECT * FROM ilan_fotograflar WHERE ilan_id=$1 ORDER BY sira', [rows[0].id]);
+    const ozellikler = await ozellik.ilanOzellikleri(rows[0].id);
     // Eigene Aufrufe nicht mitzaehlen — sonst faelscht schon das Oeffnen der
     // eigenen Bearbeiten-Maske die Aufrufzahl des eigenen Inserats.
     if (!istEigentuemer) await query('UPDATE ilanlar SET goruntulenme=goruntulenme+1 WHERE id=$1', [rows[0].id]);
-    res.json({ ...rows[0], fotograflar: foto });
+    res.json({ ...rows[0], fotograflar: foto, ozellikler, durum_etiket: ozellik.DURUM_ETIKET[rows[0].durum] || null });
   } catch(e) { res.status(500).json({ hata: e.message }); }
 });
 
@@ -399,6 +405,12 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     // Vor dem Anlegen pruefen, sonst stuende ein Inserat ohne Bilder in der DB.
     const medienFehler = await medienPruefen(fotoDateien, videoDatei);
     if (medienFehler) return res.status(400).json({ hata: medienFehler });
+    // Zustand und Merkmale VOR dem Anlegen pruefen (Auftragssammlung M).
+    if (durum !== undefined && durum !== '' && !ozellik.DURUM_KODLARI.includes(String(durum)))
+      return res.status(400).json({ hata: 'Geçersiz ürün durumu.' });
+    let ozellikListe = [];
+    try { ozellikListe = await ozellik.ozellikleriPruefe(kategori_id, req.body.ozellikler); }
+    catch (e) { if (e instanceof ozellik.OzellikHatasi) return res.status(400).json({ hata: e.message }); throw e; }
     // KI-Moderation (Claude Haiku, services/ai.service.js). Aktiv nur, wenn die
     // Pruefung lief, das Inserat freigab UND der Vertrauenswert >= 40 ist.
     // Ausfall der Pruefung -> Warteschlange 'moderasyonda', Freigabe im Admin.
@@ -408,11 +420,12 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
       `INSERT INTO ilanlar(user_id,kategori_id,baslik,aciklama,fiyat,durum,ilan_durum,
         sehir,ilce,kargo_var,elden_teslim,kargo_ucreti,ai_score,ai_karar,ai_not)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
-      [req.user.id, kategori_id, baslik, aciklama, fiyat, durum||'ikinci_el', ilan_durum,
+      [req.user.id, kategori_id, baslik, aciklama, fiyat, durum||'kullanilmis', ilan_durum,
        sehir, ilce, kargo_var!==false, elden_teslim!==false, kargo_ucreti||0,
        ai_sonuc.skor, ai_sonuc.hata ? 'hata' : (ai_sonuc.onaylandi ? 'onaylandi' : 'reddedildi'), ai_sonuc.sebep]
     );
     const ilan = rows[0];
+    if (ozellikListe.length) await ozellik.ozellikleriYaz({ query }, ilan.id, ozellikListe);
     const uploadDir = `${process.env.UPLOAD_DIR}/ilanlar`;
     // Fotoğrafları sıkıştır ve kaydet — die Reihenfolge im Formular ist die
     // Reihenfolge in der Galerie, das erste Bild ist das Titelbild.
@@ -437,6 +450,8 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
       ilan.video_url = v.url; ilan.has_video = true;
     }
     await auditLog('ilan.olustur', 'api', { userId: req.user.id, hedefTip:'ilan', hedefId: ilan.id, detay: { ai_sonuc } });
+    // Suchindex sofort nachziehen (samt Marke/Zustand), nicht erst beim naechsten Neustart.
+    if (ilan_durum === 'aktif') await meiliSync.syncListing(ilan.uuid);
     res.status(201).json({ ilan, ai_sonuc, mesaj: ilan_durum==='aktif' ? 'İlanınız yayında!' : 'İlanınız incelemeye alındı' });
   } catch(e) { res.status(500).json({ hata: e.message }); }
 });
@@ -526,8 +541,19 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
     // laufen zu lassen. baslik ist varchar(200), durum varchar(20).
     if (b.baslik !== undefined && String(b.baslik).length > 200)
       return res.status(400).json({ hata: 'Başlık en fazla 200 karakter olabilir.' });
-    if (b.durum !== undefined && b.durum !== '' && !['sifir', 'az_kullanilmis', 'ikinci_el'].includes(String(b.durum)))
+    if (b.durum !== undefined && b.durum !== '' && !ozellik.DURUM_KODLARI.includes(String(b.durum)))
       return res.status(400).json({ hata: 'Geçersiz ürün durumu.' });
+    // Merkmale: mitgeschickt -> komplett ersetzen; nur Kategorie geaendert ->
+    // Werte entfernen, die zur neuen Kategorie nicht mehr gehoeren.
+    const zielKategorie = (b.kategori_id !== undefined && b.kategori_id !== '' && !isNaN(Number(b.kategori_id)))
+      ? Number(b.kategori_id) : ilan.kategori_id;
+    let ozellikListe = null;
+    if (b.ozellikler !== undefined) {
+      try { ozellikListe = await ozellik.ozellikleriPruefe(zielKategorie, b.ozellikler); }
+      catch (e) { if (e instanceof ozellik.OzellikHatasi) return res.status(400).json({ hata: e.message }); throw e; }
+    }
+    const gueltigeTanime = zielKategorie !== ilan.kategori_id
+      ? (await ozellik.tanimlarGetir(zielKategorie)).map(t => t.id) : null;
     if (b.fiyat !== undefined && b.fiyat !== '') {
       const f = Number(b.fiyat);
       if (isNaN(f) || f <= 0) return res.status(400).json({ hata: 'Lütfen geçerli bir fiyat girin.' });
@@ -596,6 +622,9 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
       // Zeile sperren, damit ein paralleler PUT wartet statt dazwischenzugehen.
       await verbindung.query('SELECT id FROM ilanlar WHERE id=$1 FOR UPDATE', [ilan.id]);
       await verbindung.query(`UPDATE ilanlar SET ${setzen.join(', ')} WHERE id=$${p}`, werte);
+      if (ozellikListe) await ozellik.ozellikleriYaz(verbindung, ilan.id, ozellikListe);
+      else if (gueltigeTanime)
+        await verbindung.query('DELETE FROM ilan_ozellik_degerleri WHERE ilan_id=$1 AND NOT (tanim_id = ANY($2::int[]))', [ilan.id, gueltigeTanime]);
       if (entfallen.length)
         await verbindung.query('DELETE FROM ilan_fotograflar WHERE id = ANY($1::int[])', [entfallen.map(f => f.id)]);
       for (let i = 0; i < ziel.length; i++) {
@@ -735,17 +764,11 @@ router.put('/:id/yeniden', authMiddleware, async (req, res) => {
 // Kategori-Attribute (dynamische Özellikler) — inkl. Ana-Kategorie-Attribute (Parent-Walk)
 router.get('/ozellikler/:kategori_id', async (req, res) => {
   try {
-    const { rows: tan } = await query(`
-      WITH RECURSIVE zincir AS (
-        SELECT id, ust_id FROM kategoriler WHERE id=$1
-        UNION ALL SELECT k.id, k.ust_id FROM kategoriler k JOIN zincir z ON k.id=z.ust_id
-      )
-      SELECT * FROM kategori_ozellik_tanimlari WHERE kategori_id IN (SELECT id FROM zincir) ORDER BY sira, id`,[req.params.kategori_id]);
-    for (const t of tan) {
-      const { rows: sec } = await query('SELECT deger FROM kategori_ozellik_secenekleri WHERE tanim_id=$1 ORDER BY sira, id',[t.id]);
-      t.secenekler = sec.map(s=>s.deger);
-    }
-    res.json(tan);
+    // Gemeinsame Logik mit POST/PUT (lib/ozellik.js): Elternkette, ohne "durum",
+    // tiefere Ebene gewinnt bei gleichem alan_adi. `serbest` = freie Eingabe (Marke).
+    const tan = await ozellik.tanimlarGetir(req.params.kategori_id);
+    res.json(tan.map(t => ({ id: t.id, kategori_id: t.kategori_id, alan_adi: t.alan_adi, etiket: t.etiket,
+      zorunlu: t.zorunlu, tip: t.tip, sira: t.sira, secenekler: t.secenekler, serbest: t.serbest })));
   } catch(e){ res.status(500).json({ hata: e.message }); }
 });
 

@@ -51,6 +51,25 @@ const SZENARIEN = {
     await page.goto(`${BASIS}/#/panel/ilanlarim`); await page.waitForTimeout(1500);
     pruefe(await page.getByText(/KP-\d{4}-\d{7}/).count() > 0, `${b}: Kundennummer im Panel sichtbar`);
   },
+  // Verkaufsmaske: Zustand 4 Stufen, Merkmale der Kategorie dynamisch, Marke als Combobox.
+  async satis(page, b) {
+    await page.goto(`${BASIS}/#/`); await page.waitForTimeout(1500);
+    await page.locator('button[title="Sat"]').first().click();
+    await page.waitForTimeout(800);
+    const durum = page.getByRole('combobox', { name: 'Durum' }).first();
+    const opts = await durum.locator('option').allTextContents();
+    pruefe(JSON.stringify(opts) === JSON.stringify(['Durum seçin', 'Sıfır', 'Yeni gibi', 'Az kullanılmış', 'Kullanılmış']), `${b}: Durum hat 4 Stufen (${opts.join('/')})`);
+    const kat = page.locator('form select').first();
+    await kat.selectOption('araba'); await page.waitForTimeout(300);
+    await page.locator('form select').nth(1).selectOption('araba-araba'); await page.waitForTimeout(1200);
+    const marka = page.getByRole('combobox', { name: 'Marka' });
+    pruefe(await marka.count() === 1, `${b}: Marka-Combobox erscheint fuer Araba`);
+    await marka.click(); await marka.fill('tog'); await page.waitForTimeout(200);
+    pruefe(await page.getByRole('option', { name: 'Togg' }).count() === 1, `${b}: Marka filtert (tog -> Togg)`);
+    await page.getByRole('option', { name: 'Togg' }).click();
+    pruefe(await page.getByRole('textbox', { name: 'KM' }).count() === 1, `${b}: Feld KM vorhanden`);
+    await page.getByRole('textbox', { name: 'KM' }).scrollIntoViewIfNeeded();
+  },
 };
 
 (async () => {

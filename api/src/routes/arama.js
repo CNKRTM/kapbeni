@@ -11,6 +11,11 @@ router.get('/', async (req, res) => {
     if (sehir) filters.push(`sehir = "${sehir}"`)
     if (min) filters.push(`fiyat >= ${parseFloat(min)}`)
     if (max) filters.push(`fiyat <= ${parseFloat(max)}`)
+    // Marke und Zustand (Auftragssammlung M). Anfuehrungszeichen entschaerfen,
+    // sonst liesse sich ueber den Parameter der Filterausdruck aufbrechen.
+    const esc = (v) => String(v).replace(/["\\]/g, '')
+    if (req.query.marka) filters.push(`marka = "${esc(req.query.marka)}"`)
+    if (req.query.durum) filters.push(`durum = "${esc(req.query.durum)}"`)
 
     const sort =
       siralama === 'ucuz' ? ['fiyat:asc']

@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Bookmark, Heart, ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
+import { DURUM_KISA } from '../api'
 
 // Konstanten aus dem Live-Bundle
 const ITEMS_PER_PAGE = 6
@@ -7,11 +8,8 @@ const AUTOPLAY_DELAY = 2500
 const AUTOPLAY_INTERVAL = 5000
 const BOOSTED_EVERY = 4
 
-const CONDITION_MAP: Record<string, string> = {
-  sifir: 'Sıfır',
-  az_kullanilmis: 'Az Kull.',
-  ikinci_el: 'İkinci El',
-}
+// Zustandsetiketten zentral aus api/index.ts (einheitliche 4 Stufen, Auftragssammlung M)
+const CONDITION_MAP = DURUM_KISA
 
 const FONT_STYLE: React.CSSProperties = { fontFamily: "'Plus Jakarta Sans', sans-serif" }
 

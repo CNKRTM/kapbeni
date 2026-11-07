@@ -7,7 +7,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { LayoutGrid, List, X, ChevronDown, Bookmark, BookmarkCheck, SlidersHorizontal, Navigation, Star } from 'lucide-react'
-import { Listing, ve } from '../api'
+import { Listing, ve, DURUM_SECENEKLERI, DURUM_ETIKET } from '../api'
 import ProductCard from '../components/ProductCard'
 import { useKategoriAgac, mitAnzahl, type Category } from '../data/kategoriAgac'
 import IlIlceAlanlari from '../components/IlIlceAlanlari'
@@ -145,6 +145,7 @@ export default function Discover({
   const [mobilSidebarOpen, setMobilSidebarOpen] = useState(false)
   const [minPuan, setMinPuan] = useState<number | null>(null)
   const [ilce, setIlce] = useState('')
+  const [durumFiltre, setDurumFiltre] = useState('')
   const [kelimeFiltrele, setKelimeFiltrele] = useState('')
   const [geoLoading, setGeoLoading] = useState(false)
 
@@ -257,6 +258,9 @@ export default function Discover({
     if (city !== 'Tüm Şehirler' && city.trim()) arr = arr.filter(l => tuerkischFalten(l.location).includes(tuerkischFalten(city)))
     if (ilce.trim()) arr = arr.filter(l => tuerkischFalten(l.location).includes(tuerkischFalten(ilce)))
 
+    // Zustand: Listing traegt das Anzeige-Etikett, deshalb ueber DURUM_ETIKET vergleichen.
+    if (durumFiltre) arr = arr.filter(l => l.condition === DURUM_ETIKET[durumFiltre])
+
     // Preis
     if (minPrice) arr = arr.filter(l => l.price >= parseFloat(minPrice))
     if (maxPrice) arr = arr.filter(l => l.price <= parseFloat(maxPrice))
@@ -267,7 +271,7 @@ export default function Discover({
     else arr.sort((a, b) => b.id.localeCompare(a.id))
 
     return arr
-  }, [listings, searchTerm, selectedCategory, city, ilce, minPrice, maxPrice, sort, kelimeFiltrele])
+  }, [listings, searchTerm, selectedCategory, city, ilce, durumFiltre, minPrice, maxPrice, sort, kelimeFiltrele])
 
   // Süper İlanlar nach Kategorie filtern
   const filteredSuper = useMemo(() => {
@@ -278,6 +282,7 @@ export default function Discover({
   const resetAll = () => {
     onSelectCategory(null)
     setCity('Tüm Şehirler')
+    setDurumFiltre('')
     setMinPrice('')
     setMaxPrice('')
     setSort('latest')
@@ -290,7 +295,7 @@ export default function Discover({
     setKelimeFiltrele('')
   }
 
-  const hasFilters = !!(selectedCategory || city !== 'Tüm Şehirler' || minPrice || maxPrice || sort !== 'latest' || searchTerm || eldenTeslim || kargoIleYolla || ilce || minPuan !== null || kelimeFiltrele)
+  const hasFilters = !!(selectedCategory || city !== 'Tüm Şehirler' || minPrice || maxPrice || sort !== 'latest' || searchTerm || eldenTeslim || kargoIleYolla || ilce || durumFiltre || minPuan !== null || kelimeFiltrele)
 
   // ── Linke Sidebar Inhalt ──────────────────────────────────────
   const SidebarContent = () => (
@@ -459,6 +464,29 @@ export default function Discover({
               fontFamily: "'Plus Jakarta Sans', sans-serif", outline: 'none', boxSizing: 'border-box',
             }}
           />
+        </div>
+      </div>
+
+      {/* ── Durum (einheitliche 4 Stufen, Auftragssammlung M) ── */}
+      <div style={{ marginBottom: 14 }}>
+        <span style={{ display: 'block', fontSize: 11, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+          Durum
+        </span>
+        <div style={{ position: 'relative' }}>
+          <select
+            value={durumFiltre}
+            onChange={e => setDurumFiltre(e.target.value)}
+            aria-label="Durum"
+            style={{
+              width: '100%', background: '#fff', border: '1.5px solid #e5e7eb',
+              borderRadius: 9, padding: '6px 28px 6px 10px', fontSize: 12, color: '#374151', appearance: 'none',
+              fontFamily: "'Plus Jakarta Sans', sans-serif", cursor: 'pointer', outline: 'none',
+            }}
+          >
+            <option value="">Tümü</option>
+            {DURUM_SECENEKLERI.map(d => <option key={d.kod} value={d.kod}>{d.etiket}</option>)}
+          </select>
+          <ChevronDown style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#9ca3af' }} size={13} />
         </div>
       </div>
 
