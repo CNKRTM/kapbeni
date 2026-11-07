@@ -1,7 +1,8 @@
 // F – İl/İlçe: Datenquelle der Combobox (/api/iller) liefert 81 İl inkl. Aksaray und 973 İlçe.
+// Wenige HTTP-Aufrufe (Rate-Limit /api: 120 je Minute), die Summe kommt aus der DB.
 const test = require('node:test');
 const assert = require('node:assert');
-const { api, pool } = require('./_hilfe');
+const { api, q, pool } = require('./_hilfe');
 
 test('/api/iller: 81 İl, Aksaray enthalten, kod numerisch', async () => {
   const r = await api('GET', '/iller');
@@ -13,16 +14,11 @@ test('/api/iller: 81 İl, Aksaray enthalten, kod numerisch', async () => {
 });
 
 test('/api/iller/:kod/ilceler: Bezirke je İl, Summe 973', async () => {
-  const iller = (await api('GET', '/iller')).body;
-  let summe = 0;
-  for (const il of iller) {
-    const r = await api('GET', `/iller/${il.kod}/ilceler`);
-    assert.strictEqual(r.status, 200);
-    summe += r.body.length;
-  }
-  assert.strictEqual(summe, 973);
+  assert.strictEqual(Number((await q('SELECT count(*) FROM ilceler i JOIN iller l ON l.id=i.il_id')).rows[0].count), 973);
   const ist = (await api('GET', '/iller/34/ilceler')).body.map((x) => x.ad);
   assert.ok(ist.includes('Kadıköy'));
+  const aks = (await api('GET', '/iller/68/ilceler')).body;
+  assert.ok(aks.length >= 7);
 });
 
 test.after(() => pool.end());

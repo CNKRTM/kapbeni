@@ -1069,6 +1069,95 @@ so funktioniert dieselbe Datei unter beiden Adressen. Sicherung des alten Vhosts
 `0644` gefallen (für alle lesbar); zurück auf `0600`. Sicherung
 `/etc/kapbeni.env.bak-20261107` (ebenfalls `0600`).
 
+### 2026-11-08
+
+Arbeitspaket Website + API zu den Abschnitten F, H, L, M der Auftragssammlung (Admin folgt
+durch einen späteren Agenten). Sechs Versionen, jede mit eigener Migration unter
+`api/migrations/` und vorher `kapbeni-freeze.sh`.
+
+**v1.9.0 — F: Telefon, TCKN, VKN.** Gemeinsame Prüfungen in `api/src/lib/dogrula.js` und
+`Kapbeni_Prod/src/src/lib/dogrula.ts` (identische Regeln): `telefonNormalize()` → E.164
+`+905XXXXXXXXX` (Nichtziffern weg, führendes `0090`/`90`/`0` ab, genau 10 Ziffern mit 5),
+`telefonGoster()` → `+90 5XX XXX XX XX`, `tcknGecerli()` (Stelle 10/11), `vknGecerli()`
+(GİB-Algorithmus, gegen echte VKN von Hepsiburada/Trendyol geprüft), `vergiNoGecerli()` (VKN
+oder TCKN für Şahıs şirketi). Eingesetzt in `auth/kayit`, neuer Route `auth/kurumsal-kayit`
+(AuthModal rief sie schon auf — sie fehlte, 404), `PUT users/profil`, `PATCH ayarlar`,
+`gsm/gonder`, `satici-dogrulama`. Frontend: Komponente `components/TelefonInput.tsx` in
+Registrierung (bireysel + kurumsal), Ayarlar, Profil-Modal, GSM-Modal. Ayarlar zeigt
+Speicherfehler jetzt an (vorher `catch {}`) und geht über `ve.patch` statt rohem fetch.
+Kurumsal-Angaben: `firma_adi`, `vkn`, `mersis_no` gab es schon, **`users.vergi_dairesi`** neu;
+MERSİS 16-stellig geprüft. **`users.test_verisi boolean default false`** angelegt, `id=15`
+markiert. Migration `20261108_01_formulare_telefon.sql` (Funktion `kp_telefon_e164`):
+**keine Konflikte** mit `users_phone_key`; umgestellt id 1 und 15; **nicht normalisierbar**
+und unverändert: id 5 (`0000000000`) und id 6 (`0500000000`, Demo-Konto) — Platzhalter.
+
+**v1.10.0 — F: İl/İlçe-Combobox.** `data/iller.ts` (`useIller`, `useIlceler`, Modul-Cache,
+`tuerkischFalten`), `components/Combobox.tsx` (klappt nach unten, Tippen filtert, freie
+Eingabe bleibt, Tastatur), `components/IlIlceAlanlari.tsx` (zwei Zellen, Raster beim
+Aufrufer). Ersetzt die statische Liste in SellModal, Ayarlar (Profil + Adresse),
+EditProfileModal und Keşfet-Filter. **`data/cities.ts` gelöscht** (80 İl, Aksaray fehlte).
+„Konumu Kullan" in der Verkaufsmaske liest jetzt dieselben Tabellen; Keşfet ruft statt
+Nominatim direkt aus dem Browser ebenfalls `GET /api/iller/konum` auf.
+
+**v1.11.0 — L: Kundennummer.** `users.musteri_no` (unique, NOT NULL), Sequenz
+`musteri_no_seq`, Trigger `trg_musteri_no` → `KP-<Jahr der Registrierung>-<7-stellig>`,
+**fortlaufend ohne Neustart pro Jahr** (über 9 999 999 wird nicht abgeschnitten). Weil der
+Trigger vergibt, bekommt auch ein künftiger Google-Login automatisch eine Nummer. Bestand
+nach `created_at`: id 1 → `KP-2026-0000001`, 5 → …02, 6 → …03, 15 → …04. GRANT auf die
+Sequenz für `sattigitti`. API: `/auth/ben`, `/ayarlar`, Registrierung, Login,
+`GET /ilanlar/:uuid` (`satici_musteri_no`, `satici_kayit_tarihi`, jetzt auch `satici_uuid`),
+`GET /ilanlar` (Liste), `GET /satici/:id/profil` (`musteri_no`, `kayit_tarihi`). Frontend:
+`components/UyeRozeti.tsx` (`UyelikChip` „Eylül 2026'dan beri üye" mit tr. Monatsnamen und
+Suffix nach Vokalharmonie, `MusteriNo`) im Verkäuferkasten der Detailseite (ersetzt das
+hartkodierte „Üyelik Tarihi: 2024"), Profil, Panel-Seitenleiste, Verkäuferprofil.
+
+**v1.12.0 — M: Zustand + Marke.** Vier Codes `sifir | yeni_gibi | az_kullanilmis |
+kullanilmis`, Bestand `ikinci_el` → `kullanilmis`, Default `kullanilmis`, CHECK
+`ilanlar_durum_check` (NULL erlaubt für Kategorien ohne Zustand). Zentral:
+`api/src/lib/ozellik.js` (`DURUM_KODLARI`, `tanimlarGetir`, `ozellikleriPruefe`,
+`ozellikleriYaz`, `ilanOzellikleri`) und im Frontend `DURUM_SECENEKLERI`/`DURUM_ETIKET`/
+`DURUM_KISA` in `api/index.ts` (alle lokalen Zustandstabellen entfernt). EAV: Feld „durum“
+gelöscht; Marke einheitlich `alan_adi='marka'`, `tip='secim'`, freie Eingabe erlaubt
+(`serbest`); Listen für 14 Hauptkategorien (Antika ohne Marke; Immobilien/Dienste gibt es im
+Baum nicht), immer „Diğer“ am Ende. Fahrzeugfelder (Model/Yıl/KM/…) hängen jetzt an
+`araba-araba` bzw. `motosiklet-marka`, damit Ersatzteile/Felgen sie nicht erben. Pflicht nur
+noch Model/Yıl/KM bei `araba-araba`. Endpunkt `GET /ilanlar/ozellikler/:id`: Elternkette,
+tiefere Ebene gewinnt bei gleichem `alan_adi`, Marke zuerst. POST/PUT speichern `ozellikler`
+(JSON `{tanim_id: wert}`) in `ilan_ozellik_degerleri` (Unique-Index ilan+tanim), PUT ersetzt
+in derselben Transaktion; Kategorie gewechselt ohne Werte → fremde Werte werden entfernt.
+Detail liefert `ozellikler` + `durum_etiket`; Liste filtert `?durum=` (validiert) und
+`?marka=`. Meili: Dokument trägt `marka`/`durum`, filterbar (Settings beim Start gesetzt),
+`/api/arama?marka=&durum=`; **POST ruft jetzt `syncListing` auf**. SellModal: dynamische
+Felder (Marke als Combobox, Select, Zahl), Zustand Pflicht, Knopf „KI ile açıklama öner“
+(`/ilanlar/ai/aciklama-oner`, Vorschlag mit „Kullan“). Keşfet: Filter „Durum“.
+
+**v1.13.0 — M: „Hızlı İlan Ver – 3 adımda“.** `components/HizliIlanModal.tsx` im OnayModal-Stil,
+drei Schritte (Hazırlık / Başlık & açıklama / Yayınla), „Şimdi ilan ver“ öffnet die
+Verkaufsmaske. Eigener History-Eintrag: Browser-Zurück schließt, X geht per
+`history.back()`. Im Panel bei İlanlarım (Kopfzeile) und im Leer-Zustand.
+
+**v1.14.0 — H: Kontolöschung.** Ein Weg in `api/src/lib/hesapSilme.js`:
+`aktif → silme_bekliyor` (30 Tage) `→ silindi`. Antrag setzt laufende Inserate auf `pasif`
+und merkt den alten Zustand in **`ilanlar.silme_oncesi_durum`**; Token werden sofort ungültig.
+Anmeldung in der Frist widerruft (Inserate zurück, Hinweis `bilgi` in der Login-Antwort,
+AuthModal zeigt ihn). Cron täglich 03:30 (Europe/Istanbul) in `lib/cron.js` anonymisiert:
+Name, E-Mail (`silindi+<id>@silindi.kapbeni.invalid`), Telefon (`silindi-<id>`), TCKN-Hash,
+TCKN als VKN, Ansprechpartner, Adresse, IBAN, Avatar u. a.; Passwort unbrauchbar, Inserate
+`pasif`/`yayin_durum='kaldirildi'`, Adressen gelöscht, **musteri_no bleibt**. Zahlungen/
+Rechnungen unberührt. `DELETE /api/users/me` läuft in denselben Ablauf. audit_log:
+`hesap.silme_talebi`, `hesap.silme_iptal`, `hesap.anonimlestirildi`. Spalten für den Admin:
+`durum`, `silinme_istegi`, **`silindi_at`** (neu). Bestätigungsmail über `utils/mailer.js`
+(nicht an Testkonten). Login vergleicht E-Mail jetzt ohne Groß-/Kleinschreibung.
+
+**Tests** — `api/tests/` (`node --test --test-concurrency=1 tests/`, 14 Tests, alle grün):
+`_hilfe.js` erzeugt Token nur für Konten mit `test_verisi=true` und **verweigert id=1**.
+Schreibende Tests legen eigene Konten unter `@test.kapbeni.com` bzw. ein eigenes Inserat
+des Testkontos an und räumen sie wieder ab. Oberfläche: `api/tests/ui/masken.js`
+(Playwright, 390 px und 1280 px, Szenarien iller, musteri, satis, hizli, silme; Fotos unter
+`/tmp/kp-ui/`). Braucht `playwright-core` unter **`/opt/_pwtest`** (außerhalb des Repos) und
+das vorhandene Chromium in `~/.cache/ms-playwright`. Achtung Rate-Limit `/api` 120/min:
+Node-Tests und UI-Tests nicht direkt hintereinander ohne Pause laufen lassen.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1078,9 +1167,23 @@ so funktioniert dieselbe Datei unter beiden Adressen. Sicherung des alten Vhosts
   mehr in der Oberfläche. Die Route `PUT /:id/yeniden` (wieder veröffentlichen) existiert
   weiterhin, wird aber von keiner Ansicht benutzt. Drei Inserate stehen noch auf `pasif`
   (ids 11, 13, 23) und sind nur noch für ihren Eigentümer sichtbar.
-- **Neue Inserate landen nicht im Suchindex**: `meiliSync.syncListing()` wird beim Anlegen
-  (`POST /api/ilanlar`) nicht aufgerufen, nur beim Bearbeiten und über den nächtlichen Lauf.
-  Eine Suche nach einem frisch angelegten Inserat findet es deshalb nicht.
+- ~~Neue Inserate landen nicht im Suchindex~~ — **erledigt in v1.12.0** (POST ruft
+  `syncListing`, sofern das Inserat direkt aktiv ist).
+- **Admin (späterer Agent, Auftragssammlung H/L/M):** Abzeichen „Silme talebi · noch X Tage“ /
+  „Müşteri ayrıldı“ aus `users.durum`, `silinme_istegi`, `silindi_at`; Kundennummer
+  `musteri_no` in Kundenliste, Kundenakte, İlan Onayı, Riskli Mesajlar, Şikayetler; Filter
+  „Test verisi“ (`users.test_verisi`); Markenlisten unter Kategoriler → Özellikler pflegbar;
+  İl/İlçe-Combobox und Telefon-/VKN-Prüfung auch im Admin; Marke und Zustand in Kundenakte
+  und İlan Onayı. Der Admin liest Zustände noch mit den alten Codes, falls er welche zeigt.
+- Kontolöschung: Inseratsbilder gehen bei der Anonymisierung noch **nicht** ins Archiv
+  (Abschnitt G fehlt); KVKK-/Gizlilik-Text ist noch nicht an den Ablauf angepasst.
+- Telefon: id 5 (`0000000000`) und id 6 (`0500000000`) bleiben unnormalisiert (Platzhalter,
+  keine echte Nummer). `adresler` speichert Telefon/Name/Typ gar nicht, obwohl die Maske
+  sie abfragt.
+- `services/ai.service.js`: `aciklamaOner` nutzt den Claude-Pfad; ob `mesajKontrol` und
+  `fiyatOner` schon umgestellt sind, ist hier nicht geprüft.
+- Meili-Schlüssel steht hartkodiert in `api/src/lib/meili.js` — gehört nach
+  `/etc/kapbeni.env`.
 - Die Fehlergrenze schützt bislang nur die Dashboard-Reiter. Detailseite, Keşfet, Profil
   und Einstellungen haben keine — dort nimmt ein Renderfehler weiterhin die Seite mit.
   Dasselbe Muster (`FehlerGrenze` + `Inhalt`) ließe sich dort anwenden.
@@ -1131,9 +1234,9 @@ so funktioniert dieselbe Datei unter beiden Adressen. Sicherung des alten Vhosts
 - `hero_slider` enthält 7 gepflegte Slides, `GET /api/slider` liefert sie — **kein Bundle ruft
   sie ab**, die Startseite zeigt hartkodierte Slides. Texte tragen noch die alte Marke.
 - 88 hartkodierte Unsplash-Bilder + Google-Usercontent als Platzhalter.
-- Fahrzeug-Attribute: EAV-Schema (`kategori_ozellik_tanimlari`, 60 Definitionen, 198 Optionen)
-  und `GET /api/ilanlar/ozellikler/:kategori_id` sind fertig — **kein Frontend nutzt sie**,
-  `ilan_ozellik_degerleri` ist leer.
+- ~~EAV-Merkmale ungenutzt~~ — **erledigt in v1.12.0**: Verkaufsmaske und Detailseite nutzen
+  sie, Marke je Hauptkategorie. Offen: Marke → Modell abhängig (Araba/Telefon), Filter nach
+  Marke in der Keşfet-Oberfläche (API kann `?marka=` schon).
 - `data/categories.ts` ist verwaist und kann gelöscht werden.
 
 **Datenschutz**
