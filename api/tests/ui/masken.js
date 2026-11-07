@@ -88,6 +88,18 @@ const SZENARIEN = {
     await page.getByRole('button', { name: 'Şimdi ilan ver' }).click(); await page.waitForTimeout(800);
     pruefe(await page.getByText('Hemen İlan Verin').count() === 1, `${b}: "Şimdi ilan ver" oeffnet die Verkaufsmaske`);
   },
+  // Kontoloeschung in den Einstellungen: Fehler wird angezeigt, Nutzer bleibt angemeldet.
+  // Die API-Antwort wird abgefangen (500) — es wird KEIN echter Antrag gestellt.
+  async silme(page, b) {
+    await page.route('**/api/hesap/sil', (r) => r.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ hata: 'Test: Sunucu hatası' }) }));
+    await page.goto(`${BASIS}/#/ayarlar`); await page.waitForTimeout(1500);
+    await page.getByText('Hesap İşlemleri', { exact: true }).first().click();
+    await page.getByText('Hesabımı Sil ve Beni Unut').first().click(); await page.waitForTimeout(300);
+    pruefe(await page.getByText(/30 gün içinde tekrar giriş yaparsanız/).count() === 1, `${b}: Dialog beschreibt den echten Ablauf`);
+    await page.getByRole('button', { name: 'Hesabı Sil' }).click(); await page.waitForTimeout(600);
+    pruefe(await page.getByText('Test: Sunucu hatası').count() === 1, `${b}: Fehler wird sichtbar angezeigt`);
+    pruefe(await page.evaluate(() => !!localStorage.getItem('sg_token')), `${b}: bei Fehler nicht abgemeldet`);
+  },
 };
 
 (async () => {

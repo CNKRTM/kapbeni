@@ -42,12 +42,21 @@ router.get('/anlasma-notu/:konusmaId', authMiddleware, async (req, res) => {
   res.json(r.rows);
 });
 
-// Hesap Silme (30 Tage) + Çıkış tüm cihaz
-router.delete('/hesap/sil', authMiddleware, async (req, res) => {
-  await pool.query('UPDATE users SET silinme_istegi=NOW() WHERE id=$1', [req.user.id]);
-  await pool.query("UPDATE ilanlar SET ilan_durum='pasif' WHERE user_id=$1", [req.user.id]);
-  res.json({ ok: true, mesaj: 'Hesabınız 30 gün içinde silinecek. Giriş yaparak iptal edebilirsiniz.' });
-});
+// Hesap Silme — einziger Weg (lib/hesapSilme.js, Auftragssammlung H):
+// Status silme_bekliyor, 30 Tage Frist, Anmeldung widerruft, danach Cron-Anonymisierung.
+const hesapSilme = require('../lib/hesapSilme');
+async function hesapSilRoute(req, res) {
+  try {
+    const { silinecek_tarih } = await hesapSilme.silmeTalebi(req.user.id, { ip: req.ip });
+    res.json({ ok: true, silinecek_tarih,
+      mesaj: `Hesabınız ${new Date(silinecek_tarih).toLocaleDateString('tr-TR')} tarihinde silinecek. Bu tarihe kadar giriş yaparak iptal edebilirsiniz.` });
+  } catch (e) {
+    console.error('[hesap/sil]', e.message);
+    res.status(e.status || 500).json({ hata: e.status ? e.message : 'Hesap silme talebi alınamadı. Lütfen tekrar deneyin.' });
+  }
+}
+router.delete('/hesap/sil', authMiddleware, hesapSilRoute);
+router.hesapSilRoute = hesapSilRoute;
 router.post('/auth/cikis-tumcihaz', authMiddleware, async (req, res) => {
   await pool.query('UPDATE users SET token_version=COALESCE(token_version,0)+1 WHERE id=$1', [req.user.id]);
   res.json({ ok: true });

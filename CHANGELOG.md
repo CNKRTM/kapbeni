@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.14.0 — 2026-11-07
+
+H: Kontoloeschung ein Weg (silme_bekliyor 30 Tage, Anmeldung widerruft, taeglicher Anonymisierungs-Cron, DELETE /users/me umgeleitet, Fehler sichtbar, audit_log, users.silindi_at)
+
 ## 1.13.0 — 2026-11-07
 
 M: Hızlı İlan Ver – 3 adımda (Modal im Kundenpanel, Zurueck schliesst, oeffnet die Verkaufsmaske)

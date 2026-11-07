@@ -92,5 +92,18 @@ cron.schedule('0 11 * * *', async () => {
   }
 }, { timezone: 'Europe/Istanbul' });
 
+// Täglich 03:30: Kontoloeschung — Antraege nach 30 Tagen anonymisieren
+// (Auftragssammlung H, Logik in lib/hesapSilme.js). Ruhige Uhrzeit, damit
+// niemand mitten in einer Sitzung anonymisiert wird.
+cron.schedule('30 3 * * *', async () => {
+  try {
+    const { fristAbgelaufenLauf } = require('./hesapSilme');
+    const r = await fristAbgelaufenLauf();
+    console.log(`[CRON] Hesap silme: ${r.gefunden} fällig, ${r.anonimlestirildi} anonimleştirildi`);
+  } catch (err) {
+    console.error('[CRON] Hesap silme hatası:', err.message);
+  }
+}, { timezone: 'Europe/Istanbul' });
+
 console.log('[CRON] Scheduler başlatıldı (timezone: Europe/Istanbul)');
 module.exports = {};

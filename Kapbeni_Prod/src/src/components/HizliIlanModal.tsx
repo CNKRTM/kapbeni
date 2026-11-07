@@ -124,7 +124,7 @@ export default function HizliIlanModal({ offen, onKapat, onIlanVer }: Props) {
 
         {adim === 2 && (
           <ul className="space-y-2.5">
-            <Madde icon="shield-check">İlanınız gönderdikten sonra <strong>birkaç saniye içinde</strong> yapay zekâ ile kontrol edilir.</Madde>
+            <Madde icon="shield-check">İlanınız, gönderildikten sonra <strong>birkaç saniye içinde</strong> yapay zekâ ile kontrol edilir.</Madde>
             <Madde icon="clock">Uygunsa hemen yayına girer. Emin olunamazsa ekibimiz inceler; bu durumda yayına alınması biraz sürebilir.</Madde>
             <Madde icon="rocket"><strong>Öne Çıkan / Doping</strong> ile ilanınızı daha fazla kişiye gösterebilirsiniz.</Madde>
           </ul>

@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const { query, auditLog } = require('../db/pool');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 const { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } = require('../lib/dogrula');
+const hesapSilme = require('../lib/hesapSilme');
 
 const token = (user) => jwt.sign(
   { id: user.id, uuid: user.uuid, rol: user.rol, kaynak: 'api' },
@@ -72,14 +73,22 @@ router.post('/kurumsal-kayit', async (req, res) => {
 router.post('/giris', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const { rows } = await query('SELECT * FROM users WHERE email=$1', [email]);
-    if (!rows[0]) return res.status(401).json({ hata: 'Kullanıcı bulunamadı' });
-    if (rows[0].durum !== 'aktif') return res.status(403).json({ hata: 'Hesabınız askıya alındı', sebep: rows[0].ban_sebebi });
+    const { rows } = await query('SELECT * FROM users WHERE lower(email)=lower($1)', [String(email || '').trim()]);
+    if (!rows[0] || rows[0].durum === 'silindi') return res.status(401).json({ hata: 'Kullanıcı bulunamadı' });
+    // silme_bekliyor darf sich anmelden — die Anmeldung widerruft den Antrag (s. u.).
+    if (!['aktif', 'silme_bekliyor'].includes(rows[0].durum))
+      return res.status(403).json({ hata: 'Hesabınız askıya alındı', sebep: rows[0].ban_sebebi });
     if (!await bcrypt.compare(password, rows[0].password_hash))
       return res.status(401).json({ hata: 'Şifre hatalı' });
+    // Auftragssammlung H: Anmeldung innerhalb der 30 Tage hebt die Loeschung auf.
+    let bilgi = null;
+    if (rows[0].durum === 'silme_bekliyor' && await hesapSilme.silmeIptal(rows[0].id, { ip: req.ip })) {
+      bilgi = 'Hesap silme talebiniz iptal edildi. Hesabınız ve ilanlarınız yeniden aktif.';
+    }
     await auditLog('user.giris', 'api', { userId: rows[0].id, ip: req.ip });
     girisKaydet(query, rows[0].id, req, true);
-    res.json({ token: token(rows[0]), user: { id: rows[0].id, email: rows[0].email, ad: rows[0].ad } });
+    res.json({ token: token(rows[0]), bilgi, silme_iptal: !!bilgi,
+      user: { id: rows[0].id, email: rows[0].email, ad: rows[0].ad, musteri_no: rows[0].musteri_no } });
   } catch(e) { res.status(500).json({ hata: e.message }); }
 });
 

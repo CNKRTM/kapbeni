@@ -5,7 +5,8 @@ interface AuthContextType {
   user: User | null
   token: string | null
   isLoggedIn: boolean
-  login: (email: string, password: string) => Promise<void>
+  /** Liefert einen Hinweistext, z. B. wenn die Anmeldung einen Loeschantrag widerrufen hat. */
+  login: (email: string, password: string) => Promise<string | null>
   register: (ad: string, email: string, phone: string, password: string) => Promise<void>
   loginWithToken: (token: string, user: User) => void
   logout: () => void
@@ -59,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const fresh = await authApi.me()
       if (fresh) setUser(fresh)
     } catch {}
+    return (data as any).bilgi || null
   }
 
   const register = async (ad: string, email: string, phone: string, password: string) => {

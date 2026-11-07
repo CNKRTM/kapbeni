@@ -72,6 +72,9 @@ export default function Settings({ onBack }: Props) {
   const [saved, setSaved] = useState(false)
   const [phoneError, setPhoneError] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [silmeHata, setSilmeHata] = useState('')
+  const [silmeSonuc, setSilmeSonuc] = useState('')
+  const [silmeLaeuft, setSilmeLaeuft] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [editAddress, setEditAddress] = useState<any>(null)
@@ -217,10 +220,16 @@ export default function Settings({ onBack }: Props) {
     } catch {}
   }
 
+  // Fehler sichtbar machen statt verschlucken: vorher wurde der Nutzer auch
+  // dann abgemeldet, wenn der Antrag gar nicht angekommen war (Auftragssammlung H).
   const handleDeleteAccount = async () => {
-    try { await ve.del('/hesap/sil') } catch {}
-    setShowDeleteDialog(false)
-    logout()
+    setSilmeHata(''); setSilmeLaeuft(true)
+    try {
+      const d = await ve.del<{ mesaj?: string }>('/hesap/sil')
+      setSilmeSonuc(d?.mesaj || 'Hesap silme talebiniz alındı.')
+    } catch (err: any) {
+      setSilmeHata(err?.message === 'Unauthorized' ? 'Oturumunuz sona ermiş. Lütfen tekrar giriş yapın.' : (err?.message || 'Hesap silme talebi gönderilemedi.'))
+    } finally { setSilmeLaeuft(false) }
   }
 
   const handleLogoutAll = async () => {
@@ -738,20 +747,36 @@ export default function Settings({ onBack }: Props) {
               </div>
               <h3 className="font-bold text-gray-900">Hesabımı Sil ve Beni Unut</h3>
             </div>
-            <p className="text-sm text-gray-600 mb-2">
-              Bu işlemi onaylamanızdan itibaren <strong>30 gün</strong> süre tanınır. Bu süre içinde giriş yaparak işlemi iptal edebilirsiniz.
-            </p>
-            <p className="text-sm text-gray-600 mb-5">
-              30 gün sonunda tüm verileriniz (ilanlar, mesajlar, değerlendirmeler) kalıcı olarak silinir. Aktif ilanlarınız hemen yayından kaldırılır.
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDeleteDialog(false)} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm font-bold">
-                Vazgeç
-              </button>
-              <button onClick={handleDeleteAccount} className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 text-sm font-bold active:scale-95 transition-all">
-                Hesabı Sil
-              </button>
-            </div>
+            {silmeSonuc ? (
+              <>
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-gray-700 mb-5">{silmeSonuc}</div>
+                <button onClick={() => { setShowDeleteDialog(false); setSilmeSonuc(''); logout() }}
+                  className="w-full bg-primary hover:bg-primary/95 text-white rounded-xl py-2.5 text-sm font-bold">
+                  Tamam
+                </button>
+              </>
+            ) : (
+              <>
+                {/* Text beschreibt den tatsaechlichen Ablauf (lib/hesapSilme.js). */}
+                <p className="text-sm text-gray-600 mb-2">
+                  Onayladığınızda aktif ilanlarınız hemen yayından kaldırılır ve oturumunuz kapanır. <strong>30 gün</strong> içinde tekrar giriş yaparsanız talep iptal edilir ve ilanlarınız geri gelir.
+                </p>
+                <p className="text-sm text-gray-600 mb-5">
+                  30 gün sonunda adınız, e-posta adresiniz, telefonunuz ve kimlik bilgileriniz anonimleştirilir, ilanlarınız kalıcı olarak kapatılır. Yasal saklama süresi olan ödeme ve fatura kayıtları süre sonuna kadar saklanır.
+                </p>
+                {silmeHata && (
+                  <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-2.5 text-sm text-red-600 mb-4">{silmeHata}</div>
+                )}
+                <div className="flex gap-3">
+                  <button onClick={() => setShowDeleteDialog(false)} disabled={silmeLaeuft} className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl py-2.5 text-sm font-bold disabled:opacity-50">
+                    Vazgeç
+                  </button>
+                  <button onClick={handleDeleteAccount} disabled={silmeLaeuft} className="flex-1 bg-red-600 hover:bg-red-700 text-white rounded-xl py-2.5 text-sm font-bold active:scale-95 transition-all disabled:opacity-50">
+                    {silmeLaeuft ? 'İşleniyor…' : 'Hesabı Sil'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>,
         document.body

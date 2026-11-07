@@ -51,7 +51,7 @@ export const ve = {
 // ---- Auth ----
 export const authApi = {
   login: (email: string, password: string) =>
-    ve.post<{ token: string; user: User }>('/auth/giris', { email, password }),
+    ve.post<{ token: string; user: User; bilgi?: string | null }>('/auth/giris', { email, password }),
   register: (ad: string, email: string, phone: string, password: string) =>
     ve.post<{ token: string; user: User }>('/auth/kayit', { ad, email, phone, password }),
   me: () => ve.get<User>('/auth/ben'),

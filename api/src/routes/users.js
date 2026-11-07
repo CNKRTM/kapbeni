@@ -55,9 +55,7 @@ router.put('/gizlilik', authMiddleware, async (req,res)=>{
 router.put('/bildirimler', authMiddleware, async (req,res)=>{
   await query('UPDATE users SET bildirim_tercih=$1 WHERE id=$2',[JSON.stringify(req.body),req.user.id]); res.json({ok:true});
 });
-router.delete('/me', authMiddleware, async (req,res)=>{
-  await query("UPDATE users SET durum='deleted' WHERE id=$1",[req.user.id]);
-  await auditLog('user.silindi','api',{userId:req.user.id});
-  res.json({ok:true, mesaj:'Hesabınız silindi'});
-});
+// Frueher zweiter Weg (setzte durum='deleted' ohne Frist). Jetzt derselbe Ablauf
+// wie DELETE /api/hesap/sil — siehe lib/hesapSilme.js (Auftragssammlung H).
+router.delete('/me', authMiddleware, (req, res) => require('./ekstra').hesapSilRoute(req, res));
 module.exports=router;

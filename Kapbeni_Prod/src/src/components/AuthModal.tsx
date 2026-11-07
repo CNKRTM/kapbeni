@@ -75,7 +75,10 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
     setError('')
     setLoading(true)
     try {
-      await login(loginEmail, loginPassword)
+      const bilgi = await login(loginEmail, loginPassword)
+      // Anmeldung hat einen Loeschantrag widerrufen (Auftragssammlung H): Hinweis
+      // sichtbar lassen, dann schliessen.
+      if (bilgi) { setNotice(bilgi); setTimeout(onClose, 4000); return }
       onClose()
     } catch (err: any) {
       setError(err.message || 'Giriş yapılamadı. Bilgilerinizi kontrol edin.')
