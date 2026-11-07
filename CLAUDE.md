@@ -22,7 +22,8 @@ nginx. Backend: drei Node-Dienste unter PM2 plus Postgres, Redis und Meilisearch
 | Meilisearch | 7700 (nur localhost) | `/opt/meilisearch` | — |
 
 **nginx-Vhosts** (`/etc/nginx/sites-available/`):
-- `kapbeni.com` — öffentlich (443), proxyt `/api/` → 3001 und `/admin` → 3002
+- `kapbeni.com` — öffentlich (443), proxyt `/api/` → 3001 und `/kapbeniadmin/` → 3002
+  (Admin unter `/kapbeniadmin/admin`, seit v1.7.1; `/admin` → 404)
 - `kapbeni-prod` — Port 3003, gleicher `root` wie kapbeni.com (Test/LAN)
 - `kapbeni-live-ref` — Port 3004, **temporär**, liefert den Live-Stand vom 22.07. aus
   (`/opt/_vergleich/live-20260722`) für 1:1-Vergleiche
@@ -1010,6 +1011,64 @@ dunklen Fotos tritt er zurück; dort tragen das rote Zeichen und die weiße Wage
 hellen Fotos ist er deutlich besser lesbar als die vorherige Fassung. An drei frisch
 hochgeladenen Bildern geprüft (hell, hell, dunkel).
 
+### 2026-11-07
+
+**Bestandsaufnahme nach acht Wochen Pause.** Server, GitHub und kapbeni.com standen
+unverändert auf v1.6.1, Arbeitsbaum sauber. Abweichung von dieser Datei: der KYC-Dienst
+lauscht auf `0.0.0.0:8001`, nicht nur lokal (ufw hält den Port von außen dicht). Neuer
+Zugang für Claude-Sitzungen: Schlüssel `claude_srv` in `/root/.ssh/authorized_keys`.
+
+**Freeze `kapbeni-freeze-20261107-195628`** — 410 MB, Prüfsummen OK, vor allen Änderungen.
+
+**KI-Moderation neu — Claude Haiku statt NVIDIA (v1.7.0).** Drei Ursachen dafür, dass seit
+Wochen *keine* Moderation stattfand:
+1. NVIDIA hat `meta/llama-3.1-70b-instruct` am 26.08.2026 abgeschaltet (410). Fast alle
+   übrigen Modelle antworten für dieses Konto mit 404; das einzig erreichbare
+   (`mistral-large-4`) braucht 38–60 s je Aufruf — für das Anlegen eines Inserats untauglich.
+2. Der Rückfall `{onaylandi:true, skor:70}` schaltete jedes Inserat ungeprüft frei.
+3. **Die Richtung von `skor` war nirgends festgelegt.** Im Test bekam eine eindeutige
+   Betrugsanzeige (IBAN-Vorkasse, iPhone für 4.500 TL) **98** — als Risikowert gemeint,
+   vom Code (`skor >= 40` → aktiv) als „unbedenklich" gelesen.
+
+Neu in `api/src/services/ai.service.js`, `moderasyonYap()`:
+- Modell `claude-haiku-5-5` (überschreibbar per `KAPBENI_MOD_MODEL`), Schlüssel
+  `ANTHROPIC_API_KEY` aus `/etc/kapbeni.env`, `@anthropic-ai/sdk` 0.27 → **1.6.0**.
+- Antwortformat per JSON-Schema erzwungen (`output_config.format`), `effort: low`,
+  Zeitgrenze 20 s, ein Wiederholversuch.
+- `skor` ist ausdrücklich ein **Vertrauenswert**: 100 = unbedenklich, 0 = Betrug/Spam.
+- Jeder Ausfall (kein Schlüssel, Zeitüberschreitung, 401, 429, Ablehnung, abgeschnittene
+  Antwort) liefert `hata: true`. `routes/ilanlar.js` setzt `aktif` nur, wenn die Prüfung
+  lief, freigab **und** `skor >= 40`; sonst `moderasyonda`. `ilanlar.ai_karar`
+  (varchar 20) kennt dafür zusätzlich `hata`, `ai_score` bleibt dann NULL.
+
+*Belegt* (getrennter Testordner, danach gelöscht): IBAN-iPhone 3 → Warteschlange,
+IKEA-Sessel 92 → aktiv, „asdf test" 1 TL 5 → Warteschlange, Kinderwagen 88 → aktiv; je
+1–3 s. Falscher Schlüssel → `anahtar geçersiz`, Warteschlange. Nach dem Ausrollen auf dem
+Server erneut: Sessel 88 → aktiv.
+
+**Admin-Seite „İlan Onayı"** (`admin/public/index.html`). Die Endpunkte
+`GET /admin/api/ilanlar?durum=moderasyonda`, `…/:id/onayla`, `…/:id/reddet` gab es in
+`admin/server.js` längst — **keine Oberfläche rief sie auf**. Wartende Inserate wären also
+unsichtbar liegen geblieben. Jetzt eigener Menüpunkt unter İlanlar: Karte mit Bild,
+Titel, Preis, Nutzer, Beschreibung (HTML-escaped), KI-Begründung und Abzeichen
+(„KI-Prüfung ausgefallen" oder „KI-Güven <Wert>" in Rot/Gelb/Grün), Knöpfe Ansehen,
+Onayla, Reddet (mit Grund). Die Dashboard-Kachel zeigt „İlan onayı bekliyor".
+
+**Admin-Adresse verlegt (v1.7.1).** Öffentlich jetzt `https://kapbeni.com/kapbeniadmin/admin`.
+nginx (`kapbeni.com`-Vhost) streicht `/kapbeniadmin` (`proxy_pass http://localhost:3002/;`),
+der Dienst selbst sieht weiter `/admin` — `admin/server.js` blieb unverändert, im LAN gilt
+weiter `http://192.168.50.100:3002/admin`. `location /admin` antwortet mit **404**.
+IP-Sperre unverändert übernommen. Die Seite rechnet ihre API-Basis jetzt aus der eigenen
+Adresse (`location.pathname` bis `/admin` + `/api`), statt fest `/admin/api` zu nehmen —
+so funktioniert dieselbe Datei unter beiden Adressen. Sicherung des alten Vhosts:
+`/root/kapbeni.com.nginx.bak-20261107`.
+*Belegt:* `/admin` → 404, `/admin/api/dashboard` → 404, `/kapbeniadmin/admin` → 200,
+`/kapbeniadmin/admin/api/dashboard` → 401 („Giriş gerekli").
+
+**Schlüssel-Eintrag in `/etc/kapbeni.env`** — beim Bearbeiten von Hand war die Datei auf
+`0644` gefallen (für alle lesbar); zurück auf `0600`. Sicherung
+`/etc/kapbeni.env.bak-20261107` (ebenfalls `0600`).
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1040,11 +1099,17 @@ hochgeladenen Bildern geprüft (hell, hell, dunkel).
 - `api/src/routes/odeme.js:26` und `agim.js:23` verweisen hartkodiert auf die **entfernte**
   Domain `sattimgitti.transas24.com` (Zahlungs-Rückkehr-URL, Einladungslink).
 - Ein aktives Inserat (Asus Notebook, id=12) hat keine `kategori_id`.
-- **KI-Moderation antwortet nicht mehr**: `ai.service` protokolliert beim Anlegen eines
-  Inserats `AI atlandı: 410 status code (no body)` — der NVIDIA-Endpunkt ist abgeschaltet.
-  Der Rückfall (`{onaylandi:true, skor:70}`) sorgt dafür, dass jedes Inserat sofort `aktif`
-  wird; faktisch findet **keine Moderation statt**. Fällt nicht auf, weil der Rückfall
-  absichtlich freundlich ist.
+- ~~KI-Moderation antwortet nicht mehr~~ — **erledigt in v1.7.0** (Claude Haiku, siehe
+  Chronik 2026-11-07).
+- **Die übrigen KI-Funktionen hängen weiter am toten NVIDIA-Endpunkt**: `mesajKontrol`
+  (Betrugserkennung in Chats), `aciklamaOner`, `fiyatOner` in `services/ai.service.js`. Sie
+  scheitern still über `guvenli()` — `mesajKontrol` meldet dadurch jede Nachricht als `temiz`.
+  Umstellung auf Claude nach demselben Muster wie `moderasyonYap`.
+- Freigabe über „İlan Onayı" (`/admin/api/ilanlar/:id/onayla`) ruft `meiliSync` nicht auf —
+  ein freigegebenes Inserat erscheint erst nach dem nächtlichen Lauf in der Suche.
+- Der Claude-Schlüssel ist mit dem Konto des Betreibers verknüpft (`sk-ant-usr-…`). Falls bei
+  der Erstellung eine Laufzeit gesetzt wurde, endet die Moderation an dem Tag still — danach
+  geht jedes Inserat in die Warteschlange. Ablaufdatum in der Claude Console prüfen.
 - **Mock-Daten überdecken echte Inserate**: `data/mockData.ts` trägt dieselben UUIDs wie die
   DB-Inserate und dient als Anfangswert von `listings`. Bei einem Direktlink auf
   `#/ilan/<uuid>` findet `navAnwenden()` den Mock-Eintrag und zeigt dessen hartkodierte
