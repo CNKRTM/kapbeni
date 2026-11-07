@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.11.0 — 2026-11-07
+
+L: Kundennummer KP-JJJJ-NNNNNNN (Sequenz+Trigger, Bestand nachgezogen), Abzeichen "… beri üye" bei Verkaeufer, Profil und Panel
+
 ## 1.10.0 — 2026-11-07
 
 F: İl/İlçe-Combobox aus /api/iller (81 İl/973 İlçe) in Verkaufsmaske, Einstellungen, Profil und Filter; data/cities.ts entfernt

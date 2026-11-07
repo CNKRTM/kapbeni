@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { saticiApi, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
+import { UyelikChip, MusteriNo } from '../components/UyeRozeti'
 
 interface Props {
   sellerId: string
@@ -64,6 +65,10 @@ export default function SellerProfile({ sellerId, onBack, onSelectProduct }: Pro
                   <i className="ti ti-building" style={{ fontSize: 11 }} />{profil.firma_adi}
                 </span>
               )}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 6 }}>
+              <UyelikChip tarih={profil.kayit_tarihi} />
+              <MusteriNo no={profil.musteri_no} />
             </div>
             {profil.sehir && <div style={{ ...font, fontSize: 12, color: '#6b7280', marginTop: 4 }}><i className="ti ti-map-pin" style={{ fontSize: 12 }} /> {profil.sehir}</div>}
             {profil.hakkinda && <div style={{ ...font, fontSize: 13, color: '#374151', marginTop: 8 }}>{profil.hakkinda}</div>}

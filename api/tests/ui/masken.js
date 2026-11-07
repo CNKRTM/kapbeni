@@ -43,6 +43,14 @@ const SZENARIEN = {
     await ilce.fill('Eigener Ort'); await page.keyboard.press('Escape');
     pruefe(await ilce.inputValue() === 'Eigener Ort', `${b}: freie Eingabe bleibt erhalten`);
   },
+  // Kundennummer + Abzeichen im Kundenkonto (Profil) und im Panel.
+  async musteri(page, b) {
+    await page.goto(`${BASIS}/#/profil`); await page.waitForTimeout(1800);
+    pruefe(await page.getByText(/KP-\d{4}-\d{7}/).count() > 0, `${b}: Kundennummer im Profil sichtbar`);
+    pruefe(await page.getByText(/'(dan|den|tan|ten) beri üye/).count() > 0, `${b}: Abzeichen "… beri üye" im Profil`);
+    await page.goto(`${BASIS}/#/panel/ilanlarim`); await page.waitForTimeout(1500);
+    pruefe(await page.getByText(/KP-\d{4}-\d{7}/).count() > 0, `${b}: Kundennummer im Panel sichtbar`);
+  },
 };
 
 (async () => {

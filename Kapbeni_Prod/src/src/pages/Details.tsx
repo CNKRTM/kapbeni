@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import BenzerIlanlar from '../components/BenzerIlanlar'
 import PaylasMenu from '../components/PaylasMenu'
 import OnayModal from '../components/OnayModal'
+import { UyelikChip, MusteriNo } from '../components/UyeRozeti'
 
 interface Props {
   listing: Listing
@@ -56,6 +57,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   const [isVerified, setIsVerified] = useState(false)
   const [ilanNo, setIlanNo] = useState<string | null>(null)
   const [kurumsal, setKurumsal] = useState<any>(null)
+  // Kundennummer + Registrierung des Verkaeufers (Auftragssammlung L)
+  const [saticiBilgi, setSaticiBilgi] = useState<{ no: string | null; kayit: string | null }>({ no: null, kayit: null })
   const [sellerUuid, setSellerUuid] = useState<string | null>(null)
   const [ilanNumId, setIlanNumId] = useState<number | null>(null)
   const [takip, setTakip] = useState(false)
@@ -153,6 +156,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     setSellerAvatar(null)
     setIlanNo(null)
     setKurumsal(null)
+    setSaticiBilgi({ no: null, kayit: null })
     setMedien({ fotos: [], video: null })
     setAktiv(0)
     if (!listing?.id) return
@@ -168,6 +172,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
         setIsVerified(data.satici_kyc === 'onaylandi')
         setIlanNo(data.ilan_no || null)
         setKurumsal({ hesap_tipi: data.hesap_tipi, firma_adi: data.firma_adi, vkn: data.vkn })
+        setSaticiBilgi({ no: data.satici_musteri_no || null, kayit: data.satici_kayit_tarihi || null })
         setSellerUuid(data.satici_uuid || (data.user_id != null ? String(data.user_id) : null))
         setIlanNumId(data.id != null ? Number(data.id) : null)
         setTeslimat({ elden: !!data.teslimat_elden, kargo: !!data.teslimat_kargo })
@@ -509,7 +514,10 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
               </div>
               <div>
                 <h4 className="font-bold text-gray-900 text-sm">{listing.sellerName}</h4>
-                <p className="text-xs text-gray-500">Üyelik Tarihi: 2024</p>
+                <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                  <UyelikChip tarih={saticiBilgi.kayit} />
+                </div>
+                <MusteriNo no={saticiBilgi.no} className="block mt-1" />
                 {sellerUuid && onViewSeller && !isOwner && (
                   <button
                     onClick={() => onViewSeller(sellerUuid)}

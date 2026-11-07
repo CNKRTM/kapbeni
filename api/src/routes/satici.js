@@ -35,6 +35,9 @@ router.get('/:id/profil', async (req, res) => {
       firma_adi: u.firma_adi,
       sehir: u.sehir,
       hakkinda: u.hakkinda,
+      // Kundennummer und Registrierung fuer das Abzeichen "… 'dan beri üye" (Auftragssammlung L)
+      musteri_no: u.musteri_no || null,
+      kayit_tarihi: u.created_at,
       kyc_onaylandi: u.kyc_durumu === 'onaylandi',
       gsm_onaylandi: !!u.phone_verified,
       ilan_sayisi: Number(ilanRes.rows[0]?.c) || 0,

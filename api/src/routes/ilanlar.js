@@ -222,6 +222,7 @@ router.get('/', async (req, res) => {
     }[siralama] || "CASE i.vitamin_tier WHEN 'zirve' THEN 2 WHEN 'plus' THEN 1 ELSE 0 END DESC, i.one_cikarildi DESC, i.created_at DESC";
     const baseFrom = `FROM ilanlar i JOIN users u ON u.id=i.user_id LEFT JOIN kategoriler k ON k.id=i.kategori_id WHERE ${where.join(' AND ')}`;
     const sel = `SELECT i.*, k.ad as kategori_ad, k.slug as kategori_slug, u.ad, u.soyad, u.puan as satici_puan, u.toplam_satis,
+      u.musteri_no as satici_musteri_no, u.created_at as satici_kayit_tarihi,
       (SELECT url FROM ilan_fotograflar WHERE ilan_id=i.id AND ana_foto=true LIMIT 1) as ana_foto ${baseFrom}`;
     const { rows } = await query(`${sel} ORDER BY ${order} LIMIT $${p} OFFSET $${p+1}`, [...params, limit, offset]);
     const { rows: cnt } = await query(`SELECT COUNT(*)::int as t ${baseFrom}`, params);
@@ -287,6 +288,8 @@ router.get('/:uuid', async (req, res) => {
       `SELECT i.*, k.ad as kategori_ad, k.slug as kategori_slug,
               u.id as satici_id, u.ad, u.soyad, u.puan as satici_puan,
               u.toplam_satis, u.avatar_url, u.hesap_tipi, u.firma_adi, u.vkn,
+              u.uuid as satici_uuid, u.musteri_no as satici_musteri_no, u.musteri_no,
+              u.created_at as satici_kayit_tarihi,
               kc.durum as satici_kyc
        FROM ilanlar i
        JOIN users u ON u.id=i.user_id

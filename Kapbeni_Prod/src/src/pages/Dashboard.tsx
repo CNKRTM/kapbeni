@@ -4,6 +4,7 @@ import FehlerGrenze, { Inhalt } from '../components/FehlerGrenze'
 import { useAuth } from '../context/AuthContext'
 import { ilanlarApi, favorilerApi, degerlendirmeApi, ve, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
+import { UyelikChip } from '../components/UyeRozeti'
 
 type Tab = 'ilanlarim' | 'tekliflerim' | 'favorilerim' | 'degerlendirmeler' | 'aramalar' | 'kazancim' | 'dogrulamalar' | 'guven' | 'sikayetlerim'
 
@@ -222,6 +223,8 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
           <div style={{ minWidth: 0 }}>
             <div style={{ ...fontBase, fontWeight: 700, fontSize: 13, color: '#1a2e4a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{displayName}</div>
             <div style={{ ...fontBase, fontSize: 11, color: '#888', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u?.email}</div>
+            {u?.musteri_no && <div style={{ ...fontBase, fontSize: 11, color: '#888' }}>Müşteri No: <span className="font-mono font-semibold" style={{ color: '#374151' }}>{u.musteri_no}</span></div>}
+            {u?.created_at && <div style={{ marginTop: 4 }}><UyelikChip tarih={u.created_at} /></div>}
           </div>
         </div>
         {navSections.map(sec => (

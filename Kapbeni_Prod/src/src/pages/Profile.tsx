@@ -4,6 +4,7 @@ import { ilanlarApi, Listing } from '../api'
 import { useAuth } from '../context/AuthContext'
 import ProductCard from '../components/ProductCard'
 import OnayModal from '../components/OnayModal'
+import { UyelikChip, MusteriNo } from '../components/UyeRozeti'
 
 interface Props {
   onOpenKyc: () => void
@@ -97,6 +98,10 @@ export default function Profile({ onOpenKyc, onOpenGsm, onEditProfile, onSelectP
             <p className="text-xs text-gray-400 truncate">Takma ad görünüyor</p>
           )}
           <p className="text-sm text-gray-500 truncate">{user?.email}</p>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1">
+            <UyelikChip tarih={user?.created_at} />
+            <MusteriNo no={user?.musteri_no} />
+          </div>
           <button
             onClick={onEditProfile}
             className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
