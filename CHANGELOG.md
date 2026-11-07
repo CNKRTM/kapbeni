@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.8.0 — 2026-11-07
+
+Staging: Banner + noindex; alle KI-Funktionen auf Claude (Chat-Betrugserkennung mit Warnhinweis, Riskli Mesajlar im Admin); Betreiber Compendus Ltd. Şti. in Footer und Rechtsseiten (data/sirket.ts)
+
+- docs: CLAUDE.md – Chronik 2026-11-07 (KI-Moderation Claude, İlan Onayı, Admin unter /kapbeniadmin/admin)
+
 ## 1.7.1 — 2026-11-07
 
 Admin unter /kapbeniadmin/admin, API-Pfad relativ; /admin gesperrt

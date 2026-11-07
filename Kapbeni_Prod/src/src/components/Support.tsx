@@ -1,3 +1,4 @@
+import { SIRKET } from '../data/sirket'
 import { useState } from 'react'
 import { Mail, AtSign, Phone, Lightbulb, Send, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -88,10 +89,10 @@ export default function Support() {
                 <AtSign className="w-4 h-4" /> destek@kapbeni.com
               </a>
               <a
-                href="tel:+905380324398"
+                href={SIRKET.telefonHref}
                 className="flex flex-col items-center gap-1 text-xs text-gray-500 hover:text-primary transition-colors"
               >
-                <Phone className="w-4 h-4" /> +90 538 032 43 98
+                <Phone className="w-4 h-4" /> {SIRKET.telefon}
               </a>
             </div>
           </div>

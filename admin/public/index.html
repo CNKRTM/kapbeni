@@ -191,6 +191,7 @@ const MENU=[
   {id:'degerlendirmeler',icon:'⭐',label:'Değerlendirmeler'},
   {section:'Destek'},
   {id:'destektickets',icon:'🎫',label:'Destek Talepleri'},
+  {id:'riskmesaj',icon:'⚠️',label:'Riskli Mesajlar'},
   {id:'oneriler',icon:'💡',label:'Öneriler & Geri Bildirim'},
   {section:'Finans'},
   {id:'abonelikler',icon:'💳',label:'Abonelikler'},
@@ -208,7 +209,7 @@ const MENU=[
 
 const PAGE_TITLES={
   dashboard:'Dashboard',kullanicilar:'Kullanıcılar',kyc:'KYC İstekleri',kurumsalonay:'Kurumsal Onay',
-  ilanonay:'İlan Onayı',ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
+  ilanonay:'İlan Onayı',riskmesaj:'Riskli Mesajlar',ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
   destektickets:'Destek Talepleri',oneriler:'Öneriler & Geri Bildirim',
   abonelikler:'Abonelikler',paketler:'Paketler',kuponlar:'Kuponlar',
   vitaminler:'Vitaminler',slider:'Hero Slider',kategoriler:'Kategoriler',
@@ -239,6 +240,8 @@ function renderApp(){
       </div>
     </div>
     <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div id="ortam-banner" data-ortam="__APP_ORTAM__" style="background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;text-align:center;font-size:11.5px;font-weight:700;padding:5px 12px">TEST SUNUCUSU (STAGING) · Burası canlı sistem değildir. Veriler test amaçlıdır.</div>
+      <script>if(document.getElementById('ortam-banner').dataset.ortam==='prod')document.getElementById('ortam-banner').remove()</script>
       <div class="topbar">
         <div class="topbar-title" id="topbar-title">Dashboard</div>
         <div style="display:flex;align-items:center;gap:12px">
@@ -264,7 +267,7 @@ function route(r){
   if(t) t.textContent=PAGE_TITLES[r]||r;
   const views={
     dashboard:vDashboard,kullanicilar:vKullanicilar,kyc:vKyc,kurumsalonay:vKurumsalOnay,
-    ilanonay:vIlanOnay,ilanlaryayin:vIlanlarYayin,ilansikayet:vIlanSikayet,degerlendirmeler:vDegerlendirmeler,
+    ilanonay:vIlanOnay,riskmesaj:vRiskMesaj,ilanlaryayin:vIlanlarYayin,ilansikayet:vIlanSikayet,degerlendirmeler:vDegerlendirmeler,
     destektickets:vDestekTickets,oneriler:vOneriler,
     abonelikler:vAbonelikler,paketler:vPaketler,kuponlar:vKuponlar,
     vitaminler:vVitaminler,slider:vSlider,kategoriler:vKategoriler,
@@ -627,6 +630,26 @@ async function ilanReddet(id){
   await api('/ilanlar/'+id+'/reddet',{method:'POST',body:JSON.stringify({sebep})});
   showToast('İlan reddedildi');
   vIlanOnay();
+}
+
+// Riskli Mesajlar — von der KI-Pruefung (mesajKontrol, Claude) markierte
+// Chatnachrichten. Der Empfaenger sieht im Chat einen Warnhinweis; hier
+// entscheidet der Admin, ob er gegen den Absender vorgeht.
+const RISK_TUR={pesin_odeme:'Ön ödeme / IBAN',iletisim_yonlendirme:'Site dışına yönlendirme',sahte_acele:'Acele baskısı',sahte_odeme:'Sahte ödeme / link'};
+async function vRiskMesaj(){
+  Vloading();
+  const d=await api('/mesajlar/tehlikeli').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">✓ İşaretlenmiş mesaj yok</div></div>`);return;}
+  V(`<div class="card"><div class="card-body" style="padding:0"><table><thead><tr>
+      <th>Zaman</th><th>Tür</th><th>Gönderen</th><th>İlan</th><th>Mesaj</th></tr></thead><tbody>
+    ${d.map(m=>`<tr>
+      <td style="white-space:nowrap">${fmtDate(m.created_at)}</td>
+      <td><span class="badge red"><div class="dot red"></div>${escH(RISK_TUR[m.tehlike_turu]||m.tehlike_turu||'—')}</span></td>
+      <td>${escH(m.gonderen_email)}<br><span style="font-size:12px;color:#64748b">Kullanıcı #${+m.gonderen_id}</span></td>
+      <td>${escH(m.ilan_baslik)}</td>
+      <td style="max-width:420px;white-space:pre-wrap">${escH(m.metin)}</td>
+    </tr>`).join('')}
+  </tbody></table></div></div>`);
 }
 
 // ═══════════════════════════════════════════════

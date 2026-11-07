@@ -21,6 +21,7 @@ import HeroSlider from './components/HeroSlider'
 import TrendKategoriler from './components/TrendKategoriler'
 import FeatureKacheln from './components/FeatureKacheln'
 import { BoostedSuperSlider, OneCikanMiniSlider } from './components/OneCikanSliders'
+import StagingBanner from './components/StagingBanner'
 import Footer from './components/Footer'
 import ProductCard from './components/ProductCard'
 import Reviews from './components/Reviews'
@@ -740,6 +741,7 @@ export default function App() {
     }
     return (
       <div className="min-h-screen bg-white flex flex-col">
+        <StagingBanner />
         <Navbar
           activeTab={activeTab}
           setActiveTab={handleTabFromLegal}
@@ -793,6 +795,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#f8f9fa] flex flex-col pb-16 md:pb-0">
+      <StagingBanner />
       <Navbar
         activeTab={activeTab}
         setActiveTab={setActiveTab}

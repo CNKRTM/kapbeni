@@ -1,3 +1,4 @@
+import { SIRKET, tamAdres } from '../../data/sirket'
 // IadePolitikasi.tsx — 1:1 rekonstruiert aus dem Live-Bundle (Zw-Komponente)
 import { ArrowLeft } from 'lucide-react'
 
@@ -105,10 +106,10 @@ export default function IadePolitikasi({ onBack }: { onBack?: () => void }) {
           <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#1f2937', marginBottom: 10 }}>8. İletişim</h2>
           <p style={{ fontSize: 14, color: '#374151', lineHeight: 1.75 }}>Bu politikayla ilgili sorularınız için:</p>
           <address style={{ fontStyle: 'normal', fontSize: 14, color: '#374151', lineHeight: 2, marginTop: 8 }}>
-            <strong>Tamer Aydın</strong> – Şahıs İşletmesi<br />
-            Akdeniz Mah. 39741 Sk. Akdeniz 7 Sitesi No:1/B İç Kapı No:3, Mezitli / Mersin<br />
-            VKN: 1151635832 | İstiklal Vergi Dairesi Müdürlüğü<br />
-            <a href="mailto:destek@kapbeni.com" style={{ color: '#e53935' }}>destek@kapbeni.com</a> | <a href="tel:+905380324398" style={{ color: '#e53935' }}>+90 538 032 43 98</a>
+            <strong>{SIRKET.unvan}</strong><br />
+            {tamAdres()}<br />
+            {SIRKET.vkn && <>VKN: {SIRKET.vkn}{SIRKET.vergiDairesi && <> | {SIRKET.vergiDairesi}</>}<br /></>}
+            <a href="mailto:destek@kapbeni.com" style={{ color: '#e53935' }}>destek@kapbeni.com</a> | <a href={SIRKET.telefonHref} style={{ color: '#e53935' }}>{SIRKET.telefon}</a>
           </address>
         </section>
       </div>

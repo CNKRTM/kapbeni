@@ -153,6 +153,14 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
                   <div key={msg.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm ${isMine ? 'bg-[var(--color-primary)] text-white rounded-br-sm' : 'bg-white border text-gray-800 rounded-bl-sm'}`}>
                       <p>{msg.metin}</p>
+                      {/* KI-Pruefung (mesajKontrol) hat die Nachricht als Betrugsmuster
+                          markiert — Warnung nur beim Empfaenger, der Absender sieht nichts. */}
+                      {!isMine && msg.tehlikeli && (
+                        <p className="mt-2 pt-2 border-t border-gray-100 text-xs font-semibold text-[var(--color-primary)] flex items-start gap-1.5">
+                          <i className="ti ti-alert-triangle mt-0.5" />
+                          <span>Dikkat: Bu mesaj dolandırıcılık belirtisi taşıyor. Kapora/IBAN ile ön ödeme yapmayın, görüşmeyi site dışına taşımayın.</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 )

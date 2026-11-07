@@ -1,3 +1,4 @@
+import { SIRKET, tamAdres } from '../../data/sirket'
 export default function GizlilikPolitikasi() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -10,12 +11,13 @@ export default function GizlilikPolitikasi() {
           <h2 className="text-base font-bold text-gray-900 mb-3 border-b border-gray-100 pb-2">1. Veri Sorumlusunun Kimliği</h2>
           <p>6698 sayılı Kişisel Verilerin Korunması Kanunu'nun 10. maddesi uyarınca, kişisel verilerinizi işleyen veri sorumlusu aşağıda tanımlanmıştır:</p>
           <div className="mt-3 bg-gray-50 rounded-xl p-4 space-y-1">
-            <p><strong>Ticaret Unvanı:</strong> Tamer Aydın (Şahıs İşletmesi)</p>
-            <p><strong>Vergi Kimlik No:</strong> 1151635832</p>
-            <p><strong>Vergi Dairesi:</strong> İstiklal Vergi Dairesi Müdürlüğü, Mersin</p>
-            <p><strong>Adres:</strong> Akdeniz Mah. 39741 Sk. Akdeniz 7 Sitesi No:1/B İç Kapı No:3, Mezitli/Mersin</p>
-            <p><strong>Telefon:</strong> +90 538 032 43 98</p>
-            <p><strong>E-posta:</strong> destek@kapbeni.com</p>
+            <p><strong>Ticaret Unvanı:</strong> {SIRKET.unvan}</p>
+            {SIRKET.vkn && <p><strong>Vergi Kimlik No:</strong> {SIRKET.vkn}</p>}
+            {SIRKET.vergiDairesi && <p><strong>Vergi Dairesi:</strong> {SIRKET.vergiDairesi}</p>}
+            {SIRKET.mersis && <p><strong>MERSİS No:</strong> {SIRKET.mersis}</p>}
+            <p><strong>Adres:</strong> {tamAdres()}</p>
+            <p><strong>Telefon:</strong> {SIRKET.telefon}</p>
+            <p><strong>E-posta:</strong> {SIRKET.eposta}</p>
             <p><strong>Web:</strong> kapbeni.com</p>
             <p><strong>Faaliyet:</strong> İnternet üzerinden ikinci el ürün alım-satımına aracılık (NACE 479114)</p>
           </div>

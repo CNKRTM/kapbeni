@@ -1,24 +1,7 @@
-const OpenAI = require('openai');
+// Alle KI-Funktionen laufen seit v1.8.0 ueber Claude (Anthropic). Der fruehere
+// NVIDIA-Zugang (OpenAI-kompatibel) ist entfernt — Endpunkt seit 26.08.2026 tot.
 const Anthropic = require('@anthropic-ai/sdk');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
-
-const apiKey = process.env.NVIDIA_API_KEY || '';
-// AI sadece geçerli bir NVIDIA anahtarı varsa aktif.
-const AI_AKTIF = /^nvapi-/.test(apiKey) && !/DEIN_KEY|HIER_EINTRAGEN|xxx/i.test(apiKey);
-const client = AI_AKTIF ? new OpenAI({
-  baseURL: process.env.NVIDIA_BASE_URL || 'https://integrate.api.nvidia.com/v1',
-  apiKey,
-}) : null;
-
-const chat = async (system, user, model = null, maxTokens = 800) => {
-  if (!AI_AKTIF) throw new Error('AI devre dışı');
-  const m = model || process.env.NVIDIA_MODEL_STANDARD || 'meta/llama-3.1-70b-instruct';
-  const r = await client.chat.completions.create({
-    model: m, max_tokens: maxTokens, temperature: 0.15,
-    messages: [{ role:'system', content: system }, { role:'user', content: user }]
-  });
-  return r.choices[0].message.content.trim();
-};
 
 const parseJSON = (raw) => {
   try { return JSON.parse(raw.replace(/```json|```/g,'').trim()); }
@@ -113,31 +96,81 @@ exports.moderasyonYap = async (baslik, aciklama, fiyat) => {
   }
 };
 
-// Mesaj dolandırıcı tespiti — mesajlar yazıldığında tetiklenir
+// ── Weitere KI-Funktionen — ebenfalls Claude Haiku (seit v1.8.0) ──────────
+// Anders als die Moderation blockieren sie nichts: Faellt der Aufruf aus,
+// gilt der bisherige Rueckfall (Nachricht "temiz", kein Vorschlag). Eine
+// Chatnachricht darf nie an einer KI-Stoerung scheitern.
+
+// Ein Aufruf mit erzwungenem JSON-Schema; wirft bei jedem Fehler (guvenli faengt).
+const claudeJSON = async (system, user, schema, { timeout = 8_000, maxTokens = 512 } = {}) => {
+  if (!MOD_AKTIF) throw new Error('ANTHROPIC_API_KEY fehlt');
+  const msg = await anthropic.messages.create({
+    model: MOD_MODEL,
+    max_tokens: maxTokens,
+    output_config: { effort: 'low', format: { type: 'json_schema', schema } },
+    system,
+    messages: [{ role: 'user', content: user }],
+  }, { timeout, maxRetries: 0 });
+  if (msg.stop_reason !== 'end_turn') throw new Error(`stop_reason ${msg.stop_reason}`);
+  const text = msg.content.find((b) => b.type === 'text');
+  const r = text ? parseJSON(text.text) : null;
+  if (!r) throw new Error('geçersiz yanıt');
+  return r;
+};
+
+const MESAJ_TURLER = ['pesin_odeme', 'iletisim_yonlendirme', 'sahte_acele', 'sahte_odeme', 'temiz'];
+const MESAJ_SYSTEM = `kapbeni.com (Türkiye ilan sitesi) alıcı-satıcı sohbetinde tek bir mesajı dolandırıcılık açısından değerlendir.
+tehlikeli=true yalnızca açık belirti varsa:
+- pesin_odeme: kapora, IBAN, havale/EFT, "önce para gönder", hediye kartı
+- iletisim_yonlendirme: WhatsApp/Telegram/telefon/e-posta ile site dışına taşıma
+- sahte_acele: "hemen karar ver, başka alıcı var" baskısı, yurt dışından kargo hikâyesi
+- sahte_odeme: sahte dekont, "ödeme yaptım, linke tıkla", kargo/ödeme linki
+Normal pazarlık, selamlaşma, ürün sorusu, buluşma yeri ayarlamak tehlikeli DEĞİLDİR → tur "temiz".`;
+const MESAJ_SCHEMA = {
+  type: 'object',
+  properties: { tehlikeli: { type: 'boolean' }, tur: { type: 'string', enum: MESAJ_TURLER } },
+  required: ['tehlikeli', 'tur'],
+  additionalProperties: false,
+};
+
+// Mesaj dolandırıcı tespiti — mesajlar yazıldığında tetiklenir (routes/mesajlar.js)
 exports.mesajKontrol = async (metin) => {
   const fallback = { tehlikeli: false, tur: 'temiz' };
+  if (!metin || !String(metin).trim()) return fallback;
   return guvenli(async () => {
-    const sys = `Dolandırıcılık tespiti. Tehlikeli: havale/IBAN iste, WhatsApp'a yönlendir,
-acele karar ver baskısı, yurt dışı gönderim.
-JSON: {"tehlikeli":bool,"tur":"pesin_odeme|iletisim_yonlendirme|sahte_acele|temiz"}`;
-    const raw = await chat(sys, metin, process.env.NVIDIA_MODEL_FAST || 'mistralai/mistral-7b-instruct-v0.3', 200);
-    return parseJSON(raw) || fallback;
+    const r = await claudeJSON(MESAJ_SYSTEM, `<mesaj>\n${String(metin).slice(0, 2000)}\n</mesaj>`, MESAJ_SCHEMA);
+    if (typeof r.tehlikeli !== 'boolean' || !MESAJ_TURLER.includes(r.tur)) return fallback;
+    return r.tehlikeli ? r : fallback;
   }, fallback);
 };
 
 // Satıcıya açıklama önerisi
 exports.aciklamaOner = async (baslik, durum, fiyat) => {
   return guvenli(async () => {
-    const sys = `kapbeni.com için kısa Türkçe ürün açıklaması yaz. 3-4 cümle, dürüst, ikna edici.`;
-    return await chat(sys, `Ürün:${baslik} Durum:${durum} Fiyat:${fiyat}TL`, process.env.NVIDIA_MODEL_FAST || 'mistralai/mistral-7b-instruct-v0.3', 300);
+    const r = await claudeJSON(
+      `kapbeni.com için kısa Türkçe ürün açıklaması yaz. 3-4 cümle, dürüst, ikna edici. Uydurma teknik özellik ekleme; telefon, e-posta veya ödeme bilgisi yazma.`,
+      `Ürün: ${baslik}\nDurum: ${durum}\nFiyat: ${fiyat} TL`,
+      { type: 'object', properties: { aciklama: { type: 'string' } }, required: ['aciklama'], additionalProperties: false },
+      { timeout: 15_000 },
+    );
+    return typeof r.aciklama === 'string' ? r.aciklama.trim() : '';
   }, '');
 };
 
 // Fiyat önerisi
 exports.fiyatOner = async (urun, durum) => {
   return guvenli(async () => {
-    const sys = `Türkiye 2024-2025 ikinci el fiyatları. JSON: {"min":sayi,"max":sayi,"orta":sayi,"not":"kısa"}`;
-    const raw = await chat(sys, `${urun} - ${durum}`);
-    return parseJSON(raw) || null;
+    const r = await claudeJSON(
+      `Türkiye ikinci el piyasası için TL cinsinden tahmini fiyat aralığı ver. Emin değilsen aralığı geniş tut ve not alanında belirt. not: kısa Türkçe.`,
+      `${urun} - ${durum}`,
+      {
+        type: 'object',
+        properties: { min: { type: 'integer' }, max: { type: 'integer' }, orta: { type: 'integer' }, not: { type: 'string' } },
+        required: ['min', 'max', 'orta', 'not'],
+        additionalProperties: false,
+      },
+      { timeout: 15_000 },
+    );
+    return [r.min, r.max, r.orta].every(Number.isFinite) ? r : null;
   }, null);
 };

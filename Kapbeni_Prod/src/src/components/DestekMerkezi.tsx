@@ -1,3 +1,4 @@
+import { SIRKET } from '../data/sirket'
 // DestekMerkezi.tsx — 1:1 rekonstruiert aus dem Live-Bundle ($w, Fw, Iw, Vw, Ow)
 // Support-Center-Overlay: Taleplerim (Ticketliste + Chat) | Yeni Talep | Önerileriniz
 import { useState, useEffect, useRef } from 'react'
@@ -552,9 +553,9 @@ export default function DestekMerkezi({ onClose, musteriNo, initialTab = 'talepl
                 Önerileriniz
               </button>
               <div style={{ marginTop: 6, display: 'flex', flexDirection: 'column', gap: 4 }}>
-                <a href="tel:+905380324398" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', fontWeight: 600, ...FONT }}>
+                <a href={SIRKET.telefonHref} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', fontWeight: 600, ...FONT }}>
                   <i className="ti ti-phone" style={{ fontSize: 13, color: '#86efac' }} />
-                  +90 538 032 43 98
+                  {SIRKET.telefon}
                 </a>
                 <a href="mailto:destek@kapbeni.com" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'rgba(255,255,255,0.85)', textDecoration: 'none', fontWeight: 600, ...FONT }}>
                   <i className="ti ti-mail" style={{ fontSize: 13, color: '#93c5fd' }} />
@@ -625,9 +626,9 @@ export default function DestekMerkezi({ onClose, musteriNo, initialTab = 'talepl
           </div>
 
           <div className="md:hidden" style={{ borderTop: '1px solid #f0f0f0', padding: '10px 20px', background: '#fafafa', display: 'flex', gap: 12, flexShrink: 0, flexWrap: 'wrap' }}>
-            <a href="tel:+905380324398" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1a2e4a', textDecoration: 'none', fontWeight: 600, ...FONT }}>
+            <a href={SIRKET.telefonHref} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1a2e4a', textDecoration: 'none', fontWeight: 600, ...FONT }}>
               <i className="ti ti-phone" style={{ fontSize: 14, color: '#15803d' }} />
-              +90 538 032 43 98
+              {SIRKET.telefon}
             </a>
             <a href="mailto:destek@kapbeni.com" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#1a2e4a', textDecoration: 'none', fontWeight: 600, ...FONT }}>
               <i className="ti ti-mail" style={{ fontSize: 14, color: '#2563eb' }} />

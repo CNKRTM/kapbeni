@@ -19,6 +19,9 @@ export default defineConfig({
   plugins: [react()],
   define: {
     __APP_VERSION__: JSON.stringify(version()),
+    // Umgebung: Standard 'staging'. Der Prod-Bau setzt KAPBENI_ORTAM=prod
+    // (siehe CLAUDE.md, Staging/Prod). Nur bei 'prod' entfaellt das Banner.
+    __KAPBENI_ORTAM__: JSON.stringify(process.env.KAPBENI_ORTAM || 'staging'),
   },
   build: {
     outDir: 'dist',

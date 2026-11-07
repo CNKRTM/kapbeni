@@ -1,3 +1,4 @@
+import { SIRKET, tamAdres } from '../../data/sirket'
 export default function Hakkimizda() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -10,12 +11,13 @@ export default function Hakkimizda() {
       </p>
       <p className="text-gray-700 leading-relaxed">
         Sorularınız ve önerileriniz için:{' '}
-        <a href="mailto:destek@kapbeni.com" className="text-[var(--color-primary)] underline">destek@kapbeni.com</a>
+        <a href={`mailto:${SIRKET.destekEposta}`} className="text-[var(--color-primary)] underline">{SIRKET.destekEposta}</a>
       </p>
       <div className="mt-8 p-4 bg-gray-50 rounded-xl text-sm text-gray-500">
-        <p><strong>İşletmeci:</strong> Tamer Aydın (Şahıs İşletmesi)</p>
-        <p><strong>VKN:</strong> 1151635832 | İstiklal Vergi Dairesi Müdürlüğü</p>
-        <p><strong>Adres:</strong> Akdeniz Mah. 39741 Sk. Akdeniz 7 Sitesi No:1/B İç Kapı No:3, Mezitli/Mersin</p>
+        <p><strong>İşletmeci:</strong> {SIRKET.unvan}</p>
+        {SIRKET.vkn && <p><strong>VKN:</strong> {SIRKET.vkn}{SIRKET.vergiDairesi && <> | {SIRKET.vergiDairesi}</>}</p>}
+        <p><strong>Adres:</strong> {tamAdres()}</p>
+        <p><strong>İletişim:</strong> {SIRKET.eposta} | {SIRKET.telefon}</p>
       </div>
     </div>
   )

@@ -374,20 +374,20 @@ app.get('/admin/api/api-durum', adminAuth, (req,res)=>{
     { ad:'Param', aciklama:'Ödeme altyapısı', env_key:'PARAM_TEST_MODE', test_mode:process.env.PARAM_TEST_MODE==='true', url:process.env.PARAM_API_BASE, durum: has(process.env.PARAM_CLIENT_CODE,'TEST_CLIENT')?'bagli':'test' },
     { ad:'KolayBi', aciklama:'e-Fatura', env_key:'KOLAYBI_TEST_MODE', test_mode:process.env.KOLAYBI_TEST_MODE==='true', url:'efatura.kolaybi.com', durum: has(process.env.KOLAYBI_API_KEY)?'bagli':'hata' },
     { ad:'Google', aciklama:'OAuth Giriş', env_key:'GOOGLE_AUTH', test_mode:false, url:'accounts.google.com', durum: has(process.env.GOOGLE_CLIENT_ID)?'bagli':'hata' },
-    { ad:'NVIDIA', aciklama:'AI Moderasyon', env_key:'NVIDIA_API_KEY', test_mode:false, url:process.env.NVIDIA_BASE_URL, durum: has(process.env.NVIDIA_API_KEY,'DEIN_KEY|HIER')?'bagli':'hata' },
+    { ad:'Claude', aciklama:'AI Moderasyon + Mesaj Kontrolü', env_key:'ANTHROPIC_API_KEY', test_mode:false, url:'api.anthropic.com', durum: /^sk-ant-/.test(process.env.ANTHROPIC_API_KEY||'')?'bagli':'hata' },
     { ad:'e-Devlet', aciklama:'Kimlik Doğrulama', env_key:'EDEVLET', test_mode:true, url:'giris.turkiye.gov.tr', durum:'test' },
   ]);
 });
 app.get('/admin/api/api-test', adminAuth, async (req,res)=>{
   const { servis } = req.query;
   try{
-    if(String(servis).toLowerCase()==='nvidia'){
-      // openai ist keine eigene admin-dependency, sondern wird aus dem
-      // Nachbarpaket api/ mitgenutzt. Relativ zu __dirname (= admin/), damit
-      // ein Verschieben des gesamten kapbeni-Baums den Pfad nicht bricht.
-      const OpenAI=require('../api/node_modules/openai');
-      const client=new OpenAI({apiKey:process.env.NVIDIA_API_KEY, baseURL:process.env.NVIDIA_BASE_URL});
-      await client.chat.completions.create({model:process.env.NVIDIA_MODEL_STANDARD||'meta/llama-3.1-70b-instruct',messages:[{role:'user',content:'test'}],max_tokens:3});
+    if(String(servis).toLowerCase()==='claude'){
+      // Seit v1.8.0 statt NVIDIA. Das SDK liegt im Nachbarpaket api/ (keine
+      // eigene admin-Abhaengigkeit), Pfad relativ zu __dirname (= admin/).
+      // models.list kostet keine Tokens.
+      const Anthropic=require('../api/node_modules/@anthropic-ai/sdk');
+      const client=new Anthropic({apiKey:process.env.ANTHROPIC_API_KEY, timeout:10000, maxRetries:0});
+      await client.models.retrieve(process.env.KAPBENI_MOD_MODEL||'claude-haiku-5-5');
       return res.json({ok:true});
     }
     res.json({ok:false, hata:`${servis} testi için gerçek credentials gerekli`});
@@ -623,7 +623,9 @@ app.get('/admin*', (req, res) => {
   const datei = path.join(__dirname, 'public', 'index.html');
   fs.readFile(datei, 'utf8', (err, html) => {
     if (err) return res.sendFile(datei);
-    res.type('html').send(html.split('__APP_VERSION__').join(APP_VERSION));
+    // KAPBENI_ORTAM: 'staging' (Standard) oder 'prod' -> steuert das Staging-Banner.
+    const ortam = process.env.KAPBENI_ORTAM === 'prod' ? 'prod' : 'staging';
+    res.type('html').send(html.split('__APP_VERSION__').join(APP_VERSION).split('__APP_ORTAM__').join(ortam));
   });
 });
 

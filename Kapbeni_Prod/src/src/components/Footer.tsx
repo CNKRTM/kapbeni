@@ -2,6 +2,7 @@
 // 5 Spalten: Logo | Kurumsal | Paketler (Buttons → PaketModal) | Yardım | İletişim
 import { useState } from 'react'
 import { ChevronDown, X, Gift, Bookmark, Sparkles, Building2, Zap, Crown } from 'lucide-react'
+import { SIRKET, tamAdres } from '../data/sirket'
 
 const LEGAL_LINKS = [
   { label: 'Kullanım Koşulları', href: '/#/kullanim-kosullari' },
@@ -181,8 +182,8 @@ export default function Footer() {
               <ul className="space-y-2 text-sm">
                 <li><a href="/#/nasil-calisir" className="hover:text-white transition-colors">Nasıl Çalışır?</a></li>
                 <li><a href="/#/guvenli-alisveris" className="hover:text-white transition-colors">Güvenli Alışveriş</a></li>
-                <li><a href="mailto:destek@kapbeni.com" className="hover:text-white transition-colors">destek@kapbeni.com</a></li>
-                <li><a href="tel:+905380324398" className="hover:text-white transition-colors">+90 538 032 43 98</a></li>
+                <li><a href={`mailto:${SIRKET.destekEposta}`} className="hover:text-white transition-colors">{SIRKET.destekEposta}</a></li>
+                <li><a href={SIRKET.telefonHref} className="hover:text-white transition-colors">{SIRKET.telefon}</a></li>
               </ul>
             </div>
 
@@ -199,26 +200,30 @@ export default function Footer() {
               </button>
               {contactOpen && (
                 <address className="not-italic text-sm space-y-1 text-gray-400 mt-3">
-                  <p className="text-gray-300 font-medium">Tamer Aydın</p>
-                  <p>Şahıs İşletmesi</p>
-                  <p>
-                    Akdeniz Mah. 39741 Sk.<br />
-                    Akdeniz 7 Sitesi No:1/B İç Kapı No:3<br />
-                    Mezitli / Mersin
-                  </p>
-                  <p className="pt-1">VKN: 1151635832</p>
-                  <p>İstiklal Vergi Dairesi Müdürlüğü</p>
+                  <p className="text-gray-300 font-medium">{SIRKET.unvan}</p>
+                  <p>{tamAdres()}</p>
+                  {SIRKET.vkn && <p className="pt-1">VKN: {SIRKET.vkn}</p>}
+                  {SIRKET.vergiDairesi && <p>{SIRKET.vergiDairesi}</p>}
+                  {SIRKET.mersis && <p>MERSİS: {SIRKET.mersis}</p>}
                   <p className="pt-1">
-                    <a href="mailto:destek@kapbeni.com" className="hover:text-white">destek@kapbeni.com</a>
+                    <a href={`mailto:${SIRKET.eposta}`} className="hover:text-white">{SIRKET.eposta}</a>
                   </p>
                   <p>
-                    <a href="tel:+905380324398" className="hover:text-white">+90 538 032 43 98</a>
+                    <a href={SIRKET.telefonHref} className="hover:text-white">{SIRKET.telefon}</a>
                   </p>
                 </address>
               )}
+              {/* Betreiber: Compendus. Logo auf weissem Feld wie das ETBİS-Siegel,
+                  weil der dunkelblaue Schriftzug auf gray-900 nicht lesbar waere. */}
+              <a href={SIRKET.web} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex flex-col gap-1.5" title={SIRKET.unvan}>
+                <span className="text-xs text-gray-500">{SIRKET.marka} bir Compendus ürünüdür</span>
+                <span className="bg-white rounded-lg px-3 py-2 inline-flex items-center shadow-sm">
+                  <img src="/compendus-logo.webp" alt="Compendus" className="h-7 w-auto object-contain" />
+                </span>
+              </a>
               <div className="mt-4">
                 <a
-                  href="https://www.eticaret.gov.tr/sitedogrulama"
+                  href={SIRKET.etbisDogrulamaUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   title="ETBİS - Elektronik Ticaret Bilgi Sistemi"
@@ -238,11 +243,11 @@ export default function Footer() {
             {/* Version aus /opt/kapbeni/VERSION, zur Bauzeit eingesetzt (vite.config.ts).
                 Gleiche Zeile, gleiche Groesse, gleiche Farbe wie der Rest der Fusszeile. */}
             <p>
-              © 2026 Kap Beni – Tamer Aydın Şahıs İşletmesi. Tüm hakları saklıdır.
+              © {new Date().getFullYear()} {SIRKET.marka} – {SIRKET.unvan}. Tüm hakları saklıdır.
               <span className="text-gray-600 ml-2">v{__APP_VERSION__}</span>
             </p>
             <p>
-              Faaliyet Kodu: 479114 – İnternet üzerinden perakende ticaret |{' '}
+              Faaliyet Kodu: {SIRKET.naceKodu} – {SIRKET.naceAciklama} |{' '}
               <a href="/#/gizlilik-politikasi" className="hover:text-gray-300 transition-colors">KVKK</a>
             </p>
           </div>

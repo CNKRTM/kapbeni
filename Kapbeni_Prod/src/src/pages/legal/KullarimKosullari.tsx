@@ -1,3 +1,4 @@
+import { SIRKET, tamAdres } from '../../data/sirket'
 export default function KullarimKosullari() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-10">
@@ -6,10 +7,10 @@ export default function KullarimKosullari() {
       <section className="prose prose-sm max-w-none text-gray-700 space-y-6">
         <div>
           <h2 className="text-lg font-semibold text-gray-800 mb-2">1. Hizmet Sağlayıcı</h2>
-          <p>Bu platform, <strong>Tamer Aydın</strong> tarafından işletilmektedir (Şahıs İşletmesi).<br />
-          Vergi Kimlik No: 1151635832 | İstiklal Vergi Dairesi Müdürlüğü, Mersin<br />
-          Adres: Akdeniz Mah. 39741 Sk. Akdeniz 7 Sitesi No:1/B İç Kapı No:3, Mezitli/Mersin<br />
-          E-posta: destek@kapbeni.com | Tel: +90 538 032 43 98</p>
+          <p>Bu platform, <strong>{SIRKET.unvan}</strong> tarafından işletilmektedir.<br />
+          {SIRKET.vkn && <>Vergi Kimlik No: {SIRKET.vkn}{SIRKET.vergiDairesi && <> | {SIRKET.vergiDairesi}</>}<br /></>}
+          Adres: {tamAdres()}<br />
+          E-posta: {SIRKET.eposta} | Tel: {SIRKET.telefon}</p>
         </div>
         <div>
           <h2 className="text-lg font-semibold text-gray-800 mb-2">2. Platformun Amacı</h2>
