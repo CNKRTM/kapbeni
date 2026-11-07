@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.7.0 — 2026-11-07
+
+KI-Moderation mit Claude Haiku statt abgeschaltetem NVIDIA-Modell; Vertrauenswert eindeutig, Ausfall -> Warteschlange; Admin-Seite İlan Onayı
+
 ## 1.6.1 — 2026-09-12
 
 Wasserzeichen nutzt das Navbar-Logo

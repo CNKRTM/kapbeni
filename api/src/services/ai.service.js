@@ -1,4 +1,5 @@
 const OpenAI = require('openai');
+const Anthropic = require('@anthropic-ai/sdk');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 
 const apiKey = process.env.NVIDIA_API_KEY || '';
@@ -30,17 +31,86 @@ const guvenli = async (fn, fallback) => {
   catch (e) { console.warn('[ai.service] AI atlandı:', e.message); return fallback; }
 };
 
-// İlan moderasyonu — API → bu fonksiyon → NVIDIA → sonuç ilanlar tablosuna yazılır
+// ── İlan moderasyonu — Claude Haiku (seit v1.7.0) ─────────────────────────
+// Vorher NVIDIA: das Modell wurde am 26.08.2026 abgeschaltet (410), und der
+// Rueckfall {onaylandi:true, skor:70} schaltete jedes Inserat ungeprueft frei.
+//
+// Regeln:
+// - `skor` ist GUEVEN (Vertrauen): 100 = unbedenklich, 0 = sicher Betrug/Spam.
+//   Die alte Fassung liess die Richtung offen; Modelle lieferten teils einen
+//   Risikowert (98 = Betrug), der dann als "unbedenklich" durchging.
+// - Faellt die Pruefung aus (kein Schluessel, Zeitueberschreitung, Fehler,
+//   Ablehnung), kommt `hata: true` zurueck -> das Inserat geht auf
+//   'moderasyonda' und wartet auf Freigabe im Admin. Nie automatisch aktiv.
+const MOD_MODEL = process.env.KAPBENI_MOD_MODEL || 'claude-haiku-5-5';
+const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
+const MOD_AKTIF = /^sk-ant-/.test(anthropicKey);
+const anthropic = MOD_AKTIF
+  ? new Anthropic({ apiKey: anthropicKey, timeout: 20_000, maxRetries: 1 })
+  : null;
+
+const MOD_SYSTEM = `Sen kapbeni.com (Türkiye'de ikinci el ve sıfır ürün ilan sitesi) için ilan moderatörüsün.
+Bir ilanın yayına alınıp alınamayacağına karar ver.
+
+Reddet / incelemeye al (onaylandi=false, düşük skor):
+- peşin ödeme, kapora, IBAN/havale isteği, "önce para gönderin"
+- açıklamada telefon numarası, e-posta, WhatsApp/Telegram yönlendirmesi
+- piyasa değerinin çok altında fiyat (ör. sıfır iPhone 4.500 TL)
+- anlamsız, test amaçlı veya başlıkla ilgisiz metin
+- yasa dışı ürün (silah, uyuşturucu, sahte belge, çalıntı mal), yetişkin içerik, hakaret
+
+Normal ilanlar (kısa veya yazım hatalı olsa bile) onaylanır.
+
+skor = güven puanı: 100 tamamen güvenli, 0 kesin dolandırıcılık/spam. Şüphe varsa 40'ın altı.
+sebep: tek cümle Türkçe. kategori_onerisi: "Ana>Alt" biçiminde tahmin.`;
+
+const MOD_SCHEMA = {
+  type: 'object',
+  properties: {
+    onaylandi: { type: 'boolean' },
+    skor: { type: 'integer' },
+    sebep: { type: 'string' },
+    kategori_onerisi: { type: 'string' },
+  },
+  required: ['onaylandi', 'skor', 'sebep', 'kategori_onerisi'],
+  additionalProperties: false,
+};
+
+const modFehler = (grund) => ({
+  onaylandi: false, skor: null, hata: true,
+  sebep: `Otomatik kontrol yapılamadı (${grund}) — manuel inceleme`,
+  kategori_onerisi: '',
+});
+
+exports.MOD_MODEL = MOD_MODEL;
 exports.moderasyonYap = async (baslik, aciklama, fiyat) => {
-  const fallback = { onaylandi: true, skor: 70, sebep: 'Manuel inceleme', kategori_onerisi: 'Diğer' };
-  return guvenli(async () => {
-    const sys = `Sen kapbeni.com ilan moderatörsün. Şüpheli ilanları tespit et.
-Kriterler: stok fotoğraf benzeri açıklama, aşırı düşük fiyat, peşin ödeme talebi,
-kişisel iletişim bilgisi içeriyor, anlamsız açıklama.
-JSON döndür: {"onaylandi":bool,"skor":0-100,"sebep":"1 cümle Türkçe","kategori_onerisi":"Ana>Alt"}`;
-    const raw = await chat(sys, `Başlık:${baslik}\nAçıklama:${aciklama}\nFiyat:${fiyat}TL`);
-    return parseJSON(raw) || fallback;
-  }, fallback);
+  if (!MOD_AKTIF) return modFehler('anahtar yok');
+  try {
+    const msg = await anthropic.messages.create({
+      model: MOD_MODEL,
+      max_tokens: 1024,
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: MOD_SCHEMA } },
+      system: MOD_SYSTEM,
+      messages: [{
+        role: 'user',
+        content: `<ilan>\nBaşlık: ${baslik}\nAçıklama: ${aciklama}\nFiyat: ${fiyat} TL\n</ilan>`,
+      }],
+    });
+    if (msg.stop_reason === 'refusal') return modFehler('model reddetti');
+    if (msg.stop_reason === 'max_tokens') return modFehler('yanıt kesildi');
+    const text = msg.content.find((b) => b.type === 'text');
+    const r = text ? parseJSON(text.text) : null;
+    if (!r || typeof r.onaylandi !== 'boolean' || !Number.isFinite(r.skor)) return modFehler('geçersiz yanıt');
+    return { ...r, skor: Math.max(0, Math.min(100, Math.round(r.skor))), hata: false };
+  } catch (e) {
+    const grund = e instanceof Anthropic.APIConnectionTimeoutError ? 'zaman aşımı'
+      : e instanceof Anthropic.RateLimitError ? 'limit'
+      : e instanceof Anthropic.AuthenticationError ? 'anahtar geçersiz'
+      : e instanceof Anthropic.APIError ? `API ${e.status ?? ''}`.trim()
+      : 'hata';
+    console.warn('[ai.service] Moderasyon başarısız:', grund, e.message);
+    return modFehler(grund);
+  }
 };
 
 // Mesaj dolandırıcı tespiti — mesajlar yazıldığında tetiklenir

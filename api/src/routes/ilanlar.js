@@ -396,16 +396,18 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     // Vor dem Anlegen pruefen, sonst stuende ein Inserat ohne Bilder in der DB.
     const medienFehler = await medienPruefen(fotoDateien, videoDatei);
     if (medienFehler) return res.status(400).json({ hata: medienFehler });
-    // AI Moderasyon — NVIDIA. Varsayilan: yayinla. Sadece net spam/dolandiricilik (cok dusuk skor) incelemeye alinir.
+    // KI-Moderation (Claude Haiku, services/ai.service.js). Aktiv nur, wenn die
+    // Pruefung lief, das Inserat freigab UND der Vertrauenswert >= 40 ist.
+    // Ausfall der Pruefung -> Warteschlange 'moderasyonda', Freigabe im Admin.
     const ai_sonuc = await ai.moderasyonYap(baslik, aciklama||'', fiyat);
-    const ilan_durum = Number(ai_sonuc.skor) < 40 ? 'moderasyonda' : 'aktif';
+    const ilan_durum = (!ai_sonuc.hata && ai_sonuc.onaylandi && Number(ai_sonuc.skor) >= 40) ? 'aktif' : 'moderasyonda';
     const { rows } = await query(
       `INSERT INTO ilanlar(user_id,kategori_id,baslik,aciklama,fiyat,durum,ilan_durum,
         sehir,ilce,kargo_var,elden_teslim,kargo_ucreti,ai_score,ai_karar,ai_not)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [req.user.id, kategori_id, baslik, aciklama, fiyat, durum||'ikinci_el', ilan_durum,
        sehir, ilce, kargo_var!==false, elden_teslim!==false, kargo_ucreti||0,
-       ai_sonuc.skor, ai_sonuc.onaylandi?'onaylandi':'reddedildi', ai_sonuc.sebep]
+       ai_sonuc.skor, ai_sonuc.hata ? 'hata' : (ai_sonuc.onaylandi ? 'onaylandi' : 'reddedildi'), ai_sonuc.sebep]
     );
     const ilan = rows[0];
     const uploadDir = `${process.env.UPLOAD_DIR}/ilanlar`;

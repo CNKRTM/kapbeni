@@ -183,6 +183,7 @@ const MENU=[
   {id:'kyc',icon:'🪪',label:'KYC İstekleri'},
   {id:'kurumsalonay',icon:'🏢',label:'Kurumsal Onay'},
   {section:'İlanlar'},
+  {id:'ilanonay',icon:'🛡️',label:'İlan Onayı'},
   {id:'ilanlaryayin',icon:'📢',label:'Yayın Yönetimi'},
   {id:'ilansikayet',icon:'🚩',label:'İlan Şikayetleri'},
   {id:'degerlendirmeler',icon:'⭐',label:'Değerlendirmeler'},
@@ -205,7 +206,7 @@ const MENU=[
 
 const PAGE_TITLES={
   dashboard:'Dashboard',kullanicilar:'Kullanıcılar',kyc:'KYC İstekleri',kurumsalonay:'Kurumsal Onay',
-  ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
+  ilanonay:'İlan Onayı',ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
   destektickets:'Destek Talepleri',oneriler:'Öneriler & Geri Bildirim',
   abonelikler:'Abonelikler',paketler:'Paketler',kuponlar:'Kuponlar',
   vitaminler:'Vitaminler',slider:'Hero Slider',kategoriler:'Kategoriler',
@@ -261,7 +262,7 @@ function route(r){
   if(t) t.textContent=PAGE_TITLES[r]||r;
   const views={
     dashboard:vDashboard,kullanicilar:vKullanicilar,kyc:vKyc,kurumsalonay:vKurumsalOnay,
-    ilanlaryayin:vIlanlarYayin,ilansikayet:vIlanSikayet,degerlendirmeler:vDegerlendirmeler,
+    ilanonay:vIlanOnay,ilanlaryayin:vIlanlarYayin,ilansikayet:vIlanSikayet,degerlendirmeler:vDegerlendirmeler,
     destektickets:vDestekTickets,oneriler:vOneriler,
     abonelikler:vAbonelikler,paketler:vPaketler,kuponlar:vKuponlar,
     vitaminler:vVitaminler,slider:vSlider,kategoriler:vKategoriler,
@@ -311,7 +312,7 @@ async function vDashboard(){
     ${statCard('Bugün Yeni İlan','+'+fmt(s.yeni_ilan),'','#15803d','✅')}
   </div>
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:20px">
-    ${statCard('Bekleyen Onay',fmt(s.bekleyen_onay),'KYC + Kurumsal','#b45309','⏳')}
+    ${statCard('Bekleyen Onay',fmt(s.bekleyen_onay),'İlan onayı bekliyor','#b45309','⏳')}
     ${statCard('Açık Destek',fmt(s.acik_destek),'Yanıt bekleyen','#b91c1c','🎫')}
     ${statCard('CPU',m.cpu??'—','Sunucu yükü','#1a2e4a','🖥️')}
     ${statCard('RAM',m.ram!=null?m.ram+'%':'—','Bellek kullanımı','#1a2e4a','💾')}
@@ -571,6 +572,59 @@ async function vIlanlarYayin(){
 async function ilanYayinDurum(uuid,durum){
   await api('/ilanlar-yayin/'+uuid+'/durum',{method:'PATCH',body:JSON.stringify({durum})});
   showToast('Durum güncellendi ✓');
+}
+
+// ═══════════════════════════════════════════════
+// İLAN ONAYI — Warteschlange 'moderasyonda' (v1.7.0)
+// Inserate, die die KI-Pruefung nicht freigegeben hat oder bei denen die
+// Pruefung ausgefallen ist. Nutzt die vorhandenen Endpunkte
+// GET /ilanlar?durum=moderasyonda, POST /ilanlar/:id/onayla und /reddet.
+// Nutzertexte werden escaped, weil sie per innerHTML eingesetzt werden.
+// ═══════════════════════════════════════════════
+const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+async function vIlanOnay(){
+  Vloading();
+  const d=await api('/ilanlar?durum=moderasyonda&limit=100').catch(()=>[]);
+  if(!(d||[]).length){V(`<div class="card"><div class="card-body" style="text-align:center;padding:48px;color:#94a3b8">🎉 Onay bekleyen ilan yok</div></div>`);return;}
+  V(`<div style="display:flex;flex-direction:column;gap:12px">
+    ${d.map(i=>{
+      const hata=i.ai_karar==='hata';
+      const sk=i.ai_score;
+      const skC=hata||sk==null?'gray':sk<40?'red':sk<70?'amber':'green';
+      return `<div class="card"><div class="card-body">
+        <div style="display:flex;align-items:flex-start;gap:16px">
+          ${i.ana_foto?`<img src="${escH(i.ana_foto)}" style="width:84px;height:84px;object-fit:cover;border-radius:10px;flex-shrink:0">`:''}
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+              <span class="badge ${skC}"><div class="dot ${skC}"></div>${hata?'KI-Prüfung ausgefallen':'KI-Güven '+(sk??'—')}</span>
+              <span style="font-size:12px;color:#64748b">${escH(i.kategori_ad||'Kategori yok')} · ${fmtDate(i.created_at)}</span>
+            </div>
+            <p style="font-weight:700;color:#1a2e4a;margin-bottom:2px">${escH(i.baslik)} — ${fmt(i.fiyat)}₺</p>
+            <p style="font-size:12.5px;color:#64748b;margin-bottom:8px">${escH([i.ad,i.soyad].filter(Boolean).join(' '))} · ${escH(i.email)} · ${escH(i.sehir||'')}</p>
+            <div style="background:#f8fafc;border-radius:8px;padding:10px 14px;font-size:13.5px;color:#334155;white-space:pre-wrap;max-height:140px;overflow:auto">${escH(i.aciklama||'')}</div>
+            ${i.ai_not?`<p style="margin-top:8px;font-size:12.5px;color:${hata?'#64748b':'#b91c1c'}">🤖 ${escH(i.ai_not)}</p>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;flex-shrink:0">
+            <a class="btn btn-secondary btn-sm" href="https://kapbeni.com/#/ilan/${escH(i.uuid)}" target="_blank" rel="noopener">👁 Ansehen</a>
+            <button class="btn btn-success btn-sm" onclick="ilanOnayla(${+i.id})">✅ Onayla</button>
+            <button class="btn btn-secondary btn-sm" style="color:#b91c1c" onclick="ilanReddet(${+i.id})">✕ Reddet</button>
+          </div>
+        </div>
+      </div></div>`;
+    }).join('')}
+  </div>`);
+}
+async function ilanOnayla(id){
+  await api('/ilanlar/'+id+'/onayla',{method:'POST'});
+  showToast('İlan yayına alındı ✓');
+  vIlanOnay();
+}
+async function ilanReddet(id){
+  const sebep=prompt('Red sebebi (satıcıya gösterilir):','');
+  if(sebep===null) return;
+  await api('/ilanlar/'+id+'/reddet',{method:'POST',body:JSON.stringify({sebep})});
+  showToast('İlan reddedildi');
+  vIlanOnay();
 }
 
 // ═══════════════════════════════════════════════
