@@ -89,7 +89,9 @@ tr:hover td{background:#fafafa}
 <div id="toast" class="toast"></div>
 <div id="app"></div>
 <script>
-const API='/admin/api';
+// API-Basis relativ zur Seitenadresse: oeffentlich /kapbeniadmin/admin/api
+// (nginx streicht /kapbeniadmin), im LAN direkt :3002/admin/api.
+const API=location.pathname.replace(/(\/admin)(\/.*)?$/,'$1')+'/api';
 let TOKEN=localStorage.getItem('admin_token')||'';
 
 function H(){ return {'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'} }
