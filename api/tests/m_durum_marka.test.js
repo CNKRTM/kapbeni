@@ -79,6 +79,8 @@ test('POST/PUT Inserat: Zustand geprueft, Merkmale gespeichert und angezeigt', a
       const r = await api('DELETE', `/ilanlar/${uuid}`, { token });
       assert.strictEqual(r.status, 200, JSON.stringify(r.body));
       // Seit v1.23 archiviert das Loeschen (Auftragssammlung G) — Testrest samt Datei wegraeumen.
+      // Seit v1.27 protokolliert der Upload jedes Bild in medya_isleri — Testrest mit wegraeumen.
+      await q('DELETE FROM medya_isleri WHERE ilan_uuid=$1', [uuid]);
       const a = (await q('DELETE FROM ilan_arsiv WHERE ilan_uuid=$1 RETURNING musteri_no', [uuid])).rows[0];
       if (a && a.musteri_no) require('fs').rmSync(require('path').join(process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads', 'archiv', a.musteri_no, uuid), { recursive: true, force: true });
       if (a && a.musteri_no) try { require('fs').rmdirSync(require('path').join(process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads', 'archiv', a.musteri_no)); } catch { /* nicht leer */ }
