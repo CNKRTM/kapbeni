@@ -13,6 +13,8 @@ const ozellik = require('../lib/ozellik');
 const videoLib = require('../lib/video');
 const bildLib = require('../lib/bild');
 const olay = require('../lib/olay');
+// Einstellungen (Groessen/Qualitaet) und Job-Protokoll der Medien-Engine
+const medyaAyar = require('../lib/medyaAyar');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 
 // Bilder und Video kommen im selben Formular, brauchen aber verschiedene
@@ -157,12 +159,21 @@ async function videoUebernehmen(datei, uuid, uploadDir) {
 async function dateienEntfernen(urls, uuid) {
   const dir = `${process.env.UPLOAD_DIR}/ilanlar`;
   let weg = 0;
+  // Zu jedem Bild gehoert seit v1.27 die kleine Variante (Namensregel
+  // bildLib.kleinUrl) — sie geht mit, sonst blieben _sm-Waisen liegen. Die
+  // Nutzungspruefung gilt fuer das Paar: fuehrt ein anderer Datensatz die
+  // grosse URL noch, bleibt auch die kleine liegen.
+  const alle = [];
   for (const u of urls) {
     if (!u || typeof u !== 'string') continue;
-    const name = path.basename(u);
-    if (uuid && !name.startsWith(`${uuid}_`)) continue;     // fremde Datei
+    if (uuid && !path.basename(u).startsWith(`${uuid}_`)) continue;   // fremde Datei
     const { rows } = await query('SELECT 1 FROM ilan_fotograflar WHERE url=$1 LIMIT 1', [u]);
-    if (rows.length) continue;                               // noch in Benutzung
+    if (rows.length) continue;                                         // noch in Benutzung
+    alle.push(u);
+    const k = bildLib.kleinUrl(u); if (k && k !== u) alle.push(k);
+  }
+  for (const u of alle) {
+    const name = path.basename(u);
     const ziel = path.join(dir, name);
     if (path.dirname(ziel) !== dir) continue;
     try { if (fs.existsSync(ziel)) { fs.unlinkSync(ziel); weg++; } } catch { /* schon weg */ }
@@ -415,33 +426,57 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     // KI-Moderation (Claude Haiku, services/ai.service.js). Aktiv nur, wenn die
     // Pruefung lief, das Inserat freigab UND der Vertrauenswert >= 40 ist.
     // Ausfall der Pruefung -> Warteschlange 'moderasyonda', Freigabe im Admin.
+    // Bilder VOR dem Anlegen in beide Groessen bringen (v1.27). Das Dekodieren
+    // durch sharp ist zugleich die Inhaltspruefung: eine Datei, die nur
+    // vorgibt ein Bild zu sein, scheitert hier — und es entsteht kein Inserat.
+    // Frueher lief die Bildschleife NACH dem INSERT; ein sharp-Abbruch liess
+    // ein Inserat ohne Fotos zurueck (Geister-Inserat).
+    const bilder = [];
+    try {
+      for (const f of fotoDateien) bilder.push(await bildLib.bildVarianten(f.buffer, await medyaAyar.bildAyar()));
+    } catch (e) {
+      console.error('[bild] nicht lesbar:', e.message);
+      await medyaAyar.bildFehlerProtokoll(req.user.id, fotoDateien, e).catch(() => {});
+      return res.status(400).json({ hata: 'Fotoğraf işlenemedi. Dosya bozuk ya da desteklenmeyen bir biçimde olabilir. Lütfen başka bir fotoğraf deneyin.' });
+    }
+    // foto_url (ohne Datei) nur als echte Adresse uebernehmen — vorher ging
+    // jeder Freitext als Bildpfad durch (Backlog: ilan_fotograflar ids 11/13).
+    const fotoUrlGueltig = typeof foto_url === 'string' && /^(https:\/\/|\/uploads\/ilanlar\/)[^\s"'<>]{1,480}$/.test(foto_url);
     const ai_sonuc = await ai.moderasyonYap(baslik, aciklama||'', fiyat);
     const ilan_durum = (!ai_sonuc.hata && ai_sonuc.onaylandi && Number(ai_sonuc.skor) >= 40) ? 'aktif' : 'moderasyonda';
-    const { rows } = await query(
+    // Inserat, Merkmale und Fotozeilen in EINER Transaktion; Dateien erst nach dem COMMIT.
+    const db = await pool.connect();
+    let rows; const dateien = [];
+    try {
+      await db.query('BEGIN');
+      ({ rows } = await db.query(
       `INSERT INTO ilanlar(user_id,kategori_id,baslik,aciklama,fiyat,durum,ilan_durum,
         sehir,ilce,kargo_var,elden_teslim,kargo_ucreti,ai_score,ai_karar,ai_not)
        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) RETURNING *`,
       [req.user.id, kategori_id, baslik, aciklama, fiyat, durum||'kullanilmis', ilan_durum,
        sehir, ilce, kargo_var!==false, elden_teslim!==false, kargo_ucreti||0,
        ai_sonuc.skor, ai_sonuc.hata ? 'hata' : (ai_sonuc.onaylandi ? 'onaylandi' : 'reddedildi'), ai_sonuc.sebep]
-    );
-    const ilan = rows[0];
-    if (ozellikListe.length) await ozellik.ozellikleriYaz({ query }, ilan.id, ozellikListe);
-    const uploadDir = `${process.env.UPLOAD_DIR}/ilanlar`;
-    // Fotoğrafları sıkıştır ve kaydet — die Reihenfolge im Formular ist die
-    // Reihenfolge in der Galerie, das erste Bild ist das Titelbild.
-    if (fotoDateien.length) {
-      for (let i = 0; i < fotoDateien.length; i++) {
-        const fname = `${ilan.uuid}_${i}.webp`;
-        // Eine gemeinsame Kette fuer Anlegen und Bearbeiten (lib/bild.js):
-        // EXIF-Ausrichtung, Skalieren, Wasserzeichen, WebP.
-        fs.writeFileSync(`${uploadDir}/${fname}`, await bildLib.inseratsBildVerarbeiten(fotoDateien[i].buffer));
-        await query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,$3,$4)',
-          [ilan.id, `/uploads/ilanlar/${fname}`, i, i===0]);
+      ));
+      const ilanNeu = rows[0];
+      if (ozellikListe.length) await ozellik.ozellikleriYaz(db, ilanNeu.id, ozellikListe);
+      // Reihenfolge im Formular = Reihenfolge in der Galerie, das erste ist das Titelbild.
+      for (let i = 0; i < bilder.length; i++) {
+        const basis = `${ilanNeu.uuid}_${i}`;
+        dateien.push([`${basis}_lg.webp`, bilder[i].lg], [`${basis}_sm.webp`, bilder[i].sm]);
+        await db.query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,$3,$4)',
+          [ilanNeu.id, `/uploads/ilanlar/${basis}_lg.webp`, i, i===0]);
       }
-    } else if (foto_url) {
-      await query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,0,true)', [ilan.id, foto_url]);
-    }
+      if (!bilder.length && fotoUrlGueltig)
+        await db.query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,0,true)', [ilanNeu.id, foto_url]);
+      await db.query('COMMIT');
+    } catch (e) {
+      await db.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally { db.release(); }
+    const ilan = rows[0];
+    const uploadDir = `${process.env.UPLOAD_DIR}/ilanlar`;
+    for (const [name, daten] of dateien) fs.writeFileSync(`${uploadDir}/${name}`, daten);
+    await medyaAyar.bildProtokoll(req.user.id, ilan, bilder).catch(() => {});
     // Video ablegen — zu grosse Dateien werden heruntergerechnet statt abgelehnt.
     // has_video wird mitgefuehrt, damit der bestehende Filter "videolu=true"
     // aus GET /api/ilanlar endlich echte Treffer liefert.
@@ -583,11 +618,13 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
     try {
       for (const z of ziel) {
         if (z.vorhanden) continue;
-        const daten = await bildLib.inseratsBildVerarbeiten(neueFotos[z.neu].buffer);
-        fertige.set(z.neu, { fname: `${ilan.uuid}_${stempel}_${z.neu}.webp`, daten });
+        const v = await bildLib.bildVarianten(neueFotos[z.neu].buffer, await medyaAyar.bildAyar());
+        fertige.set(z.neu, { fname: `${ilan.uuid}_${stempel}_${z.neu}_lg.webp`, daten: v.lg,
+                             fnameSm: `${ilan.uuid}_${stempel}_${z.neu}_sm.webp`, datenSm: v.sm, v });
       }
-    } catch {
-      return res.status(400).json({ hata: 'Fotoğraf işlenemedi. Lütfen başka bir dosya deneyin.' });
+    } catch (e) {
+      await medyaAyar.bildFehlerProtokoll(req.user.id, neueFotos, e, ilan).catch(() => {});
+      return res.status(400).json({ hata: 'Fotoğraf işlenemedi. Dosya bozuk ya da desteklenmeyen bir biçimde olabilir. Lütfen başka bir fotoğraf deneyin.' });
     }
 
     // ── Video: ersetzen, entfernen oder unveraendert lassen ──
@@ -652,7 +689,11 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
     }
 
     // ── Dateien erst nach dem COMMIT anfassen ──
-    for (const f of fertige.values()) fs.writeFileSync(`${uploadDir}/${f.fname}`, f.daten);
+    for (const f of fertige.values()) {
+      fs.writeFileSync(`${uploadDir}/${f.fname}`, f.daten);
+      fs.writeFileSync(`${uploadDir}/${f.fnameSm}`, f.datenSm);
+    }
+    if (fertige.size) await medyaAyar.bildProtokoll(req.user.id, ilan, [...fertige.values()].map(f => f.v)).catch(() => {});
     if (videoName) fs.renameSync(`${TMP_DIR}/${videoName}`, `${uploadDir}/${videoName}`);
     if (entfallen.length) await dateienEntfernen(entfallen.map(f => f.url), ilan.uuid);
     if (alteVideoUrl && alteVideoUrl !== neueVideoUrl) await dateienEntfernen([alteVideoUrl], ilan.uuid);

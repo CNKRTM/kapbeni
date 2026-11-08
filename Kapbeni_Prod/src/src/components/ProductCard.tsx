@@ -1,5 +1,7 @@
 import { Heart, MapPin, Clock } from 'lucide-react'
 import type { Listing } from '../api'
+import IlanResim from './IlanResim'
+import { SIZES } from '../lib/medya'
 
 interface Props {
   listing: Listing
@@ -15,7 +17,7 @@ function formatPrice(p: number) {
 export default function ProductCard({ listing, isGridView, onSelect, onToggleFavorite }: Props) {
   const title = listing.title || ''
   const price = listing.price ?? 0
-  const image = listing.image || 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=600&q=70'
+  const image = listing.image || ''
   const location = listing.location || ''
   const date = listing.date || ''
   const isFav = listing.isFavorite || false
@@ -27,9 +29,10 @@ export default function ProductCard({ listing, isGridView, onSelect, onToggleFav
         className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-xs hover:shadow-md transition-shadow cursor-pointer group"
       >
         <div className="relative aspect-square overflow-hidden">
-          <img
-            src={image}
+          <IlanResim
+            url={image}
             alt={title}
+            sizes={SIZES.karteRaster}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
           <button
@@ -71,7 +74,7 @@ export default function ProductCard({ listing, isGridView, onSelect, onToggleFav
       className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-xs hover:shadow-md transition-shadow cursor-pointer flex gap-3 p-3"
     >
       <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden">
-        <img src={image} alt={title} className="w-full h-full object-cover" />
+        <IlanResim url={image} alt={title} sizes={SIZES.karteListe} className="w-full h-full object-cover" />
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between">

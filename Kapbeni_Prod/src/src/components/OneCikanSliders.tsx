@@ -8,6 +8,8 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Sparkles, Bookmark, ChevronLeft, ChevronRight, Heart, MapPin } from 'lucide-react'
 import ProductCard from './ProductCard'
 import { DURUM_ETIKET, DURUM_KISA } from '../api'
+import IlanResim from './IlanResim'
+import { SIZES } from '../lib/medya'
 
 const FONT = { fontFamily: "'Plus Jakarta Sans', sans-serif" }
 
@@ -357,7 +359,7 @@ export function OneCikanMiniSlider({ listings, rawBoosted, onSelect, onToggleFav
                 <Heart size={10} className={item.isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-400'} />
               </button>
               <div style={{ height: 70, background: '#e5e7eb', overflow: 'hidden' }}>
-                <img src={img} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <IlanResim url={img} alt={item.title} sizes={SIZES.mini} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               </div>
               <div style={{ padding: '5px 6px 6px' }}>
                 {item.condition && (

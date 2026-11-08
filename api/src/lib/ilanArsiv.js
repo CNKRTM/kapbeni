@@ -71,6 +71,11 @@ async function snapshotYaz(db, snap, { grund, grundDetay = null, kaynak, adminId
   const eintrag = (url) => {
     const rel = arsivPfad(url, i.uuid, i.musteri_no);
     if (rel) dateien.push([path.join(ILAN_DIR(), path.basename(url)), path.join(ARSIV(), rel)]);
+    // Kleine Variante (v1.27) wandert still mit, damit keine _sm-Waise liegen
+    // bleibt; im Snapshot steht weiter nur die grosse Datei.
+    const klein = require('./bild').kleinUrl(url);
+    const relK = klein && klein !== url ? arsivPfad(klein, i.uuid, i.musteri_no) : null;
+    if (relK) dateien.push([path.join(ILAN_DIR(), path.basename(klein)), path.join(ARSIV(), relK)]);
     return { url, arsiv: rel };
   };
   const bilder = snap.fotos.map(eintrag);

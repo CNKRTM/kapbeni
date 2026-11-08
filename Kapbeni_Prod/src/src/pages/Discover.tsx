@@ -13,6 +13,8 @@ import { useKategoriAgac, mitAnzahl, type Category } from '../data/kategoriAgac'
 import IlIlceAlanlari from '../components/IlIlceAlanlari'
 import { tuerkischFalten } from '../data/iller'
 import { useAuth } from '../context/AuthContext'
+import IlanResim from '../components/IlanResim'
+import { SIZES } from '../lib/medya'
 
 interface Props {
   listings: Listing[]
@@ -73,7 +75,7 @@ function SuperIlanCard({ item, onClick }: { item: any; onClick: () => void }) {
       {/* Foto */}
       <div style={{ flex: 1, overflow: 'hidden', background: '#fce4e4', minHeight: 0 }}>
         {item.ana_foto
-          ? <img src={item.ana_foto} alt={item.baslik} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ? <IlanResim url={item.ana_foto} alt={item.baslik} sizes={SIZES.kachel} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <i className="ti ti-photo" style={{ fontSize: '2.5rem', color: '#ffab9f' }} />
             </div>

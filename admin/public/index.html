@@ -1021,6 +1021,10 @@ async function kDetayGoster(id){
 const ADMIN_BASIS=API.replace(/\/api$/,'');
 // Inseratsbilder: /uploads/ilanlar/… liefert auch der Admin selbst (LAN :3002 kennt /uploads nicht)
 const medya=u=>!u?'':String(u).startsWith('/uploads/ilanlar/')?ADMIN_BASIS+u:String(u).startsWith('arsiv/dosya/')?API+'/'+u:u;
+// Kleine Variante (v1.27, Namensregel wie api/src/lib/bild.js kleinUrl) fuer Kacheln und Listen.
+// Liefert die Attribute src/srcset/sizes; fehlt _sm, faellt das Bild auf die grosse Datei zurueck.
+const kleinUrl=u=>{u=String(u||'');if(!/^\/uploads\/ilanlar\/[^/]+\.webp$/.test(u))return null;if(/_sm\.webp$/.test(u))return u;return /_lg\.webp$/.test(u)?u.replace(/_lg\.webp$/,'_sm.webp'):u.replace(/\.webp$/,'_sm.webp')};
+const imgKlein=(u,sizes='120px')=>{const k=kleinUrl(u),g=medya(u);if(!k)return `src="${escH(g)}"`;const ks=medya(k);return `src="${escH(ks)}" srcset="${escH(ks)} 480w, ${escH(g)} 1200w" sizes="${sizes}" onerror="this.onerror=null;this.removeAttribute('srcset');this.src='${escH(g)}'"`};
 const noKlasse=(c,tip)=>tip==='kurumsal'?'kur':c==='k'?'k':c==='e'?'e':'n';
 function noRozet(no,c,tip,link=true){
   if(!no) return '<span style="color:#94a3b8">—</span>';
@@ -1306,14 +1310,14 @@ function tlRender(){
         <span style="font-weight:800;font-size:13px">${saat(e.zaman)}</span><span class="pill" style="${tlPill(e.tur)}">${escH(e.ad)}</span>
         <span style="font-size:12.5px;color:#1a2e4a;font-weight:700;overflow:hidden;text-overflow:ellipsis">${escH(tlTitel(e))}</span></div>
         <span class="mono" style="font-size:11.5px;color:#475569">${escH(e.ip||'—')} · ${escH(e.sehir||'—')} · ${escH(e.cihaz||'—')}</span></div>
-        <div style="display:flex;gap:10px;align-items:flex-start">${e.ilan?.foto?`<img class="ent-img" src="${escH(medya(e.ilan.foto))}" alt="" loading="lazy">`:''}
+        <div style="display:flex;gap:10px;align-items:flex-start">${e.ilan?.foto?`<img class="ent-img" ${imgKlein(e.ilan.foto,'64px')} alt="" loading="lazy">`:''}
         <div class="ent-grid" style="flex:1">${tlSpalten(e).map(([k,v])=>`<div><div class="k">${k}</div><div class="v">${v}</div></div>`).join('')}</div></div></div>`).join(''):''}</section>`; }).join('');
   if(gor==='liste') inhalt=`<div class="card" style="overflow-x:auto"><table style="min-width:820px"><thead><tr><th>Zaman</th><th>İşlem</th><th>Ayrıntı</th><th>Kategori</th><th>IP</th><th>Konum</th><th>Cihaz</th></tr></thead><tbody>
     ${tage.map(t=>`<tr class="dl-day"><td colspan="7">${dt(t.k)} · <span style="font-weight:600;text-transform:capitalize">${wt(t.k)}</span> · ${t.e.length} kayıt</td></tr>`+t.e.map(e=>`<tr>
       <td style="white-space:nowrap">${saat(e.zaman)}</td><td><span class="pill" style="${tlPill(e.tur)}">${escH(e.ad)}</span></td><td style="font-weight:600;max-width:320px">${escH(tlTitel(e))}</td>
       <td>${escH(e.ilan?.kategori||'—')}</td><td class="mono">${escH(e.ip||'—')}</td><td>${escH(e.sehir||'—')}</td><td style="font-size:12.5px">${escH(e.cihaz||'—')}</td></tr>`).join('')).join('')}</tbody></table></div>`;
   if(gor==='kachel'){ const il=sicht.filter(e=>e.ilan&&e.olay==='ilan_olustur');
-    inhalt=il.length?`<div class="kach">${il.map(e=>`<div><div class="kach-img">${e.ilan.foto?`<img src="${escH(medya(e.ilan.foto))}" alt="" loading="lazy">`:escH((e.ilan.kategori||'').split(' › ')[0]||'İlan')}</div>
+    inhalt=il.length?`<div class="kach">${il.map(e=>`<div><div class="kach-img">${e.ilan.foto?`<img ${imgKlein(e.ilan.foto,'200px')} alt="" loading="lazy">`:escH((e.ilan.kategori||'').split(' › ')[0]||'İlan')}</div>
       <div style="padding:10px 12px"><div style="font-weight:700">${escH(e.ilan.baslik)}</div><div style="color:#b61722;font-weight:800;margin-top:2px">${fmtTL(e.ilan.fiyat)}</div>
       <div style="font-size:11.5px;color:#475569;margin-top:4px">${escH([e.ilan.kategori,e.ilan.marka,ZUSTAND[e.ilan.zustand]].filter(Boolean).join(' · '))}</div>
       <div style="font-size:11.5px;color:#475569">${fmtDate(e.zaman)} · ${escH(e.sehir||'—')}</div><div style="margin-top:6px">${ilanDurumBadge(e.ilan.durum)}</div></div></div>`).join('')}</div>`
@@ -1340,7 +1344,7 @@ async function aIlanlar(no,box){
   box.innerHTML=`<div class="card"><div class="card-body" style="padding:14px 16px 4px"><p class="section-title" style="margin:0">Mevcut ilanlar (${il.length})</p>
     <p style="font-size:12px;color:#64748b;margin-top:2px">Görseller doğrudan ilandan gelir, kopya tutulmaz.</p></div>
     <div style="overflow-x:auto"><table style="min-width:860px"><thead><tr><th></th><th>İlan no</th><th>Başlık</th><th>Kategori / marka</th><th>Fiyat</th><th>Yayın</th><th>KI güven</th><th>Durum</th><th></th></tr></thead><tbody>
-    ${il.length?il.map(x=>`<tr><td>${(x.fotolar||[])[0]?`<img class="ent-img" style="width:48px;height:48px" src="${escH(medya(x.fotolar[0]))}" alt="" loading="lazy">`:''}</td>
+    ${il.length?il.map(x=>`<tr><td>${(x.fotolar||[])[0]?`<img class="ent-img" style="width:48px;height:48px" ${imgKlein(x.fotolar[0],'48px')} alt="" loading="lazy">`:''}</td>
       <td class="mono" style="font-size:12px">#${escH(x.ilan_no||x.ilan_numarasi||x.id)}</td><td style="font-weight:600;max-width:240px">${escH(x.baslik)}<div style="font-size:11.5px;color:#64748b">${escH(ZUSTAND[x.durum]||'')}${(x.fotolar||[]).length>1?' · '+x.fotolar.length+' görsel':''}</div></td>
       <td style="font-size:12.5px">${escH([x.ust_kategori,x.kategori_ad].filter(Boolean).join(' › ')||'—')}${x.marka?`<div style="color:#64748b">${escH(x.marka)}</div>`:''}</td>
       <td style="color:#b61722;font-weight:700;white-space:nowrap">${fmtTL(x.fiyat)}</td><td style="white-space:nowrap;font-size:12.5px">${fmtDate(x.created_at)}</td>
@@ -1575,7 +1579,7 @@ async function vIlanOnay(){
       const skC=hata||sk==null?'gray':sk<40?'red':sk<70?'amber':'green';
       return `<div class="card"><div class="card-body">
         <div style="display:flex;align-items:flex-start;gap:16px">
-          ${i.ana_foto?`<img src="${escH(medya(i.ana_foto))}" style="width:84px;height:84px;object-fit:cover;border-radius:10px;flex-shrink:0">`:''}
+          ${i.ana_foto?`<img ${imgKlein(i.ana_foto,'84px')} style="width:84px;height:84px;object-fit:cover;border-radius:10px;flex-shrink:0">`:''}
           <div style="flex:1;min-width:0">
             <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
               <span class="badge ${skC}"><div class="dot ${skC}"></div>${hata?'KI-Prüfung ausgefallen':'KI-Güven '+(sk??'—')}</span>

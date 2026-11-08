@@ -61,6 +61,7 @@ import { navZuHash, hashZuNav, navSchluessel, LEGAL_HASHES, type NavState } from
 import type { Listing } from './api'
 import { MOCK_LISTINGS, MOCK_CHATS } from './data/mockData'
 import type { AppChat } from './data/mockData'
+import IlanResim from './components/IlanResim'
 
 function DestekSection({ onOpen }: { onOpen?: (tab: 'taleplerim' | 'oneriler') => void }) {
   return (
@@ -842,7 +843,7 @@ export default function App() {
                       >
                         <div style={{ height: 130, background: '#f5f5f5', overflow: 'hidden' }}>
                           {b.ana_foto
-                            ? <img src={b.ana_foto} alt={b.baslik} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ? <IlanResim url={b.ana_foto} alt={b.baslik} sizes="240px" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                             : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><i className="ti ti-photo" style={{ fontSize: '2rem', color: '#ccc' }} /></div>}
                         </div>
                         <div style={{ padding: 10 }}>

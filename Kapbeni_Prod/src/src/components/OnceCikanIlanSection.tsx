@@ -1,6 +1,8 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { Bookmark, Heart, ChevronLeft, ChevronRight, MapPin } from 'lucide-react'
 import { DURUM_KISA } from '../api'
+import IlanResim from './IlanResim'
+import { SIZES } from '../lib/medya'
 
 // Konstanten aus dem Live-Bundle
 const ITEMS_PER_PAGE = 6
@@ -186,7 +188,7 @@ export default function OnceCikanIlanSection({ listings, rawBoosted, onSelect, o
               </button>
               {/* Bild */}
               <div style={{ height: 70, background: '#e5e7eb', overflow: 'hidden' }}>
-                <img src={img} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                <IlanResim url={img} alt={item.title} sizes={SIZES.mini} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
               </div>
               {/* Info */}
               <div style={{ padding: '5px 6px 6px' }}>

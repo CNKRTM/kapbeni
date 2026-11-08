@@ -117,7 +117,8 @@ async function platzhalterBild(titel, farbe, nr) {
     <rect width="1200" height="900" fill="${farbe}"/><rect x="60" y="60" width="1080" height="780" rx="40" fill="#ffffff" fill-opacity="0.12"/>
     ${zeilen.slice(0, 3).map((t, i) => `<text x="600" y="${400 + i * 90 - (zeilen.length - 1) * 45}" font-family="DejaVu Sans, sans-serif" font-size="72" font-weight="700" fill="#ffffff" text-anchor="middle">${esc(t)}</text>`).join('')}
     <text x="600" y="780" font-family="DejaVu Sans, sans-serif" font-size="34" fill="#ffffff" fill-opacity="0.8" text-anchor="middle">TEST VERİSİ · Görsel ${nr}</text></svg>`;
-  return bild.inseratsBildVerarbeiten(await sharp(Buffer.from(svg)).png().toBuffer());
+  // Beide Groessen wie beim echten Upload (v1.27, _lg + _sm)
+  return bild.bildVarianten(await sharp(Buffer.from(svg)).png().toBuffer());
 }
 
 async function kategorieId(slug) {
@@ -217,8 +218,10 @@ async function inserate(angelegt) {
       const marka = await markeSetzen(ilan.id, katId);
       const anzahl = 1 + zufall(3);
       for (let i = 0; i < anzahl; i++) {
-        const fname = `${ilan.uuid}_${i}.webp`;
-        fs.writeFileSync(path.join(UP, 'ilanlar', fname), await platzhalterBild(titel, FARBE[haupt] || '#334155', i + 1));
+        const fname = `${ilan.uuid}_${i}_lg.webp`;
+        const v = await platzhalterBild(titel, FARBE[haupt] || '#334155', i + 1);
+        fs.writeFileSync(path.join(UP, 'ilanlar', fname), v.lg);
+        fs.writeFileSync(path.join(UP, 'ilanlar', `${ilan.uuid}_${i}_sm.webp`), v.sm);
         await query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,$3,$4)', [ilan.id, `/uploads/ilanlar/${fname}`, i, i === 0]);
       }
       await ereignis(a.id, 'ilan_olustur', z, k, n, { hedefTip: 'ilan', hedefId: ilan.uuid, detay: { baslik: titel, fiyat, marka, ilan_durum: ilanDurum, ai_skor: skor } });

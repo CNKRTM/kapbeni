@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.27.0 — 2026-11-08
+
+Bilder in zwei Größen (_lg 1200/q75, _sm 480/q70), EXIF/GPS weg, srcset, Bestand nachgezogen (Auftragssammlung I)
+
+- docs: CLAUDE.md – Chronik 2026-11-08 Kundenakte-Paket (v1.22–v1.26: Ereignisprotokoll, Archiv, Testkunden, Kundenliste/-akte, Markenlisten), Backlog
+
 ## 1.26.0 — 2026-11-08
 
 M: Markenlisten/Merkmalswerte im Admin pflegbar (Kategoriler → Özellikler), Kategorien aus der DB (fix 0 Kategorien unter :3002)

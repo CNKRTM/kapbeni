@@ -6,6 +6,7 @@ import { ilanlarApi, favorilerApi, degerlendirmeApi, ve, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
 import { UyelikChip } from '../components/UyeRozeti'
 import HizliIlanModal from '../components/HizliIlanModal'
+import IlanResim from '../components/IlanResim'
 
 type Tab = 'ilanlarim' | 'tekliflerim' | 'favorilerim' | 'degerlendirmeler' | 'aramalar' | 'kazancim' | 'dogrulamalar' | 'guven' | 'sikayetlerim'
 
@@ -339,7 +340,7 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
             : teklifler.map((t: any) => (
                 <div key={t.id} style={{ ...cardStyle, marginBottom: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
                   <div style={{ width: 56, height: 56, borderRadius: 10, background: '#f5f5f5', overflow: 'hidden', flexShrink: 0 }}>
-                    {t.foto ? <img src={t.foto} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><i className="ti ti-photo" style={{ color: '#ccc' }} /></div>}
+                    {t.foto ? <IlanResim url={t.foto} sizes="56px" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><i className="ti ti-photo" style={{ color: '#ccc' }} /></div>}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ ...fontBase, fontWeight: 600, fontSize: 13, color: '#1a2e4a', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.baslik}</div>

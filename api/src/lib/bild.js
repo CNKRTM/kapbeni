@@ -30,7 +30,27 @@ const path = require('path');
 const fs = require('fs');
 
 const MAX_KANTE = 1200;
-const WEBP_QUALITAET = 80;
+const WEBP_QUALITAET = 80;   // nur noch fuer inseratsBildVerarbeiten() (Altaufrufer)
+
+// ── Zwei Groessen (Auftragssammlung I, v1.27) ───────────────────────────────
+// _lg fuer Detail und Lightbox, _sm fuer Karten, Listen, Benzer İlanlar und die
+// Kundenakte. Qualitaet an vier Testbildern gemessen (Tabelle in CLAUDE.md,
+// Chronik 2026-11-08 v1.27): q75 statt q80 spart beim _lg 10-20 %, die SSIM
+// sinkt dabei um hoechstens 0,006 — mit blossem Auge nicht zu sehen. Beim _sm
+// liegt q70 nur 0,001-0,005 unter q75. Die Werte sind Voreinstellungen; der
+// Admin kann sie unter SİSTEM → Medya Motoru aendern (medya_ayarlari).
+const VARIANTEN_STANDARD = { lg_px: 1200, lg_q: 75, sm_px: 480, sm_q: 70 };
+
+/** Dateiname der kleinen Variante zu einer _lg-URL bzw. einer Alt-URL.
+ *  Namensregel statt eigener Spalte: …_lg.webp → …_sm.webp, Altbestand
+ *  …_N.webp → …_N_sm.webp. Nur fuer eigene Dateien unter /uploads/ilanlar/;
+ *  fremde Adressen (Unsplash u. a.) haben keine kleine Variante → null. */
+function kleinUrl(url) {
+  if (!url || typeof url !== 'string' || !/^\/uploads\/ilanlar\/[^/]+\.webp$/.test(url)) return null;
+  if (/_sm\.webp$/.test(url)) return url;
+  if (/_lg\.webp$/.test(url)) return url.replace(/_lg\.webp$/, '_sm.webp');
+  return url.replace(/\.webp$/, '_sm.webp');
+}
 
 // Wasserzeichen: Werte an echten Produktfotos (Auto, Telefon, Sessel) verglichen.
 //   16 %  auf hellen Flächen fast verschwunden
@@ -60,16 +80,17 @@ const LOGO = path.join(__dirname, '..', '..', '..', 'Kapbeni_Prod', 'src', 'publ
 // wiederverwendet — sonst rechnete jeder Upload es für jedes Bild neu.
 const wzSpeicher = new Map();
 
-async function wasserzeichen(bildBreite, bildHoehe) {
+async function wasserzeichen(bildBreite, bildHoehe, { deckkraft = WZ_DECKKRAFT, anteil = WZ_ANTEIL } = {}) {
   // Auf 50er-Schritte runden: sonst entstuende fuer jede Pixelgroesse ein
   // eigener Eintrag und der Zwischenspeicher liefe voll.
   const rb = Math.round(bildBreite / 50) * 50;
   const rh = Math.round(bildHoehe / 50) * 50;
-  const schluessel = `${rb}x${rh}`;
+  const schluessel = `${rb}x${rh}_${deckkraft}_${anteil}`;
   if (wzSpeicher.has(schluessel)) return wzSpeicher.get(schluessel);
 
   const gedreht = await sharp(LOGO)
-    .resize({ width: Math.max(200, Math.round(bildBreite * WZ_ANTEIL)) })
+    // Untergrenze 200 px nur, wenn das Bild selbst breit genug ist (_sm hat 480 px)
+    .resize({ width: Math.max(Math.min(200, bildBreite), Math.round(bildBreite * anteil)) })
     .ensureAlpha()
     .rotate(WZ_WINKEL, { background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .toBuffer();
@@ -92,7 +113,7 @@ async function wasserzeichen(bildBreite, bildHoehe) {
   const fertig = await sharp(passend)
     .composite([{
       input: { create: { width: m.width, height: m.height, channels: 4,
-                         background: { r: 0, g: 0, b: 0, alpha: WZ_DECKKRAFT } } },
+                         background: { r: 0, g: 0, b: 0, alpha: deckkraft } } },
       blend: 'dest-in',
     }])
     .png()
@@ -132,7 +153,52 @@ async function inseratsBildVerarbeiten(eingabe) {
     .toBuffer();
 }
 
+// Auf der kleinen Variante waere das Zeichen mit 22 % und 65 % Breite kaum zu
+// erkennen (bei 480 px nur noch ~310 px breit und blass). Deshalb dort kraeftiger
+// und breiter — an den Testbildern verglichen, Produkt bleibt erkennbar.
+const WZ_SM = { deckkraft: 0.32, anteil: 0.8 };
+
+/** Eine Groesse erzeugen: drehen (EXIF), skalieren, Zeichen, WebP.
+ *  EXIF/GPS: sharp uebernimmt Metadaten NUR mit withMetadata()/keepMetadata().
+ *  Beides wird hier bewusst nicht aufgerufen — die Ausgabe traegt kein EXIF,
+ *  kein GPS, kein ICC-Profil ausser sRGB (Test u_medya prueft das). */
+async function eineGroesse(eingabe, kante, qualitaet, wzOpt) {
+  const skaliert = await sharp(eingabe)
+    .rotate()
+    .resize(kante, kante, { fit: 'inside', withoutEnlargement: true })
+    .toBuffer();
+  if (!logoDa) return sharp(skaliert).webp({ quality: qualitaet }).toBuffer();
+  const m = await sharp(skaliert).metadata();
+  const wz = await wasserzeichen(m.width, m.height, wzOpt);
+  return sharp(skaliert).composite([{ input: wz, gravity: 'center' }]).webp({ quality: qualitaet }).toBuffer();
+}
+
+/**
+ * Beide Groessen eines Inseratsfotos (v1.27). Beide werden aus dem ORIGINAL
+ * gerechnet, nicht _sm aus _lg — sonst wuerde das Zeichen zweimal aufgelegt.
+ * Wirft, wenn sharp die Datei nicht lesen kann (= Inhaltspruefung).
+ * Rueckgabe: { lg, sm, breite, hoehe, vorher, nachher }.
+ */
+async function bildVarianten(eingabe, ayar = {}) {
+  const a = { ...VARIANTEN_STANDARD, ...ayar };
+  const t0 = Date.now();
+  const meta = await sharp(eingabe).metadata();   // wirft bei Nicht-Bildern
+  if (!meta.width || !meta.height) throw new Error('kein lesbares Bild');
+  const lg = await eineGroesse(eingabe, a.lg_px, a.lg_q, {});
+  const sm = await eineGroesse(eingabe, a.sm_px, a.sm_q, WZ_SM);
+  return { lg, sm, breite: meta.width, hoehe: meta.height, vorher: eingabe.length, nachher: lg.length + sm.length, ms: Date.now() - t0 };
+}
+
+/** _sm aus einer vorhandenen _lg-Datei (nur fuer den Bestand, dessen Original
+ *  nicht aufbewahrt wurde). Das Zeichen steckt dort schon im Bild und wird
+ *  mitverkleinert — kein zweites Zeichen. */
+async function kleinAusGross(eingabe, ayar = {}) {
+  const a = { ...VARIANTEN_STANDARD, ...ayar };
+  return sharp(eingabe).resize(a.sm_px, a.sm_px, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: a.sm_q }).toBuffer();
+}
+
 module.exports = {
-  inseratsBildVerarbeiten,
+  inseratsBildVerarbeiten, bildVarianten, kleinAusGross, kleinUrl, VARIANTEN_STANDARD, WZ_SM,
   MAX_KANTE, WEBP_QUALITAET, WZ_DECKKRAFT, WZ_ANTEIL, WZ_WINKEL, LOGO,
 };
