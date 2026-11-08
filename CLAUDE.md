@@ -1623,6 +1623,37 @@ mu?“ samt Ereignis. Wiederhergestellt (gleicher Text, Zeit 2026-09-14 10:05 UT
 Seed-Profil; neue Zeilen-id 58), Test korrigiert. (c) Vor v1.33.3 lief `pm2 reload kapbeni-admin`
 schon mit dem neuen Admin-Code (für den Gegentest), wenige Minuten vor dem Ausrollen.
 
+#### Benachrichtigungen (v1.35.0)
+
+Erste Lücke aus dem E2E-Test geschlossen: Nach Nachricht, Angebot oder Freigabe erfährt die Gegenseite davon.
+- **Bibliothek `api/src/lib/bildirim.js`** — `gonder({userId, tip, baslik, icerik, link, kaynakTip, kaynakId})`
+  wirft nie, beachtet die Ayarlar-Schalter `bildirim_mesaj` / `bildirim_teklif` / `bildirim_ilan`
+  (aus = keine Meldung), schreibt nichts an gelöschte Konten (`silindi_at`). Chat: je Konversation
+  höchstens **eine** ungelesene Meldung, weitere Nachrichten aktualisieren sie. `okunduYap()` markiert
+  Meldungen einer Quelle als gelesen.
+- **Auslöser:** `mesaj` (Empfänger; bei `tehlikeli` ohne Nachrichtentext), `teklif_yeni` (Verkäufer, Link
+  `/#/panel/gelen-teklifler` = Tekliflerim mit Rolle Satıcı), `teklif_kabul` / `teklif_red` (Käufer),
+  `ilan_onay` / `ilan_red` (Admin İlan Onayı → Eigentümer), `medya` (Videofehler, vorher eigenes INSERT).
+- **Migration `20261108_14_bildirimler.sql`:** `bildirimler.kaynak_tip`, `kaynak_id` + zwei Indizes.
+- **API:** `GET /bildirimler` (neueste zuerst, `okunmamis`, `mesaj_okunmamis`), neu `GET /bildirimler/ozet`
+  (`{bildirim, mesaj}`), `PUT /:id/oku` und `DELETE /:id` mit Ziffernprüfung (400). `GET /mesajlar/konusmalar`
+  liefert `okunmamis` je Konversation; Öffnen einer Konversation markiert deren Meldung gelesen.
+  `PUT /teklifler/:id` nimmt nur noch `kabul|reddedildi` (vorher jeder Text).
+- **Oberfläche:** `components/BildirimZili.tsx` — Desktop: Glocke rechts in der Navbar mit Zähler, Liste
+  als Fenster (Portal in `<body>`, sonst verdeckt die sticky Kategorieleiste den Kopf). Handy: Punkt am
+  Menü-Knopf, Zeile „Bildirimler“ mit Zähler im Menü (ein Knopf mehr im Handy-Kopf hätte das Suchfeld
+  unter das Logo geschoben). Klick = gelesen + Sprung über `navAnwenden` (nicht `location.hash`),
+  „Tümünü okundu işaretle“, Escape/Außenklick schließen. `lib/bildirimOzet.ts` lädt die Zähler alle 30 s
+  (nur bei sichtbarem Tab), beim Zurückkehren in den Tab und auf das Ereignis `kapbeni:bildirim-yenile`
+  (Messages löst es beim Lesen aus). **Das Mesajlar-Abzeichen zählt jetzt echte ungelesene Nachrichten**
+  (vorher Mock-`chats`); Konversationsliste zeigt ungelesene fett mit Zahl.
+- **Tests:** `api/tests/x_bildirim.test.js` (6, eigenes Testinserat von Elif, Käuferin Ayşe 71, räumt
+  Meldungen/Nachrichten/Teklifs/Ereignisse weg), Aufräumen in `w_e2e_ablauf` ergänzt; Browser
+  `api/tests/ui/bildirim.js` (1280/390: Zähler, Liste, Fensterkopf frei, Sprung zum Inserat, Zähler sinkt,
+  Escape, Tümünü okundu, Angebots-Link → Satıcıyım aktiv, Suchfeld so breit wie vorher, keine
+  Seitenfehler). Sitzung per `tokenFuer` (15 min), kein Passwort. Vor dem Ausrollen gegen API :3911 /
+  Admin :3912 / Vorschau :3906 (47/47, UI grün, `zurueck.js` 66× OK), danach live 47/47.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1685,7 +1716,11 @@ schon mit dem neuen Admin-Code (für den Gegentest), wenige Minuten vor dem Ausr
   `mesajlar`, `kategoriler`, `hero`, `slider`, `oneriler`, `destek`.
 - ~~`startChat` erzeugt lokale IDs `chat_…`~~ — **erledigt v1.30** (nur noch API-Konversation).
   Offen: Der App-State `chats` (Mock-Startwert, `localStorage kapbeni_chats`) existiert weiter
-  neben der API und speist nur noch den Ungelesen-Zähler — aufräumen.
+  neben der API — seit v1.35 speist er auch den Ungelesen-Zähler nicht mehr, kann weg.
+- Benachrichtigungen (v1.35) nur im Konto: E-Mail/SMS (`bildirim_email`, `bildirim_sms`) werden nicht
+  versendet (SMTP/NetGSM fehlen). Ohne Auslöser bisher: gespeicherte Suchen (`kayitli_aramalar.bildirim_aktif`),
+  Preissenkung bei Favoriten (`bildirim_tercih.fiyat_dususu`), Bewertung erhalten, Push im Browser.
+  Kein Echtzeitkanal — Zähler alle 30 s.
 - `api/src/routes/odeme.js:26` und `agim.js:23` verweisen hartkodiert auf die **entfernte**
   Domain `sattimgitti.transas24.com` (Zahlungs-Rückkehr-URL, Einladungslink).
 - Ein aktives Inserat (Asus Notebook, id=12) hat keine `kategori_id`.
