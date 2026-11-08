@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.33.4 — 2026-11-08
+
+E2E-Fix: Meldung nach dem Anlegen nennt İlan Onayı statt immer „yayınlandı“
+
 ## 1.33.3 — 2026-11-08
 
 E2E-Fix: Freigabe in İlan Onayı nimmt das Inserat sofort in den Suchindex, Ablehnen entfernt es

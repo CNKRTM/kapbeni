@@ -495,9 +495,13 @@ export default function App() {
         form.append('foto_url', listing.image)
       }
       if (video) form.append('video', video)
-      await ilanlarApi.create(form)
+      const sonuc: any = await ilanlarApi.create(form)
       setShowSellModal(false)
-      showToast('İlanınız başarıyla yayınlandı!')
+      // Meldung nach dem tatsaechlichen Ergebnis der KI-Pruefung: vorher stand immer
+      // „yayınlandı“, auch wenn das Inserat in İlan Onayı wartete (E2E-Test v1.33.4).
+      showToast(sonuc?.ilan?.ilan_durum === 'moderasyonda'
+        ? 'İlanınız incelemeye alındı. Onaylandığında yayına girecek.'
+        : 'İlanınız başarıyla yayınlandı!')
       // Dieselbe Regel wie beim Loeschen: nur navigieren, wenn die aktuelle
       // Ansicht nicht stehenbleiben kann. Die Erstellmaske ist ein Overlay
       // ohne eigene Route — die Ansicht darunter kann IMMER bleiben. Vorher

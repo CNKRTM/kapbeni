@@ -79,4 +79,11 @@ test('v1.33.3 İlan Onayı: Freigabe nimmt das Inserat sofort in den Suchindex',
   }
 });
 
+test('v1.33.4 Anlegen: Meldung richtet sich nach ilan_durum', () => {
+  const app = fs.readFileSync(`${FRONT}/App.tsx`, 'utf8');
+  assert.match(app, /sonuc\?\.ilan\?\.ilan_durum === 'moderasyonda'/);
+  assert.match(app, /İlanınız incelemeye alındı/);
+  // Verhalten im Browser: api/tests/ui/e2e.js Schritt „toast“
+});
+
 module.exports = { fremdesTestinserat, KAEUFER, FRONT };

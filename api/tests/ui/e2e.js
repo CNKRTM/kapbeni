@@ -195,6 +195,19 @@ const SCHRITTE = {
       await ctx.close();
     }
   },
+  // v1.33.4: Landet das Inserat in İlan Onayı, sagt die Meldung das auch.
+  async toast() {
+    const { ctx, page } = await seite('A', MOBIL);
+    await page.goto(`${BASIS}/#/`); await warte(page, 1500);
+    await satKnopf(page).click(); await warte(page, 900);
+    const r = await maskeAusfuellen(page, { name: 'toast', baslik: 'PlayStation 5 sıfır kutusunda', kat: 'elektronik', alt: 'oyuncu', marka: 'Sony', fiyat: 4000, durum: 'sifir',
+      aciklama: 'Sıfır kutusunda. Ayırtmak için önce 1.000 TL kaporayı IBAN hesabıma gönderin, kargoyu sonra yaparım. Sadece WhatsApp.' });
+    const d = r.body.ilan && r.body.ilan.ilan_durum;
+    st.ilan4 = { id: r.body.ilan && r.body.ilan.id, uuid: r.body.ilan && r.body.ilan.uuid, durum: d }; merke();
+    notiz(`toast: Status ${d}, Meldung „${r.toast}“`);
+    pruefe(d === 'moderasyonda' ? /incelemeye alındı/.test(r.toast) : /yayınlandı/.test(r.toast), `toast: Meldung passt zum Ergebnis (${d})`);
+    await ctx.close();
+  },
   // 1d) Inserate in İlan Onayı → mit dem Test-Admin freigeben; danach Suchindex prüfen.
   async moderasyon() {
     // Drittes Inserat (über die API als A) mit Kapora/IBAN-Hinweis — soll in die Warteschlange.
