@@ -29,11 +29,17 @@ app.use('/uploads', express.static('/var/www/kapbeni/uploads'));
 // Seitenaufruf mitlaeuft. Mit 20 Anfragen je 15 Minuten war ein Nutzer nach rund
 // zwanzig Seitenaufrufen gesperrt — und weil das Frontend einen Fehlschlag von
 // /ben wie eine Abmeldung behandelte, flog er dabei aus seiner Sitzung.
+//
+// Schluessel ist die ECHTE Client-IP (v1.24): ohne keyGenerator sah Express hinter
+// nginx jede Anfrage als 127.0.0.1 — alle Besucher teilten sich EIN Limit, z. B.
+// 20 Anmeldungen je 15 Minuten fuer die ganze Seite. X-Real-IP zaehlt nur, wenn
+// die Anfrage vom lokalen nginx kommt (lib/olay.js istemciIp).
+const ipSchluessel = (req) => require('./lib/olay').istemciIp(req) || 'unbekannt';
 app.use(['/api/auth/giris', '/api/auth/kayit', '/api/auth/kurumsal-kayit'],
-  rateLimit({ windowMs: 15*60*1000, max: 20, message: { hata: 'Çok fazla istek' } }));
+  rateLimit({ windowMs: 15*60*1000, max: 20, keyGenerator: ipSchluessel, message: { hata: 'Çok fazla istek' } }));
 // /ben ist ein billiger, angemeldeter Lesezugriff — grosszuegiger, aber nicht offen.
-app.use('/api/auth/ben', rateLimit({ windowMs: 1*60*1000, max: 60 }));
-app.use('/api', rateLimit({ windowMs: 1*60*1000, max: 120 }));
+app.use('/api/auth/ben', rateLimit({ windowMs: 1*60*1000, max: 60, keyGenerator: ipSchluessel }));
+app.use('/api', rateLimit({ windowMs: 1*60*1000, max: 120, keyGenerator: ipSchluessel }));
 
 // Routes — hepsi /api/* altında
 app.use('/api/auth',       require('./routes/auth'));

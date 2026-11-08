@@ -39,7 +39,12 @@ test('Ereignisse aus den Routen', async () => {
       await q('UPDATE users SET test_verisi=true WHERE id=$1', [r.body.user.id]);
       return r.body;
     };
-    const a = await kayit(1), b = await kayit(2);
+    const a = await kayit(1);
+    // zweites Konto direkt (Registrierungslimit je IP schonen)
+    const bu = (await q(`INSERT INTO users(email,phone,password_hash,ad,test_verisi) VALUES($1,$2,'!','Olay Test',true) RETURNING id`,
+      [`olay2-${z}@test.kapbeni.com`, '+90597' + String(z + 2).slice(-7)])).rows[0];
+    ids.push(bu.id);
+    const b = { user: { id: bu.id }, token: await require('./_hilfe').tokenFuer(bu.id) };
     let r = await rufe('POST', '/auth/giris', { body: { email: `olay1-${z}@test.kapbeni.com`, password: 'falsch' } });
     assert.strictEqual(r.status, 401);
     r = await rufe('POST', '/auth/giris', { body: { email: `olay1-${z}@test.kapbeni.com`, password: 'Test-1234!' }, ip: '176.33.10.8' });
@@ -59,7 +64,7 @@ test('Ereignisse aus den Routen', async () => {
     assert.strictEqual(A[2].ip, '176.33.10.8');
     assert.match(A[0].cihaz, /iPhone/); assert.match(A[0].os, /iOS/);
     const B = (await q('SELECT olay, hedef_id FROM musteri_olaylari WHERE user_id=$1 ORDER BY id', [b.user.id])).rows;
-    assert.deepStrictEqual(B.map((x) => x.olay), ['kayit', 'ilan_duzenle']);
+    assert.deepStrictEqual(B.map((x) => x.olay), ['ilan_duzenle']);
     // Aufbewahrung: ein 3 Jahre alter Eintrag faellt dem Loeschlauf zum Opfer
     await q(`INSERT INTO musteri_olaylari(user_id,olay,created_at) VALUES($1,'giris',NOW()-interval '3 years')`, [a.user.id]);
     assert.ok(await olay.eskileriSil() >= 1);

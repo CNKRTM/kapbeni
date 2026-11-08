@@ -5,7 +5,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const { api, q, adminApi, adminGiris } = require('./_hilfe');
+const { api, q, adminApi, adminGiris, tokenFuer } = require('./_hilfe');
 const arsiv = require('../src/lib/ilanArsiv');
 
 const UP = process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads';
@@ -22,11 +22,12 @@ async function testIlan(uid, titel) {
 
 test('Archiv: Loeschen, Ablehnen, Admin-Entfernen, Aufbewahrung', async () => {
   const z = Date.now(); const ids = [];
+  // Konten direkt anlegen (nicht ueber /auth/kayit — das Registrierungslimit 20/15 min gilt je IP)
   const neu = async (n) => {
-    const r = await api('POST', '/auth/kayit', { body: { email: `arsiv${n}-${z}@test.kapbeni.com`, phone: '0598' + String(z + n).slice(-7), password: 'Test-1234!', ad: 'Arşiv Test' } });
-    assert.strictEqual(r.status, 201, JSON.stringify(r.body)); ids.push(r.body.user.id);
-    await q('UPDATE users SET test_verisi=true WHERE id=$1', [r.body.user.id]);
-    return r.body;
+    const u = (await q(`INSERT INTO users(email,phone,password_hash,ad,test_verisi) VALUES($1,$2,'!','Arşiv Test',true) RETURNING id`,
+      [`arsiv${n}-${z}@test.kapbeni.com`, '+90598' + String(z + n).slice(-7)])).rows[0];
+    ids.push(u.id);
+    return { user: { id: u.id }, token: await tokenFuer(u.id) };
   };
   try {
     const a = await neu(1), b = await neu(2);

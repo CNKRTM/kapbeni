@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.23.1 — 2026-11-08
+
+Rate-Limit je echter Client-IP (hinter nginx), Zeilenenden LF, Tests ohne Registrierungslimit
+
 ## 1.23.0 — 2026-11-08
 
 G: Archiv beendeter Inserate (ilan_arsiv, uploads/archiv nicht oeffentlich, Ablehnen/Admin-Entfernen, 2-Jahres-Cron)
