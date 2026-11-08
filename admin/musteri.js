@@ -14,12 +14,12 @@ const ASKIDA = ['askida', 'banli', 'banlı', 'parked'];
 const GEHEIM = ['password_hash', 'reset_token', 'reset_token_exp', 'email_dogrulama_token', 'telefon_otp', 'otp_expires_at', 'tc_no_hash', 'token_version'];
 const OLAY_TUR = {
   giris: 'giris', giris_basarisiz: 'giris', kayit: 'hesap', ilan_olustur: 'ilan', ilan_duzenle: 'ilan', ilan_sil: 'ilan', ilan_kaldirildi: 'ilan',
-  ilan_reddedildi: 'ilan', mesaj: 'mesaj', teklif: 'teklif', teklif_alindi: 'teklif', sikayet: 'sikayet', belge: 'belge',
+  ilan_reddedildi: 'ilan', ilan_satildi: 'ilan', mesaj: 'mesaj', teklif: 'teklif', teklif_alindi: 'teklif', sikayet: 'sikayet', belge: 'belge',
   hesap_silme_talebi: 'hesap', hesap_silme_iptal: 'hesap', hesap_anonim: 'hesap', hesap_askiya: 'hesap', hesap_aktif: 'hesap',
 };
 const OLAY_AD = {
   giris: 'Giriş', giris_basarisiz: 'Başarısız giriş', kayit: 'Kayıt oldu', ilan_olustur: 'İlan oluşturdu', ilan_duzenle: 'İlan düzenledi',
-  ilan_sil: 'İlanı sildi', ilan_kaldirildi: 'İlan kaldırıldı (admin)', ilan_reddedildi: 'İlan reddedildi', mesaj: 'Mesaj gönderdi',
+  ilan_sil: 'İlanı sildi', ilan_kaldirildi: 'İlan kaldırıldı (admin)', ilan_reddedildi: 'İlan reddedildi', ilan_satildi: 'Satıldı olarak işaretledi', mesaj: 'Mesaj gönderdi',
   teklif: 'Teklif verdi', teklif_alindi: 'Teklif aldı', sikayet: 'Şikayet etti', belge: 'Belge', hesap_silme_talebi: 'Hesap silme talebi',
   hesap_silme_iptal: 'Silme talebi iptal', hesap_anonim: 'Hesap anonimleştirildi', hesap_askiya: 'Hesap askıya alındı', hesap_aktif: 'Askı kaldırıldı',
 };

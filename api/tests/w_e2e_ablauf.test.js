@@ -86,4 +86,42 @@ test('v1.33.4 Anlegen: Meldung richtet sich nach ilan_durum', () => {
   // Verhalten im Browser: api/tests/ui/e2e.js Schritt „toast“
 });
 
+test('v1.33.5 Detail-Nachfrage ?medya=1 zählt keinen Aufruf', async () => {
+  const il = await fremdesTestinserat(KAEUFER);
+  const z = async () => (await q('SELECT goruntulenme FROM ilanlar WHERE id=$1', [il.id])).rows[0].goruntulenme;
+  const a = await z();
+  for (let i = 0; i < 3; i++) assert.strictEqual((await api('GET', `/ilanlar/${il.uuid}?medya=1`)).status, 200);
+  assert.strictEqual(await z(), a);
+  await api('GET', `/ilanlar/${il.uuid}`);
+  assert.strictEqual(await z(), a + 1);
+  await q('UPDATE ilanlar SET goruntulenme=goruntulenme-1 WHERE id=$1', [il.id]);
+});
+
+test('v1.34.0 Satıldı: per uuid, nur Eigentümer, nur aktiv, raus aus dem Index, Ereignis', async () => {
+  const sahip = (await q("SELECT id FROM users WHERE email='elif.koc@test.kapbeni.com' AND test_verisi")).rows[0].id;
+  const { rows } = await q(`INSERT INTO ilanlar(user_id,kategori_id,baslik,aciklama,fiyat,durum,ilan_durum,sehir,ilce)
+    VALUES($1,3,'Test Satildi w_e2e','Satıldı-Test, wird sofort entfernt.',321,'kullanilmis','aktif','İstanbul','Kadıköy') RETURNING id, uuid`, [sahip]);
+  const il = rows[0];
+  const ms = require('../src/lib/meiliSync');
+  try {
+    await ms.syncListing(il.uuid);
+    assert.strictEqual(await indexWarten(il.uuid, true), true);
+    // fremder Nutzer → 404, nichts geaendert
+    assert.strictEqual((await api('PUT', `/ilanlar/${il.uuid}/satildi`, { token: await tokenFuer(KAEUFER), body: {} })).status, 404);
+    const t = await tokenFuer(sahip);
+    assert.strictEqual((await api('PUT', `/ilanlar/${il.uuid}/satildi`, { token: t, body: {} })).status, 200);
+    assert.strictEqual((await q('SELECT ilan_durum FROM ilanlar WHERE id=$1', [il.id])).rows[0].ilan_durum, 'satildi');
+    assert.strictEqual(await indexWarten(il.uuid, false), false, 'nicht mehr im Index');
+    assert.strictEqual((await q("SELECT count(*)::int n FROM musteri_olaylari WHERE user_id=$1 AND olay='ilan_satildi' AND hedef_id=$2", [sahip, String(il.uuid)])).rows[0].n, 1);
+    // zweites Mal: nicht mehr aktiv → 404; Unsinn-Kennung → 404
+    assert.strictEqual((await api('PUT', `/ilanlar/${il.uuid}/satildi`, { token: t, body: {} })).status, 404);
+    assert.strictEqual((await api('PUT', '/ilanlar/abc/satildi', { token: t, body: {} })).status, 404);
+  } finally {
+    await ms.deleteListing(il.uuid);
+    await q("DELETE FROM musteri_olaylari WHERE user_id=$1 AND hedef_id=$2", [sahip, String(il.uuid)]);
+    await q("DELETE FROM audit_log WHERE olay='ilan.satildi' AND hedef_id::text=$1::text", [il.id]).catch(() => {});
+    await q('DELETE FROM ilanlar WHERE id=$1 AND user_id=$2', [il.id, sahip]);
+  }
+});
+
 module.exports = { fremdesTestinserat, KAEUFER, FRONT };

@@ -421,7 +421,7 @@ const SCHRITTE = {
     await foto(page, 'satildi-A');
     // Bewertung / Treuhand: gibt es eine Oberfläche?
     await page.goto(`${BASIS}/#/panel/degerlendirmeler`); await page.reload(); await warte(page, 2000);
-    const degKnopf = await page.getByRole('button', { name: /Değerlendir|Puan ver|Yorum yap/ }).count();
+    const degKnopf = await page.getByRole('button', { name: /^Değerlendir$|Puan ver|Yorum yaz/ }).count();
     pruefe(degKnopf > 0, 'abwicklung: Oberfläche zum Bewerten des Handelspartners');
     await foto(page, 'degerlendirme-A');
     await page.goto(`${BASIS}/#/`); await warte(page, 1200);

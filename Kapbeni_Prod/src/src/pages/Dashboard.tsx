@@ -7,6 +7,7 @@ import ProductCard from '../components/ProductCard'
 import { UyelikChip } from '../components/UyeRozeti'
 import HizliIlanModal from '../components/HizliIlanModal'
 import IlanResim from '../components/IlanResim'
+import OnayModal from '../components/OnayModal'
 
 type Tab = 'ilanlarim' | 'tekliflerim' | 'favorilerim' | 'degerlendirmeler' | 'aramalar' | 'kazancim' | 'dogrulamalar' | 'guven' | 'sikayetlerim'
 
@@ -30,6 +31,16 @@ interface Props {
   refreshSignal?: number
   /** Oeffnet die Verkaufsmaske — fuer "Hızlı İlan Ver – 3 adımda". */
   onOpenSell?: () => void
+}
+
+// Status-Abzeichen in „İlanlarım“ (v1.34.0) — aktive Inserate tragen keins.
+// Farben nur aus dem Styleguide: secondary (blau), tertiary (gruen), primary (rot), Grau.
+const DURUM_ROZET: Record<string, [string, string]> = {
+  moderasyonda: ['İncelemede', 'bg-blue-50 text-secondary border border-blue-200'],
+  satildi: ['Satıldı', 'bg-green-50 text-tertiary border border-green-200'],
+  reddedildi: ['Reddedildi', 'bg-red-50 text-primary border border-red-200'],
+  pasif: ['Yayında değil', 'bg-gray-100 text-gray-600 border border-gray-200'],
+  askida: ['İşlemde', 'bg-gray-100 text-gray-600 border border-gray-200'],
 }
 
 export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNavigateSettings, initialTab, onTabChange, onEditListing, refreshSignal, onOpenSell }: Props) {
@@ -58,6 +69,10 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
   // Ansicht auf dem alten Reiter stehen, waehrend die URL etwas anderes sagt.
   useEffect(() => { setTab((initialTab as Tab) || 'ilanlarim') }, [initialTab])
   const [ilanlar, setIlanlar] = useState<Listing[]>([])
+  // „Satıldı olarak işaretle“ (v1.34.0): Ziel der Bestaetigung + Fehlermeldung
+  const [satildiZiel, setSatildiZiel] = useState<string | null>(null)
+  const [satildiLaeuft, setSatildiLaeuft] = useState(false)
+  const [satildiHata, setSatildiHata] = useState<string | null>(null)
   const [favoriler, setFavoriler] = useState<Listing[]>([])
   const [degerlendirmeler, setDegerlendirmeler] = useState<any[]>([])
   const [degStats, setDegStats] = useState<{ ortalama: number; sayi: number } | null>(null)
@@ -104,7 +119,9 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
           image: l.ana_foto || l.image || 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=600&q=70',
           description: l.aciklama || l.description || '',
           sellerName: u?.ad || '', sellerPhone: '', isFavorite: false, condition: 'İkinci El',
-        })))
+          // Status fuer das Abzeichen (İncelemede / Satıldı / Reddedildi / Pasif)
+          ilanDurum: l.ilan_durum || 'aktif',
+        } as Listing & { ilanDurum: string })))
       }).catch(() => {}).finally(done)
     } else if (tab === 'favorilerim') {
       // Zusaetzlich absichern: eine unerwartete Antwortform darf nie wieder
@@ -303,14 +320,29 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
                 // Karte sitzt (das steht auf absolute top-2 right-2).
                 <div key={l.id} className="relative">
                   <ProductCard listing={l} isGridView={true} onSelect={() => onSelectProduct(l)} onToggleFavorite={() => {}} />
-                  {onEditListing && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onEditListing(l.id) }}
-                      className="absolute top-2 left-2 z-10 flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-primary bg-white/95 border border-gray-200 hover:border-primary rounded-lg px-2 py-1 shadow-sm transition-colors cursor-pointer"
-                    >
-                      <i className="ti ti-pencil" style={{ fontSize: 13 }} /> Düzenle
-                    </button>
-                  )}
+                  <div className="absolute top-2 left-2 z-10 flex flex-wrap items-center gap-1.5 pr-12">
+                    {onEditListing && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onEditListing(l.id) }}
+                        className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-primary bg-white/95 border border-gray-200 hover:border-primary rounded-lg px-2 py-1 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <i className="ti ti-pencil" style={{ fontSize: 13 }} /> Düzenle
+                      </button>
+                    )}
+                    {(l as any).ilanDurum === 'aktif' && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSatildiHata(null); setSatildiZiel(l.id) }}
+                        className="flex items-center gap-1 text-xs font-semibold text-gray-600 hover:text-tertiary bg-white/95 border border-gray-200 hover:border-tertiary rounded-lg px-2 py-1 shadow-sm transition-colors cursor-pointer"
+                      >
+                        <i className="ti ti-circle-check" style={{ fontSize: 13 }} /> Satıldı
+                      </button>
+                    )}
+                    {DURUM_ROZET[(l as any).ilanDurum] && (
+                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide shadow-sm ${DURUM_ROZET[(l as any).ilanDurum][1]}`}>
+                        {DURUM_ROZET[(l as any).ilanDurum][0]}
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -550,6 +582,26 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
       </div>
     )}
     {onOpenSell && <HizliIlanModal offen={hizliOffen} onKapat={() => setHizliOffen(false)} onIlanVer={onOpenSell} />}
+    <OnayModal
+      offen={satildiZiel != null}
+      titel="Satıldı olarak işaretle"
+      text={satildiHata || 'İlan yayından kalkar ve aramalarda görünmez. Bu işlem geri alınamaz. Ürün satıldı mı?'}
+      bestaetigen="Evet, satıldı"
+      icon="circle-check"
+      laeuft={satildiLaeuft}
+      onAbbrechen={() => { setSatildiZiel(null); setSatildiHata(null) }}
+      onBestaetigen={async () => {
+        if (!satildiZiel) return
+        setSatildiLaeuft(true)
+        try {
+          await ve.put(`/ilanlar/${satildiZiel}/satildi`, {})
+          setIlanlar((prev) => prev.map((x) => x.id === satildiZiel ? ({ ...x, ilanDurum: 'satildi' } as any) : x))
+          setSatildiZiel(null)
+        } catch (err: any) {
+          setSatildiHata('İşaretlenemedi: ' + (err?.message || 'Lütfen tekrar deneyin.'))
+        } finally { setSatildiLaeuft(false) }
+      }}
+    />
     </>
   )
 }

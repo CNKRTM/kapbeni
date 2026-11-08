@@ -719,10 +719,20 @@ router.post('/ai/fiyat-oner', authMiddleware, async (req, res) => {
 });
 
 // Satıldı işaretle
+// Akzeptiert die numerische id ODER die uuid (das Panel kennt nur die uuid, v1.34.0).
+// Nur aktive Inserate; danach aus dem Suchindex und als Ereignis in die Kundenakte.
 router.put('/:id/satildi', authMiddleware, async (req, res) => {
-  const { rows } = await query("UPDATE ilanlar SET ilan_durum='satildi' WHERE id=$1 AND user_id=$2 RETURNING id",[req.params.id, req.user.id]);
-  if(!rows[0]) return res.status(404).json({ hata:'İlan bulunamadı' });
-  res.json({ ok:true });
+  try {
+    const k = String(req.params.id || '');
+    const istUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k);
+    if (!istUuid && !/^\d{1,10}$/.test(k)) return res.status(404).json({ hata:'İlan bulunamadı' });
+    const { rows } = await query(`UPDATE ilanlar SET ilan_durum='satildi' WHERE ${istUuid ? 'uuid' : 'id'}=$1 AND user_id=$2 AND ilan_durum='aktif' RETURNING id, uuid, baslik, fiyat`, [k, req.user.id]);
+    if(!rows[0]) return res.status(404).json({ hata:'İlan bulunamadı veya yayında değil' });
+    await meiliSync.deleteListing(String(rows[0].uuid));
+    await auditLog('ilan.satildi', 'api', { userId: req.user.id, hedefTip:'ilan', hedefId: rows[0].id });
+    olay.kaydet(req, { userId: req.user.id, olay: 'ilan_satildi', hedefTip: 'ilan', hedefId: rows[0].uuid, detay: { baslik: rows[0].baslik, fiyat: rows[0].fiyat } });
+    res.json({ ok:true });
+  } catch (e) { console.error('[satildi]', e.message); res.status(500).json({ hata: 'İşlem yapılamadı' }); }
 });
 // Yeniden yayınla (+30 gün)
 router.put('/:id/yeniden', authMiddleware, async (req, res) => {
