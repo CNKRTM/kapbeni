@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.24.0 — 2026-11-08
+
+L: Testkunden-Seed (8 Demo-Kunden, Inserate, Ereignisse), users.cinsiyet, musteri_belgeleri
+
 ## 1.23.1 — 2026-11-08
 
 Rate-Limit je echter Client-IP (hinter nginx), Zeilenenden LF, Tests ohne Registrierungslimit
