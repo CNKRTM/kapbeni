@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.29.0 — 2026-11-08
+
+Admin SİSTEM → Medya Motoru: Kacheln, Jobliste mit Filter und Tekrar dene, Einstellungen in der DB (Auftragssammlung J)
+
 ## 1.28.0 — 2026-11-08
 
 Medya Motoru (kapbeni-media, :3901): Videos asynchron, max. 60 s, immer 720p H.264 CRF 28/AAC 96k/faststart, WebP-Poster, Medya işleniyor (Auftragssammlung J)

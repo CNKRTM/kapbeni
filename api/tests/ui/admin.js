@@ -314,6 +314,24 @@ const SZENARIEN = {
     await page.locator('#view a.kp-no').first().click(); await page.waitForSelector('.akte-kopf', { timeout: 8000 });
     pruefe(/#\/musteri\/KP-/.test(page.url()), `${b}: Abzeichen → Akte`);
   },
+  // SİSTEM → Medya Motoru (v1.29): Kacheln, Reiter per Hash, Filter in der Adresse, Zurück
+  async medya(page, b) {
+    await anmelden(page);
+    await page.goto(BASIS + '#/medya'); await page.waitForSelector('#view .stat-card', { timeout: 8000 });
+    pruefe(await page.locator('#view .stat-card').count() === 6, `${b}: sechs Kacheln`);
+    pruefe(/Motor çalışıyor/.test(await page.locator('#view').innerText()), `${b}: Motor online`);
+    pruefe(!/Hazırlanıyor/.test(await page.locator('#view').innerText()), `${b}: kein Platzhalter mehr`);
+    await page.click('a.akte-tab:has-text("İşler")'); await page.waitForSelector('#mi-tbody tr', { timeout: 8000 });
+    await page.selectOption('#mi-tip', 'bild'); await page.waitForTimeout(900);
+    pruefe(page.url().includes('#/medya/isler?tip=bild'), `${b}: Filter steht in der Adresse`);
+    await page.click('a.akte-tab:has-text("Ayarlar")'); await page.waitForSelector('#ma-video_max_sn', { timeout: 8000 });
+    pruefe(await page.inputValue('#ma-video_max_sn') === '60', `${b}: Videolänge 60 s`);
+    await page.screenshot({ path: `${AUS}/admin-medya-ayarlar-${page.viewportSize().width}.png` });
+    await page.goBack(); await page.waitForTimeout(900);
+    pruefe(page.url().includes('#/medya/isler?tip=bild') && await page.inputValue('#mi-tip') === 'bild', `${b}: Zurück → İşler mit Filter`);
+    await page.goBack(); await page.waitForTimeout(900);
+    pruefe(page.url().endsWith('#/medya'), `${b}: Zurück → Genel bakış`);
+  },
 };
 
 (async () => {

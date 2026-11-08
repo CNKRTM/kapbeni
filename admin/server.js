@@ -941,6 +941,8 @@ app.get('/admin/api/abonelikler', adminAuth, async (req, res) => {
 require('./musteri')(app, { db, adminAuth, auditAdmin, clientIp, arsivZeile, olayLib });
 // ── KATEGORİLER + ÖZELLİKLER (v1.27, admin/kategori.js) ──
 require('./kategori')(app, { db, adminAuth, auditAdmin });
+// ── MEDYA MOTORU (v1.29, admin/medya.js) ──
+require('./medya')(app, { db, adminAuth, auditAdmin });
 
 // ── ADMIN UI (Single Page) ─────────────────────────────────────────────
 

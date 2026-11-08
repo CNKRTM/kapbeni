@@ -592,8 +592,7 @@ const SIDEBAR=[
   ]},
   {id:'sistem',label:'Sistem',items:[
     {id:'entegrasyonlar',icon:'🔌',label:'Entegrasyonlar',yeni:'2026-11-08'},
-    {id:'medya',icon:'🎞️',label:'Medya Motoru',hazirlaniyor:true,
-      aciklama:'Görsel ve videolar için kendi medya motoru: küçültme, WebP/AVIF, filigran, arşiv.'},
+    {id:'medya',icon:'🎞️',label:'Medya Motoru',yeni:'2026-11-08'},
     {id:'yedekleme',icon:'💾',label:'Yedekleme',hazirlaniyor:true,
       aciklama:'Gece yedeği (veritabanı + yüklemeler + harici kopya), yedek geçmişi ve geri yükleme testi.'},
     {id:'waayar',icon:'📱',label:'WhatsApp Ayarları'},
@@ -751,7 +750,7 @@ function routeAnwenden(){
     destektickets:vDestekTickets,oneriler:vOneriler,
     abonelikler:vAbonelikler,paketler:vPaketler,kuponlar:vKuponlar,
     vitaminler:vVitaminler,slider:vSlider,kategoriler:vKategoriler,
-    waayar:vWaAyar,entegrasyonlar:vEntegrasyonlar,ayarlar:vAyarlar
+    waayar:vWaAyar,entegrasyonlar:vEntegrasyonlar,ayarlar:vAyarlar,medya:vMedya
   };
   (views[r]||vDashboard)();
 }
@@ -2054,6 +2053,112 @@ async function vSlider(){
 // ═══════════════════════════════════════════════
 let KAT_LISTE=null;
 async function katLaden(neu){ if(!KAT_LISTE||neu) KAT_LISTE=await api('/kategoriler'); return KAT_LISTE; }
+// ═══════════════════════════════════════════════
+// MEDYA MOTORU (v1.29) — SİSTEM → Medya Motoru
+// Reiter per Hash: #/medya (Genel), #/medya/isler?durum=&tip=&ara=, #/medya/ayarlar
+// ═══════════════════════════════════════════════
+const MB=b=>(Number(b||0)/1048576).toLocaleString('tr-TR',{maximumFractionDigits:1})+' MB';
+const MEDYA_DURUM={bekliyor:['Kuyrukta','amber'],isleniyor:['İşleniyor','blue'],tamam:['Tamam','green'],hata:['Hata','red']};
+const MEDYA_TIP={bild:'Görsel',bild_sm:'Küçük görsel (arşiv)',video:'Video'};
+function medyaKopf(aktiv){ return `<nav class="akte-tabs" style="margin-bottom:16px">${[['genel','Genel bakış','#/medya'],['isler','İşler','#/medya/isler'],['ayarlar','Ayarlar','#/medya/ayarlar']]
+  .map(([k,l,h])=>`<a class="akte-tab${aktiv===k?' on':''}" href="${h}">${l}</a>`).join('')}</nav>`; }
+async function vMedya(){
+  const {arg}=aktuelleRoute();
+  if(arg==='isler') return vMedyaIsler();
+  if(arg==='ayarlar') return vMedyaAyarlar();
+  Vloading();
+  const [o,son]=await Promise.all([api('/medya/ozet'),api('/medya/isler?durum=hata').catch(()=>({isler:[]}))]);
+  if(!o||o.bekliyor===undefined) return V(medyaKopf('genel')+'<div class="card"><div class="card-body">Veriler alınamadı.</div></div>');
+  const t=o.tasarruf, kazanc=Math.max(0,t.once-t.sonra), yuzde=t.once?Math.round(kazanc/t.once*100):0;
+  const sn=ms=>ms==null?'—':(ms/1000).toLocaleString('tr-TR',{maximumFractionDigits:1})+' sn';
+  const d=o.disk||{}, dolu=d.toplam?Math.round((1-d.bos/d.toplam)*100):null;
+  V(medyaKopf('genel')+`
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+    ${o.motor.cevrimici?`<span class="badge green">● Motor çalışıyor</span><span style="font-size:12.5px;color:#64748b">${o.motor.aktif} iş işleniyor · ${Math.round((o.motor.seit||0)/60)} dk'dır açık</span>`
+      :'<span class="badge red">● Motor yanıt vermiyor</span><span style="font-size:12.5px;color:#64748b">İşler veritabanında bekler; motor açılınca devam eder.</span>'}
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px;margin-bottom:16px">
+    <a href="#/medya/isler?durum=bekliyor" style="text-decoration:none">${statCard('Kuyrukta',fmt(o.bekliyor),'sıradaki işler','#b45309','⏳')}</a>
+    <a href="#/medya/isler?durum=isleniyor" style="text-decoration:none">${statCard('İşleniyor',fmt(o.isleniyor),'en fazla 2 paralel','#1d4ed8','⚙️')}</a>
+    <a href="#/medya/isler?durum=hata" style="text-decoration:none">${statCard('Başarısız',fmt(o.hata),'tekrar denenebilir','#b91c1c','⚠️')}</a>
+    ${statCard('Tasarruf',MB(kazanc),`%${yuzde} · ${fmt(t.adet)} dosya (${MB(t.once)} → ${MB(t.sonra)})`,'#15803d','💾')}
+    ${statCard('Ortalama süre',sn(o.sure.video?.ort_ms),`video · görsel ${sn(o.sure.bild?.ort_ms)} (30 gün)`,'#1a2e4a','⏱️')}
+    ${statCard('Disk',dolu==null?'—':'%'+dolu,`boş ${MB(d.bos)} · ilanlar ${MB(d.ilanlar?.bayt)} · arşiv ${MB(d.arsiv?.bayt)} · geçici ${MB(d.gecici?.bayt)}`,'#1a2e4a','🗄️')}
+  </div>
+  <div class="card"><div class="card-body">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><p class="section-title" style="margin:0">Son hatalar</p><a class="btn btn-secondary btn-sm" href="#/medya/isler?durum=hata">Tümü →</a></div>
+    ${(son.isler||[]).slice(0,5).map(medyaZeileKurz).join('')||'<p style="color:#94a3b8;font-size:13px">Hata yok.</p>'}
+  </div></div>`);
+}
+function medyaZeileKurz(j){
+  return `<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-top:1px solid #f1f5f9;font-size:13px">
+    <span class="badge red">#${j.id}</span><div style="flex:1;min-width:0"><b>${escH(MEDYA_TIP[j.tip]||j.tip)}</b> · ${escH(j.baslik||'—')} ${j.musteri_no?`<a href="#/musteri/${encodeURIComponent(j.musteri_no)}/ilanlar" class="badge gray">${escH(j.musteri_no)}</a>`:''}
+    <div style="color:#b91c1c;font-size:12.5px;margin-top:2px">${escH(j.hata_kullanici||'')}</div></div>
+    ${j.tekrar?`<button class="btn btn-secondary btn-sm" onclick="medyaTekrar(${j.id})">Tekrar dene</button>`:''}</div>`;
+}
+async function vMedyaIsler(){
+  const {q}=aktuelleRoute();
+  const f={durum:q.get('durum')||'',tip:q.get('tip')||'',ara:q.get('ara')||'',sayfa:+(q.get('sayfa')||1)};
+  if(!el('mi-tbody')){
+    V(medyaKopf('isler')+`<div class="card" style="margin-bottom:12px"><div class="card-body" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+      <div><label for="mi-durum">Durum</label><select id="mi-durum" onchange="medyaFiltre()"><option value="">Tümü</option>${Object.entries(MEDYA_DURUM).map(([k,[l]])=>`<option value="${k}">${l}</option>`).join('')}</select></div>
+      <div><label for="mi-tip">Tür</label><select id="mi-tip" onchange="medyaFiltre()"><option value="">Tümü</option>${Object.entries(MEDYA_TIP).map(([k,l])=>`<option value="${k}">${l}</option>`).join('')}</select></div>
+      <div style="flex:1;min-width:200px"><label for="mi-ara">Ara</label><input id="mi-ara" placeholder="İlan başlığı, müşteri no, ilan UUID" onkeydown="if(event.key==='Enter')medyaFiltre()"></div>
+      <button class="btn btn-secondary" onclick="medyaFiltre()">Filtrele</button></div></div>
+      <div class="card" style="overflow-x:auto"><table style="min-width:860px"><thead><tr><th>#</th><th>Tür</th><th>Durum</th><th>İlan / müşteri</th><th>Boyut</th><th>Süre</th><th>Deneme</th><th>Zaman</th><th></th></tr></thead><tbody id="mi-tbody"></tbody></table></div>
+      <div id="mi-sayfa" style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px"></div>`);
+  }
+  el('mi-durum').value=f.durum; el('mi-tip').value=f.tip; el('mi-ara').value=f.ara;
+  el('mi-tbody').innerHTML='<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:30px">Yükleniyor…</td></tr>';
+  const p=new URLSearchParams(); for(const k of ['durum','tip','ara']) if(f[k]) p.set(k,f[k]); if(f.sayfa>1) p.set('sayfa',f.sayfa);
+  const d=await api('/medya/isler?'+p.toString()).catch(()=>({isler:[]}));
+  const tarih=x=>x?new Date(x).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+  el('mi-tbody').innerHTML=(d.isler||[]).map(j=>{ const [dl,dc]=MEDYA_DURUM[j.durum]||[j.durum,'gray'];
+    const boyut=j.boyut_once?`${MB(j.boyut_once)}${j.boyut_sonra?' → '+MB(j.boyut_sonra):''}`:'—';
+    return `<tr><td>${j.id}</td><td>${escH(MEDYA_TIP[j.tip]||j.tip)}${j.senkron?' <span class="badge gray" title="Yükleme sırasında API içinde işlendi">senkron</span>':''}${j.detay?.bestand?' <span class="badge purple">arşiv</span>':''}</td>
+      <td><span class="badge ${dc}">${dl}</span>${j.hata?`<div style="font-size:12px;color:#b91c1c;margin-top:4px;max-width:280px">${escH(j.hata_kullanici||'')}<br><span style="color:#94a3b8">${escH(String(j.hata).slice(0,160))}</span></div>`:''}</td>
+      <td style="max-width:260px">${j.ilan_uuid?`<span style="font-weight:600">${escH(j.baslik||'(silinmiş ilan)')}</span>`:'—'}${j.musteri_no?` <a class="badge gray" href="#/musteri/${encodeURIComponent(j.musteri_no)}/ilanlar">${escH(j.musteri_no)}</a>`:''}</td>
+      <td style="white-space:nowrap">${boyut}</td><td>${j.sure_ms!=null?(j.sure_ms/1000).toLocaleString('tr-TR',{maximumFractionDigits:1})+' sn':'—'}</td><td>${j.deneme}</td><td style="white-space:nowrap">${tarih(j.created_at)}</td>
+      <td>${j.tekrar?`<button class="btn btn-secondary btn-sm" onclick="medyaTekrar(${j.id})">Tekrar dene</button>`:''}</td></tr>`; }).join('')
+    ||'<tr><td colspan="9" style="text-align:center;color:#94a3b8;padding:30px">Kayıt yok.</td></tr>';
+  el('mi-sayfa').innerHTML=(f.sayfa>1?`<button class="btn btn-secondary btn-sm" onclick="medyaFiltre(${f.sayfa-1})">← Önceki</button>`:'')+(d.sonraki?`<button class="btn btn-secondary btn-sm" onclick="medyaFiltre(${f.sayfa+1})">Sonraki →</button>`:'');
+}
+// Filter stehen in der Adresse (replaceState): Zurueck aus einer Kundenakte stellt sie wieder her.
+function medyaFiltre(sayfa=1){
+  const p=new URLSearchParams(); const v={durum:el('mi-durum').value,tip:el('mi-tip').value,ara:el('mi-ara').value.trim()};
+  for(const k in v) if(v[k]) p.set(k,v[k]); if(sayfa>1) p.set('sayfa',sayfa);
+  history.replaceState(null,'','#/medya/isler'+(p.toString()?'?'+p:'')); vMedyaIsler();
+}
+async function medyaTekrar(id){
+  const r=await fetch(API+'/medya/isler/'+id+'/tekrar',{method:'POST',headers:H()}); const j=await r.json().catch(()=>({}));
+  if(!r.ok) return showToast(j.hata||'Tekrar denenemedi','err');
+  showToast('İş yeniden kuyruğa alındı'); vMedya();
+}
+async function vMedyaAyarlar(){
+  Vloading();
+  const d=await api('/medya/ayarlar');
+  const a=d.ayarlar, g=d.sinirlar, ro=d.duzenleyebilir?'':'disabled';
+  const feld=(k,l,einheit,hilfe)=>`<div><label for="ma-${k}">${l}</label><div style="display:flex;align-items:center;gap:6px"><input id="ma-${k}" type="number" min="${g[k][0]}" max="${g[k][1]}" value="${a[k]}" ${ro} style="max-width:130px"><span style="font-size:12.5px;color:#64748b">${einheit}</span></div>
+    <p style="font-size:11.5px;color:#94a3b8;margin-top:3px">${hilfe} · izin: ${g[k][0]}–${g[k][1]} · standart ${d.standart[k]}</p></div>`;
+  V(medyaKopf('ayarlar')+`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;align-items:start">
+    <div class="card"><div class="card-body" style="display:grid;gap:12px"><p class="section-title" style="margin:0">Görseller</p>
+      ${feld('lg_px','Büyük boyut (_lg)','px','Detay ve büyütme')}${feld('lg_q','Büyük kalite','WebP q','')}
+      ${feld('sm_px','Küçük boyut (_sm)','px','Kartlar, listeler, müşteri dosyası')}${feld('sm_q','Küçük kalite','WebP q','')}
+      <p style="font-size:12px;color:#64748b">Yeni ayarlar yalnızca yeni yüklemelere uygulanır; mevcut dosyalar değişmez.</p></div></div>
+    <div class="card"><div class="card-body" style="display:grid;gap:12px"><p class="section-title" style="margin:0">Video</p>
+      ${feld('video_max_sn','En uzun video','sn','Daha uzun videolar yüklemede reddedilir')}${feld('video_yukseklik','Yükseklik','px','H.264, faststart')}
+      ${feld('video_crf','CRF','','Yüksek = küçük dosya')}${feld('video_ses_kbit','Ses','kbit/s','AAC')}
+      ${feld('paralel','Paralel iş','','ffmpeg ~4,6 çekirdek kullanır')}</div></div>
+  </div>
+  <div style="margin-top:12px;display:flex;gap:10px;align-items:center">${d.duzenleyebilir?'<button class="btn btn-primary" onclick="medyaAyarKaydet()">Kaydet</button>':'<span class="badge gray">Yalnızca süper yönetici değiştirebilir</span>'}</div>`);
+}
+async function medyaAyarKaydet(){
+  const keys=['lg_px','lg_q','sm_px','sm_q','video_max_sn','video_yukseklik','video_crf','video_ses_kbit','paralel'];
+  const body={}; for(const k of keys) body[k]=+el('ma-'+k).value;
+  const r=await fetch(API+'/medya/ayarlar',{method:'POST',headers:{...H(),'Content-Type':'application/json'},body:JSON.stringify(body)}); const j=await r.json().catch(()=>({}));
+  if(!r.ok) return showToast(j.hata||'Kaydedilemedi','err');
+  showToast('Ayarlar kaydedildi (en geç 10 sn içinde etkin)'); vMedyaAyarlar();
+}
 function katKopf(aktiv){ return `<nav class="akte-tabs" style="margin-bottom:16px">${[['kategoriler','Kategoriler','#/kategoriler'],['ozellikler','Özellikler (marka, seçenekler)','#/kategoriler/ozellikler']]
   .map(([k,l,h])=>`<a class="akte-tab${aktiv===k?' on':''}" href="${h}">${l}</a>`).join('')}</nav>`; }
 async function vKategoriler(){
