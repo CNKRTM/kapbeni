@@ -1675,15 +1675,16 @@ Vorlage: Santral `docs/LOGIN-EFFEKTE.md` (live santral.compendus.com). Farben st
 - **Website** (`lib/girisEfekt.ts` — gleiche Logik als DOM-Helfer; CSS am Ende von `index.css`,
   Klassen `.kp-glas`, `.kp-streif`): AuthModal Login und Registrierung als Glaskarte mit Streifen auf
   dem abgedunkelten Hintergrund, Glanzstreifen auf dem Hauptknopf, Schütteln bei Fehler.
-  **Einklappen nur beim Login und nur mit Maus** (`(hover: hover) and (pointer: fine)`): am Handy ist das
-  Fenster ein Bottom-Sheet, die Registrierung ein langes Formular — beide starten offen. Die Karte
+  Einklappen beim Login auf allen Geräten (**v1.36.1**, Burak: „Ja, auch einklappen“ — v1.36.0 klappte nur
+  mit Maus ein): am Handy sitzt die Kachel unten mittig (rundum 20 px, 32 px über dem Rand) und wächst
+  beim Tippen zum Bottom-Sheet; zu erst wieder per `focusout`. Die Registrierung startet offen. Die Karte
   trägt einen festen `className`, damit React die per DOM gesetzten Klassen `intro/reveal/shake` nicht
   überschreibt.
 - **Google-Knopf** war schon ein eigener Knopf mit voller Breite (kein GSI-Button, Login „Yakında“) —
   gemessen genau so breit wie die Felder (Admin 352/310 px, Website 408/350 px). Wenn Google live geht
   und auf `renderButton` umgestellt wird: Breite aus `clientWidth` (200–400) + ResizeObserver wie Santral.
 - `prefers-reduced-motion: reduce` schaltet Streifen, Intro und Animationen ab, die Karte bleibt offen.
-- **Test** `api/tests/ui/giris-efekt.js` (1280/390 px, 56 Prüfungen; Kunden-Login ohne Anmeldung,
+- **Test** `api/tests/ui/giris-efekt.js` (1280/390 px, 59 Prüfungen; Kunden-Login ohne Anmeldung,
   Admin-Teil mit Test-Admin id=3, Passwort aus `/root/kp-admin-test.pw`, nie ausgegeben). Vorher gegen
   Admin :3912 + Vorschau :3905, danach live ALLES OK, Suite 47/47, Test-Admin wieder `aktif=false`.
 
