@@ -106,11 +106,13 @@ cron.schedule('30 3 * * *', async () => {
 }, { timezone: 'Europe/Istanbul' });
 
 // Täglich 04:00: Aufbewahrungsfristen (5651 / Auftragssammlung A, G) — Ereignisprotokoll
-// musteri_olaylari nach 2 Jahren loeschen (lib/olay.js).
+// musteri_olaylari (lib/olay.js) und ilan_arsiv samt Dateien (lib/ilanArsiv.js) nach 2 Jahren loeschen.
 cron.schedule('0 4 * * *', async () => {
   try {
     const n = await require('./olay').eskileriSil();
     console.log(`[CRON] musteri_olaylari: ${n} Einträge älter als 2 Jahre gelöscht`);
+    const m = await require('./ilanArsiv').eskileriSil();
+    console.log(`[CRON] ilan_arsiv: ${m} Snapshots älter als 2 Jahre samt Dateien gelöscht`);
   } catch (err) {
     console.error('[CRON] Olay-Aufbewahrung hatası:', err.message);
   }

@@ -17,6 +17,9 @@ app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({ origin: '*', methods: ['GET','POST','PUT','DELETE','PATCH'] }));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan('combined'));
+// Archiv beendeter Inserate (Auftragssammlung G) ist NIE oeffentlich — der Admin
+// liest es ueber /admin/api/arsiv/dosya/… (authentifiziert). Muss vor dem Static stehen.
+app.use(['/uploads/archiv', '/uploads/kyc_temp', '/uploads/belgeler'], (req, res) => res.status(404).json({ hata: 'Bulunamadı' }));
 app.use('/uploads', express.static('/var/www/kapbeni/uploads'));
 
 // Rate limiting

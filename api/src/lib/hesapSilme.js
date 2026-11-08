@@ -102,8 +102,11 @@ async function anonimlestir(userId, { kaynak = 'cron' } = {}) {
   });
   if (!sonuc) return false;
   try { const { deleteListing } = require('./meiliSync'); for (const uuid of sonuc.ilanlar) await deleteListing(uuid); } catch {}
+  // Auftragssammlung G: Bilder der beendeten Inserate ins Archiv (Snapshot je Inserat).
+  let arsiv = 0;
+  try { arsiv = await require('./ilanArsiv').kontoArsivle(userId); } catch (e) { console.error('[hesapSilme] Archiv:', e.message); }
   await auditLog('hesap.anonimlestirildi', kaynak, { userId, hedefTip: 'user', hedefId: userId,
-    detay: { beendete_ilanlar: sonuc.ilanlar.length } });
+    detay: { beendete_ilanlar: sonuc.ilanlar.length, arsivlenen: arsiv } });
   return true;
 }
 

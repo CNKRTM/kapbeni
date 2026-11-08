@@ -18,6 +18,8 @@ const rateLimit = require('../api/node_modules/express-rate-limit');
 
 const app = express();
 const entegrasyon = require('../api/src/lib/entegrasyon');
+const ilanArsiv = require('../api/src/lib/ilanArsiv');
+const olayLib = require('../api/src/lib/olay');
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(express.json());
@@ -367,11 +369,66 @@ app.post('/admin/api/ilanlar/:id/onayla', adminAuth, async (req, res) => {
   res.json({ mesaj: 'İlan onaylandı' });
 });
 
+// Ablehnen: Inserat bleibt (der Eigentuemer sieht es als abgelehnt), zusaetzlich
+// Snapshot + KOPIE der Bilder ins Archiv (Auftragssammlung G, v1.23).
 app.post('/admin/api/ilanlar/:id/reddet', adminAuth, async (req, res) => {
   const { sebep } = req.body;
   await db.query("UPDATE ilanlar SET ilan_durum='reddedildi', ai_not=$1 WHERE id=$2", [sebep, req.params.id]);
   await auditAdmin('ilan.reddet', req.admin.id, { hedefTip:'ilan', hedefId:+req.params.id, detay:{sebep} });
+  try {
+    const a = await ilanArsiv.ilanKopieArsivle(+req.params.id, { grund: 'reddedildi', grundDetay: sebep || null, kaynak: 'admin', adminId: req.admin.id, ip: clientIp(req) });
+    const u = (await db.query('SELECT user_id, uuid FROM ilanlar WHERE id=$1', [req.params.id])).rows[0];
+    if (u) await olayLib.yaz({ userId: u.user_id, olay: 'ilan_reddedildi', hedefTip: 'ilan', hedefId: u.uuid, ip: null, userAgent: '', detay: { sebep: sebep || null, arsiv_id: a && a.arsiv_id } });
+  } catch (e) { console.error('[reddet/arsiv]', e.message); }
   res.json({ mesaj: 'İlan reddedildi' });
+});
+
+// Entfernen durch den Admin (Kundenakte → İlanlar → Kaldır): derselbe Loeschweg wie
+// beim Eigentuemer (lib/ilanArsiv.js) — 409 bei laufender Transaktion, Archiv, Meili, audit.
+app.delete('/admin/api/ilanlar/:uuid', adminAuth, async (req, res) => {
+  try {
+    const sebep = String(req.body?.sebep || '').trim().slice(0, 500);
+    if (!sebep) return res.status(400).json({ hata: 'Kaldırma sebebi zorunludur' });
+    const r = await ilanArsiv.ilanSilVeArsivle({ uuid: req.params.uuid, grund: 'admin_kaldirdi', grundDetay: sebep,
+      kaynak: 'admin', adminId: req.admin.id, ip: clientIp(req), audit: { kaynak: 'admin', adminId: req.admin.id } });
+    if (!r.ok) return res.status(r.status).json({ hata: r.hata });
+    await olayLib.yaz({ userId: r.user_id, olay: 'ilan_kaldirildi', hedefTip: 'ilan', hedefId: req.params.uuid, ip: null, userAgent: '', detay: { sebep, arsiv_id: r.arsiv_id } });
+    res.json({ ok: true, arsiv_id: r.arsiv_id });
+  } catch (e) { console.error('[admin/ilan-sil]', e.message); res.status(500).json({ hata: 'İlan kaldırılamadı' }); }
+});
+
+// ── ARŞİV (Auftragssammlung G): Snapshot + Bilder nur fuer angemeldete Admins ──
+// <img> kann keinen Bearer-Header senden, deshalb tragen die Bild-Adressen ein
+// kurzlebiges, signiertes Token (30 min) mit Sitzungs-ID; die Route prueft es und
+// ob die Sitzung offen und nicht gesperrt ist.
+function arsivDosyaUrl(req, id, n) {
+  const t = jwt.sign({ k: 'arsiv', id: String(id), n: String(n), sid: req.admin.sid }, process.env.JWT_SECRET, { expiresIn: '30m' });
+  return `arsiv/dosya/${id}/${n}?t=${encodeURIComponent(t)}`;
+}
+function arsivZeile(req, a) {
+  const bilder = (a.bilder || []).map((b, n) => ({ url: b.arsiv ? arsivDosyaUrl(req, a.id, n) : b.url, arsivde: !!b.arsiv }));
+  const video = a.video ? { url: a.video.arsiv ? arsivDosyaUrl(req, a.id, 'v') : a.video.url, arsivde: !!a.video.arsiv } : null;
+  return { ...a, bilder, video };
+}
+app.get('/admin/api/arsiv/:id(\\d+)', adminAuth, async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM ilan_arsiv WHERE id=$1', [req.params.id]);
+  if (!rows[0]) return res.status(404).json({ hata: 'Arşiv kaydı yok' });
+  res.json(arsivZeile(req, rows[0]));
+});
+app.get('/admin/api/arsiv/dosya/:id(\\d+)/:n', async (req, res) => {
+  try {
+    const d = jwt.verify(String(req.query.t || ''), process.env.JWT_SECRET);
+    if (d.k !== 'arsiv' || d.id !== req.params.id || d.n !== req.params.n) return res.status(403).end();
+    const o = (await db.query('SELECT kapandi_at, kilitli, bitis FROM admin_oturumlar WHERE id=$1', [d.sid])).rows[0];
+    if (!o || o.kapandi_at || o.kilitli || new Date(o.bitis) < new Date()) return res.status(401).end();
+    const a = (await db.query('SELECT bilder, video FROM ilan_arsiv WHERE id=$1', [req.params.id])).rows[0];
+    if (!a) return res.status(404).end();
+    const e = req.params.n === 'v' ? a.video : (a.bilder || [])[+req.params.n];
+    const p = e && ilanArsiv.dosyaYolu(e.arsiv);
+    if (!p) return res.status(404).end();
+    res.set('Cache-Control', 'private, max-age=600');
+    res.sendFile(p);
+  } catch { res.status(403).end(); }
 });
 
 // ── EMANET İŞLEM YÖNETİMİ ─────────────────────────────────────────────

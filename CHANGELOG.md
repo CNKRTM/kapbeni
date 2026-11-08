@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.23.0 — 2026-11-08
+
+G: Archiv beendeter Inserate (ilan_arsiv, uploads/archiv nicht oeffentlich, Ablehnen/Admin-Entfernen, 2-Jahres-Cron)
+
 ## 1.22.0 — 2026-11-08
 
 A: IP- und Ereignisprotokoll musteri_olaylari (GeoIP offline, User-Agent, 5651-Cron)

@@ -666,70 +666,22 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
   } catch(e) { res.status(500).json({ hata: e.message }); }
 });
 
-// İlanı sil (sahip) — endgueltig.
+// İlanı sil (sahip) — endgueltig, mit Archiv (Auftragssammlung G, v1.23).
 //
-// Vorher setzte diese Route nur ilan_durum='pasif' und meldete trotzdem
-// "İlan kaldırıldı": Zeile, Fotozeilen und Bilddateien blieben liegen, und
-// der Direktlink lieferte das "geloeschte" Inserat weiter an jeden aus.
-// Jetzt wird wirklich geloescht — die Fotozeilen gehen per FK-Cascade mit,
-// die Dateien raeumt der Handler selbst ab.
+// Frueher (bis v1.22) wurden Zeile UND Bilddateien geloescht. Jetzt laeuft der
+// eine Loeschweg lib/ilanArsiv.js: Snapshot in ilan_arsiv, Bilder werden nach
+// uploads/archiv/<musteri_no>/<uuid>/ verschoben (nicht oeffentlich). Alle
+// Sicherungen von frueher bleiben dort erhalten: Besitzpruefung (404 statt 403),
+// 409 bei laufender Transaktion, Belege behalten ihre Zeile (ilan_id=NULL),
+// Gebote gehen mit, Dateien erst nach dem COMMIT, Meili-Delete, audit_log.
 router.delete('/:uuid', authMiddleware, async (req, res) => {
   try {
-    // Ohne diese Pruefung erzeugt eine numerische ID in Postgres 22P02 und
-    // damit einen 500er mit rohem Fehlertext.
-    const k = String(req.params.uuid || '');
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(k))
-      return res.status(404).json({ hata: 'İlan bulunamadı' });
-
-    const { rows } = await query('SELECT * FROM ilanlar WHERE uuid=$1 AND user_id=$2', [k, req.user.id]);
-    if (!rows[0]) return res.status(404).json({ hata: 'İlan bulunamadı' });
-    const ilan = rows[0];
-
-    // Ein laufendes Geschaeft darf nicht weggeloescht werden. Die Belegzeile
-    // ueberlebt zwar (ilan_id=NULL), faellt damit aber aus GET /api/islemler/benim
-    // heraus — das verbindet per INNER JOIN mit ilanlar. Der Vorgang
-    // verschwaende fuer Kaeufer UND Verkaeufer, das Geld haengt, und der
-    // Chatverlauf zum Inserat geht per CASCADE gleich mit. Ein Verkaeufer
-    // koennte so nach einer Beschwerde die Beweislage entfernen.
-    const OFFEN = ['odeme_bekleniyor', 'aktif', 'askida', 'kargoya_verildi', 'itiraz_acildi'];
-    const { rows: laufend } = await query(
-      'SELECT COUNT(*)::int AS n FROM islemler WHERE ilan_id=$1 AND durum = ANY($2::text[])',
-      [ilan.id, OFFEN]);
-    if (laufend[0].n > 0)
-      return res.status(409).json({ hata: 'Bu ilan için devam eden bir işlem var. İşlem tamamlanmadan ilan silinemez.' });
-
-    const { rows: fotos } = await query('SELECT url FROM ilan_fotograflar WHERE ilan_id=$1', [ilan.id]);
-
-    // Sieben Fremdschluessel auf ilanlar stehen auf NO ACTION und wuerden ein
-    // DELETE blockieren. Geschaeftsunterlagen duerfen dabei NICHT verschwinden,
-    // nur weil ein Verkaeufer sein Inserat entfernt — Zahlungen, Bewertungen
-    // und Beschwerden bleiben also erhalten und verlieren nur den Verweis.
-    // Gebote sind ohne Inserat gegenstandslos und gehen mit.
-    // Die uebrigen Verweise (Fotos, Favoriten, Chats, Warenkorb, Merkmale,
-    // Beobachter) raeumt die DB per CASCADE selbst ab.
-    const LOESEN = ['odemeler', 'payments', 'islemler', 'degerlendirmeler',
-                    'ilan_sikayetler', 'ilan_vitaminler', 'support_tickets'];
-    const verbindung = await pool.connect();
-    try {
-      await verbindung.query('BEGIN');
-      for (const t of LOESEN) await verbindung.query(`UPDATE ${t} SET ilan_id=NULL WHERE ilan_id=$1`, [ilan.id]);
-      await verbindung.query('DELETE FROM teklifler WHERE ilan_id=$1', [ilan.id]);
-      await verbindung.query('DELETE FROM ilanlar WHERE id=$1', [ilan.id]);
-      await verbindung.query('COMMIT');
-    } catch (e) {
-      await verbindung.query('ROLLBACK').catch(() => {});
-      throw e;
-    } finally {
-      verbindung.release();
-    }
-
-    // Dateien erst nach dem COMMIT — ein Rollback soll keine Bilder kosten.
-    const weg = await dateienEntfernen([...fotos.map(f => f.url), ilan.video_url], ilan.uuid);
-    // Ohne das blieb das Inserat im Suchindex und wurde ueber /api/arama
-    // weiter oeffentlich ausgeliefert, obwohl es die Zeile nicht mehr gibt.
-    await meiliSync.deleteListing(ilan.uuid);
-
-    await auditLog('ilan.sil', 'api', { userId: req.user.id, hedefTip:'ilan', hedefId: ilan.id, detay: { dateien: weg } });
+    const ip = olay.istemciIp(req);
+    const r = await require('../lib/ilanArsiv').ilanSilVeArsivle({
+      uuid: req.params.uuid, sahipId: req.user.id, grund: 'silindi', kaynak: 'kullanici', ip,
+      audit: { kaynak: 'api', userId: req.user.id } });
+    if (!r.ok) return res.status(r.status).json({ hata: r.hata });
+    olay.kaydet(req, { userId: req.user.id, olay: 'ilan_sil', hedefTip: 'ilan', hedefId: req.params.uuid, detay: { arsiv_id: r.arsiv_id } });
     res.json({ mesaj: 'İlan silindi' });
   } catch(e) {
     // Rohe SQL-Meldungen gehoeren nicht zum Aufrufer.
