@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.21.0 — 2026-11-08
+
+Google-Login vorbereitet (Admin + Kunde): Knöpfe sichtbar mit „Yakında“, OAuth-Start/Callback nur bei aktiver Integration, Admin nur für izinliler + vorhandenes Konto
+
 ## 1.20.0 — 2026-11-08
 
 Turnstile: Admin-Login, Şifremi unuttum, Kunden-Login und -Registrierung (AuthModal); test = Cloudflare-Testschlüssel, live = siteverify, disabled = aus; GET /api/auth/yapilandirma

@@ -151,6 +151,8 @@ tr:hover td{background:#fafafa}
 // API-Basis relativ zur Seitenadresse: oeffentlich /kapbeniadmin/admin/api
 // (nginx streicht /kapbeniadmin), im LAN direkt :3002/admin/api.
 const API=location.pathname.replace(/(\/admin)(\/.*)?$/,'$1')+'/api';
+// Rueckkehr vom Google-Login (v1.21, Geruest): #/google-giris?token=…
+(()=>{ const m=location.hash.match(/^#\/google-giris\?token=([^&]+)/); if(m){ try{ localStorage.setItem('admin_token',decodeURIComponent(m[1])); }catch{} history.replaceState(null,'','#/dashboard'); } })();
 let TOKEN=localStorage.getItem('admin_token')||'';
 
 function H(){ return {'Authorization':'Bearer '+TOKEN,'Content-Type':'application/json'} }
@@ -273,6 +275,8 @@ function girisRoute(){
   if(r==='yeni-sifre') return yeniSifreSayfa(q.get('t')||'');
   girisSayfasi(girisFormHtml());
   tsRender('ts-giris');
+  const gh=aktuelleRoute().q.get('hata');
+  if(gh) girisFehler(gh==='google_izin'?'Bu Google hesabı yönetim paneli için yetkili değil.':'Google ile giriş başarısız oldu.');
   setTimeout(()=>el('login-email')?.focus(),50);
 }
 // ── Şifremi unuttum ──

@@ -33,6 +33,8 @@ const SZENARIEN = {
       pruefe(await p2.getByRole('heading', { name: 'Giriş Yap' }).count() === 1, `${b}: AuthModal offen`);
       await p2.waitForFunction(() => document.querySelector('[data-turnstile="test"] input[name="cf-turnstile-response"]')?.value, null, { timeout: 15000 }).catch(() => {});
       pruefe(!!(await p2.locator('[data-turnstile="test"] input[name="cf-turnstile-response"]').inputValue().catch(() => '')), `${b}: Turnstile-Widget (Testmodus) im Login liefert Token`);
+      const g = p2.getByRole('button', { name: /Google ile Giriş/ });
+      pruefe(await g.isDisabled() && /Yakında/.test(await g.textContent()), `${b}: Google-Knopf deaktiviert „Yakında“`);
       await p2.screenshot({ path: `${AUS}/turnstile-giris-${p2.viewportSize().width}.png` });
       await p2.getByRole('button', { name: 'Kayıt Ol', exact: true }).first().click().catch(() => {});
       await p2.waitForTimeout(800);

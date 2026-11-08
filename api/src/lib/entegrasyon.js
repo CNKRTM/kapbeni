@@ -400,7 +400,29 @@ async function claudeModeller() {
   return liste;
 }
 
+// ── Google OAuth (Geruest, v1.21) ───────────────────────────────────────────
+// Wird nur benutzt, wenn googleAyar() eine vollstaendige, live geschaltete
+// Konfiguration liefert. Prueft das ID-Token ueber Googles tokeninfo (aud, email_verified).
+function googleAuthUrl(cfg, state) {
+  const u = new URL('https://accounts.google.com/o/oauth2/v2/auth');
+  u.search = new URLSearchParams({ client_id: cfg.clientId, redirect_uri: cfg.redirectUris[0], response_type: 'code',
+    scope: 'openid email profile', state, prompt: 'select_account' }).toString();
+  return u.toString();
+}
+async function googleCodeTausch(cfg, code) {
+  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', signal: zamanAsimi(10000),
+    body: new URLSearchParams({ code: String(code || ''), client_id: cfg.clientId, client_secret: cfg.clientSecret,
+      redirect_uri: cfg.redirectUris[0], grant_type: 'authorization_code' }) });
+  const d = await r.json().catch(() => ({}));
+  if (!d.id_token) throw new Error('Google: ' + (d.error || 'id_token yok'));
+  const t = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(d.id_token), { signal: zamanAsimi(10000) });
+  const info = await t.json().catch(() => ({}));
+  if (info.aud !== cfg.clientId) throw new Error('Google: aud uyuşmuyor');
+  if (String(info.email_verified) !== 'true' || !info.email) throw new Error('Google: e-posta doğrulanmamış');
+  return { sub: String(info.sub), email: String(info.email).toLowerCase(), ad: info.given_name || null, soyad: info.family_name || null };
+}
+
 const kapat = async () => { if (_pool) { const p = _pool; _pool = null; await p.end(); } };
 
-module.exports = { kapat, claudeModeller, SAGLAYICILAR, tanim, ayar, listeMaskeli, kaydet, test, hazirlik, cacheLeeren,
+module.exports = { googleAuthUrl, googleCodeTausch, kapat, claudeModeller, SAGLAYICILAR, tanim, ayar, listeMaskeli, kaydet, test, hazirlik, cacheLeeren,
   turnstileGenel, turnstileDogrula, googleAyar, mailKanal, maskele, sifrele, coz, TURNSTILE_TEST, ORTAM };

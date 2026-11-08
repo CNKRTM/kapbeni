@@ -123,6 +123,50 @@ router.get('/ben', require('../middleware/auth').authMiddleware, async (req, res
   res.json(u);
 });
 
+// ── Google ile giriş (Geruest, v1.21) ────────────────────────────────────
+// Freigegeben nur, wenn Admin → Entegrasyonlar → „Google ile Giriş (Müşteri)“ live
+// und vollstaendig ist. Bis dahin 404. Neue Konten bekommen ihre musteri_no vom
+// DB-Trigger trg_musteri_no. OFFEN (Burak): users.phone ist NOT NULL — Google liefert
+// keine Telefonnummer; vorlaeufig Platzhalter „g-<hash>“, Abfrage nach dem ersten Login fehlt noch.
+router.get('/google/baslat', async (req, res) => {
+  const cfg = await entegrasyon.googleAyar('musteri').catch(() => null);
+  if (!cfg) return res.status(404).json({ hata: 'Google ile giriş henüz aktif değil' });
+  const state = jwt.sign({ t: 'google-musteri', n: require('crypto').randomBytes(8).toString('hex') }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  res.redirect(entegrasyon.googleAuthUrl(cfg, state));
+});
+router.get('/google/callback', async (req, res) => {
+  const cfg = await entegrasyon.googleAyar('musteri').catch(() => null);
+  if (!cfg) return res.status(404).json({ hata: 'Google ile giriş henüz aktif değil' });
+  const geri = (h) => res.redirect('/#/' + h);
+  try {
+    const st = jwt.verify(String(req.query.state || ''), process.env.JWT_SECRET);
+    if (st.t !== 'google-musteri') throw new Error('state');
+    const g = await entegrasyon.googleCodeTausch(cfg, req.query.code);
+    let { rows } = await query('SELECT * FROM users WHERE google_id=$1 OR lower(email)=$2 ORDER BY (google_id=$1) DESC LIMIT 1', [g.sub, g.email]);
+    let u = rows[0];
+    if (u && !['aktif', 'silme_bekliyor'].includes(u.durum)) return geri('?giris_hata=hesap');
+    if (!u) {
+      const ph = 'g-' + require('crypto').createHash('sha1').update(g.sub).digest('hex').slice(0, 17);
+      const hash = await bcrypt.hash(require('crypto').randomBytes(24).toString('hex'), 12);
+      ({ rows } = await query(
+        `INSERT INTO users(email,phone,password_hash,ad,soyad,google_id,email_dogrulandi) VALUES($1,$2,$3,$4,$5,$6,true) RETURNING *`,
+        [g.email, ph, hash, g.ad, g.soyad, g.sub]));
+      u = rows[0];
+      await query("UPDATE users SET kullanici_no='SG-'||LPAD(id::TEXT,8,'0') WHERE id=$1", [u.id]);
+      await auditLog('user.kayit', 'api', { userId: u.id, ip: req.ip, detay: { yontem: 'google' } });
+    } else if (!u.google_id) {
+      await query('UPDATE users SET google_id=$1 WHERE id=$2', [g.sub, u.id]);
+    }
+    if (u.durum === 'silme_bekliyor') await hesapSilme.silmeIptal(u.id, { ip: req.ip });
+    await auditLog('user.giris', 'api', { userId: u.id, ip: req.ip, detay: { yontem: 'google' } });
+    girisKaydet(query, u.id, req, true);
+    geri('google-giris?token=' + encodeURIComponent(token(u)));
+  } catch (e) {
+    console.error('[auth/google]', e.message);
+    geri('?giris_hata=google');
+  }
+});
+
 // KYC webhook için /api/kyc/webhook kullanılır (routes/kyc.js)
 // Tüm cihazlardan çıkış (basit: istemci token'ı siler; sunucu audit)
 router.post('/logout-all', require('../middleware/auth').authMiddleware, async (req, res) => {

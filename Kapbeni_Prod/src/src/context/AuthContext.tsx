@@ -18,7 +18,12 @@ const AuthContext = createContext<AuthContextType | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('sg_token'))
+  const [token, setToken] = useState<string | null>(() => {
+    // Rueckkehr vom Google-Login (v1.21, Geruest): #/google-giris?token=… -> Token uebernehmen, Adresse saeubern
+    const m = window.location.hash.match(/^#\/google-giris\?token=([^&]+)/)
+    if (m) { try { localStorage.setItem('sg_token', decodeURIComponent(m[1])) } catch { /* privat */ } window.history.replaceState(null, '', '#/') }
+    return localStorage.getItem('sg_token')
+  })
 
   useEffect(() => {
     if (!localStorage.getItem('sg_token')) return

@@ -251,6 +251,40 @@ app.post('/admin/api/sifre-yenile', yenileLimiter, async (req, res) => {
   } catch (e) { console.error('[sifre-yenile]', e.message); res.status(500).json({ hata: 'Şifre güncellenemedi' }); }
 });
 
+// ── Google ile giriş (Admin, Geruest v1.21) ──────────────────────────────
+// Nur bei live geschalteter Integration „Google ile Giriş (Admin)“. Zugelassen wird
+// nur, wer in den izinliler steht (E-Mail oder @domain) UND ein aktives admin_users-
+// Konto mit derselben E-Mail hat. Keine automatische Anlage von Admins.
+const googleIzinli = (email, liste) => liste.some((x) => x.startsWith('@') ? email.endsWith(x) : email === x);
+app.get('/admin/api/google/baslat', async (req, res) => {
+  const cfg = await entegrasyon.googleAyar('admin').catch(() => null);
+  if (!cfg) return res.status(404).json({ hata: 'Google ile giriş henüz aktif değil' });
+  const state = jwt.sign({ t: 'google-admin', n: require('crypto').randomBytes(8).toString('hex') }, process.env.JWT_SECRET, { expiresIn: '10m' });
+  res.redirect(entegrasyon.googleAuthUrl(cfg, state));
+});
+app.get('/admin/api/google/callback', async (req, res) => {
+  const cfg = await entegrasyon.googleAyar('admin').catch(() => null);
+  if (!cfg) return res.status(404).json({ hata: 'Google ile giriş henüz aktif değil' });
+  const ip = clientIp(req).slice(0, 45);
+  const geri = (h) => res.redirect(ADMIN_URL() + '#/' + h);
+  try {
+    const st = jwt.verify(String(req.query.state || ''), process.env.JWT_SECRET);
+    if (st.t !== 'google-admin') throw new Error('state');
+    const g = await entegrasyon.googleCodeTausch(cfg, req.query.code);
+    const { rows } = await db.query('SELECT * FROM admin_users WHERE lower(email)=$1 AND aktif=true', [g.email]);
+    if (!googleIzinli(g.email, cfg.izinliler) || !rows[0]) {
+      await db.query(`INSERT INTO audit_log(olay,kaynak,detay,ip_adresi) VALUES('admin.giris_hata','admin',$1,$2)`,
+        [JSON.stringify({ email: g.email, yontem: 'google', sebep: 'izinli_degil' }), ip]);
+      return geri('giris?hata=google_izin');
+    }
+    const sid = await oturumAc(rows[0], req);
+    await db.query('UPDATE admin_users SET son_giris=NOW() WHERE id=$1', [rows[0].id]);
+    await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.giris','admin',$1,$2,$3)`,
+      [rows[0].id, JSON.stringify({ yontem: 'google' }), ip]);
+    geri('google-giris?token=' + encodeURIComponent(adminToken(rows[0], sid)));
+  } catch (e) { console.error('[admin/google]', e.message); geri('giris?hata=google'); }
+});
+
 // Oeffentlich: was die Login-Seite braucht (keine Geheimnisse).
 app.get('/admin/api/giris-yapilandirma', async (req, res) => {
   let turnstile = { aktif: false }, google = { aktif: false }, mail = { kanal: 'log' };

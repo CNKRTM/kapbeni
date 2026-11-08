@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { ve } from '../api'
 import TelefonInput from './TelefonInput'
 import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
-import Turnstile from './Turnstile'
+import Turnstile, { useAuthYapilandirma } from './Turnstile'
 
 const SEKTORLER = [
   'Elektronik', 'Beyaz Eşya', 'Mobilya & Dekorasyon', 'Giyim & Tekstil', 'Araç & Vasıta',
@@ -47,6 +47,8 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
   const [tsToken, setTsToken] = useState<string | null>(null)
   const [tsSifirla, setTsSifirla] = useState(0)
   const tsYenile = () => setTsSifirla((n) => n + 1)
+  // Google-Login: sichtbar, aber erst aktiv, wenn Entegrasyonlar es freigibt (v1.21)
+  const googleAktif = !!useAuthYapilandirma()?.google?.aktif
 
   // Login
   const [loginEmail, setLoginEmail] = useState('')
@@ -134,7 +136,8 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
   }
 
   const handleGoogle = () => {
-    setNotice('Google ile giriş yakında aktif olacak. KapBeni Google OAuth onayı bekleniyor.')
+    if (googleAktif) { window.location.href = '/api/auth/google/baslat'; return }
+    setNotice('Google ile giriş yakında aktif olacak.')
     setTimeout(() => setNotice(''), 4000)
   }
 
@@ -187,9 +190,10 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
                 <span className="text-xs text-gray-400 font-medium">veya</span>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
-              <button type="button" onClick={handleGoogle} className="w-full flex items-center justify-center gap-3 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all">
+              <button type="button" onClick={handleGoogle} disabled={!googleAktif} title={googleAktif ? undefined : 'Yakında'} className="w-full flex items-center justify-center gap-3 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white">
                 <GoogleIcon />
                 Google ile Giriş Yap
+                {!googleAktif && <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-extrabold uppercase tracking-wide">Yakında</span>}
               </button>
               <p className="text-center text-xs text-gray-500 pt-2">
                 Hesabınız yok mu?{' '}
@@ -266,9 +270,10 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
                 <span className="text-xs text-gray-400 font-medium">veya</span>
                 <div className="flex-1 h-px bg-gray-200" />
               </div>
-              <button type="button" onClick={handleGoogle} className="w-full flex items-center justify-center gap-3 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all">
+              <button type="button" onClick={handleGoogle} disabled={!googleAktif} title={googleAktif ? undefined : 'Yakında'} className="w-full flex items-center justify-center gap-3 py-3 border-2 border-gray-200 rounded-xl text-sm font-bold text-gray-700 hover:border-gray-300 hover:bg-gray-50 transition-all disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:bg-white">
                 <GoogleIcon />
                 Google ile Kayıt Ol
+                {!googleAktif && <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-extrabold uppercase tracking-wide">Yakında</span>}
               </button>
               <p className="text-xs text-center text-gray-400">
                 Kayıt olarak{' '}
