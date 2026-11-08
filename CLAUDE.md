@@ -1654,6 +1654,15 @@ Erste Lücke aus dem E2E-Test geschlossen: Nach Nachricht, Angebot oder Freigabe
   Seitenfehler). Sitzung per `tokenFuer` (15 min), kein Passwort. Vor dem Ausrollen gegen API :3911 /
   Admin :3912 / Vorschau :3906 (47/47, UI grün, `zurueck.js` 66× OK), danach live 47/47.
 
+#### Gemeinsames Initialpasswort der Testkunden (09.11.2026, Wunsch Burak)
+- Alle 9 Testkunden (`users.test_verisi=true`, `@test.kapbeni.com` + `vergleich.test@kapbeni.local`)
+  haben dasselbe Passwort, damit Burak es in Santral eintragen kann. Es steht nur in
+  `/root/kp-initialpasswort-testkunden.txt` (0600), `/root/kp-testkunden.txt` und
+  `/root/kp-e2e-testkunde.txt` (Format unverändert, Backups `*.bak-2026-11-09`). Nie ins Repo/Doku.
+- Echte Kundenkonten und `users.id=1` wurden **nicht** geändert. Kein Prod vorhanden; für ein späteres
+  Prod nur Testkonten so behandeln, echte Kunden setzen ihr Passwort selbst.
+- `token_version` erhöht (alte Sitzungen der Testkonten abgemeldet), Audit `test.kunden_initialpasswort`.
+
 #### Login-Effekte nach Santral (v1.36.0)
 
 Auftrag von Burak über die Santral-Sitzung („alle mit gleichen Effekten … jeweils farblich abgestimmt“).
