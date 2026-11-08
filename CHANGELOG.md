@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.26.0 — 2026-11-08
+
+M: Markenlisten/Merkmalswerte im Admin pflegbar (Kategoriler → Özellikler), Kategorien aus der DB (fix 0 Kategorien unter :3002)
+
 ## 1.25.0 — 2026-11-08
 
 A: Kundenliste (Suche/Filter/Sortierung serverseitig) und Kundenakte #/musteri/<no>/<reiter> mit Zeitleiste, Archiv, IP, Belgeler, Notlar; Kundennummer in allen Admin-Listen

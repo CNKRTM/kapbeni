@@ -689,7 +689,7 @@ const PAGE_TITLES={
   ilanonay:'İlan Onayı',riskmesaj:'Riskli Mesajlar',ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
   destektickets:'Destek Talepleri',oneriler:'Öneriler & Geri Bildirim',
   abonelikler:'Abonelikler',paketler:'Paketler',kuponlar:'Kuponlar',
-  vitaminler:'Vitaminler',slider:'Hero Slider',kategoriler:'Kategoriler',
+  vitaminler:'Vitaminler',slider:'Hero Slider',kategoriler:'Kategoriler & Özellikler',
   waayar:'WhatsApp Ayarları',entegrasyonlar:'Entegrasyonlar',ayarlar:'Sistem Ayarları'
 };
 
@@ -2043,20 +2043,82 @@ async function vSlider(){
 }
 
 // ═══════════════════════════════════════════════
-// KATEGORİLER
+// KATEGORİLER + ÖZELLİKLER (v1.27) — Daten aus /admin/api/kategoriler (DB),
+// damit die Seite auch unter :3002 funktioniert. Özellikler: Werte (v. a. Marken)
+// je Kategorie hinzufügen, umbenennen, sortieren, entfernen. „Diğer“ bleibt am Ende.
+// Adressen: #/kategoriler, #/kategoriler/ozellikler?k=<id>
 // ═══════════════════════════════════════════════
+let KAT_LISTE=null;
+async function katLaden(neu){ if(!KAT_LISTE||neu) KAT_LISTE=await api('/kategoriler'); return KAT_LISTE; }
+function katKopf(aktiv){ return `<nav class="akte-tabs" style="margin-bottom:16px">${[['kategoriler','Kategoriler','#/kategoriler'],['ozellikler','Özellikler (marka, seçenekler)','#/kategoriler/ozellikler']]
+  .map(([k,l,h])=>`<a class="akte-tab${aktiv===k?' on':''}" href="${h}">${l}</a>`).join('')}</nav>`; }
 async function vKategoriler(){
+  const {arg}=aktuelleRoute();
+  if(arg==='ozellikler') return vOzellikler();
   Vloading();
-  const r=await fetch('/api/kategoriler').catch(()=>null);
-  const d=r?await r.json().catch(()=>[]):[];
-  V(`<p style="font-size:13.5px;color:#64748b;margin-bottom:16px">${d.length} ana kategori</p>
-  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
-    ${(d||[]).map(k=>`<div class="card"><div class="card-body" style="text-align:center;padding:16px">
-      <div style="font-size:24px;margin-bottom:6px">${k.icon||'📦'}</div>
-      <p style="font-weight:700;color:#1a2e4a;font-size:14px">${k.ad||k.label||'—'}</p>
-      <p style="font-size:12px;color:#94a3b8;margin-top:2px">${(k.altKategoriler||k.sub||[]).length} alt kategori</p>
-    </div></div>`).join('')}
+  const d=await katLaden(true).catch(()=>[]);
+  const ana=d.filter(k=>!k.ust_id);
+  const kinder=id=>d.filter(k=>k.ust_id===id);
+  const alle=id=>{ const out=[]; const lauf=x=>kinder(x).forEach(c=>{ out.push(c); lauf(c.id); }); lauf(id); return out; };
+  V(katKopf('kategoriler')+`<p style="font-size:13.5px;color:#64748b;margin-bottom:16px">${ana.length} ana kategori · ${d.length} kategori toplam</p>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px" id="kat-grid">
+    ${ana.map(k=>{ const a=alle(k.id); const ilan=k.ilan+a.reduce((s,x)=>s+x.ilan,0);
+      return `<a class="card" href="#/kategoriler/ozellikler?k=${k.id}" style="text-decoration:none"><div class="card-body" style="padding:16px">
+      <p style="font-weight:700;color:#1a2e4a;font-size:14px">${escH(k.ad)}</p>
+      <p style="font-size:12px;color:#94a3b8;margin-top:2px">${kinder(k.id).length} alt kategori · ${a.length} toplam · ${ilan} ilan</p>
+      <p style="font-size:12px;color:#b61722;font-weight:700;margin-top:8px">Özellikler →</p></div></a>`; }).join('')}
   </div>`);
+}
+async function vOzellikler(){
+  const {q}=aktuelleRoute(); const kid=+(q.get('k')||0);
+  if(!el('oz-kat')){ Vloading();
+    const d=await katLaden().catch(()=>[]);
+    const kinder=id=>d.filter(k=>k.ust_id===id);
+    const opt=(k,tiefe)=>`<option value="${k.id}">${'  '.repeat(tiefe*2)}${escH(k.ad)}${k.ozellik?` (${k.ozellik})`:''}</option>`+kinder(k.id).map(c=>opt(c,tiefe+1)).join('');
+    V(katKopf('ozellikler')+`<div class="card" style="margin-bottom:12px"><div class="card-body" style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
+      <div style="flex:1;min-width:240px"><label for="oz-kat">Kategori</label><select id="oz-kat" onchange="history.replaceState(null,'','#/kategoriler/ozellikler?k='+this.value);vOzellikler()">
+        <option value="">Kategori seçin…</option>${d.filter(k=>!k.ust_id).map(k=>opt(k,0)).join('')}</select></div>
+      <p style="font-size:12.5px;color:#64748b;max-width:460px;line-height:1.6">Alt kategoriler üst kategorinin özelliklerini devralır (ör. marka listesi ana kategoride). Devralınan bir listeyi değiştirmek tüm alt kategorileri etkiler.</p>
+    </div></div><div id="oz-liste"></div>`); }
+  el('oz-kat').value=kid||'';
+  const box=el('oz-liste');
+  if(!kid){ box.innerHTML='<div class="card"><div class="card-body" style="text-align:center;color:#94a3b8;padding:40px">Özelliklerini düzenlemek için bir kategori seçin.</div></div>'; return; }
+  box.innerHTML='<div style="padding:30px;text-align:center;color:#94a3b8">Yükleniyor…</div>';
+  const t=await api('/kategoriler/'+kid+'/ozellikler').catch(()=>[]);
+  if(!t.length){ box.innerHTML='<div class="card"><div class="card-body" style="color:#94a3b8">Bu kategoride (ve üst kategorilerinde) tanımlı özellik yok.</div></div>'; return; }
+  box.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:12px;align-items:start">${t.map(o=>`<div class="card" data-tanim="${o.id}"><div class="card-body">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px"><div><p class="section-title" style="margin:0">${escH(o.etiket||o.alan_adi)}</p>
+      <p style="font-size:12px;color:#64748b;margin-top:2px">${escH(o.alan_adi)} · ${escH(o.tip)}${o.zorunlu?' · zorunlu':''}${o.serbest?' · serbest giriş':''}</p></div>
+      ${o.miras?`<span class="badge blue" title="Üst kategoriden devralındı">↑ ${escH(o.kategori_ad)}</span>`:'<span class="badge gray">bu kategori</span>'}</div>
+    ${o.tip!=='secim'?'<p style="font-size:13px;color:#94a3b8">Serbest metin / sayı — seçenek listesi yok.</p>':`
+      <div style="display:flex;flex-direction:column;gap:4px;max-height:420px;overflow:auto" class="oz-werte">${o.secenekler.map((s,i)=>`<div class="ozb-row" style="align-items:center;padding:5px 0" data-id="${s.id}">
+        <span style="display:flex;gap:6px;align-items:center;min-width:0"><span style="display:flex;flex-direction:column">
+          <button class="sb-ikon-btn" style="color:#64748b;padding:0 4px;font-size:11px" title="Yukarı" ${i===0||s.deger==='Diğer'?'disabled':''} onclick="ozSirala(${o.id},${s.id},-1)">▲</button>
+          <button class="sb-ikon-btn" style="color:#64748b;padding:0 4px;font-size:11px" title="Aşağı" ${s.deger==='Diğer'||o.secenekler[i+1]?.deger==='Diğer'||i===o.secenekler.length-1?'disabled':''} onclick="ozSirala(${o.id},${s.id},1)">▼</button></span>
+          <span class="oz-deger" style="font-weight:600;overflow:hidden;text-overflow:ellipsis">${escH(s.deger)}</span>${s.kullanim?`<span class="badge gray" title="Bu değeri kullanan ilan">${s.kullanim} ilan</span>`:''}</span>
+        ${s.deger==='Diğer'?'<span style="font-size:11.5px;color:#94a3b8">her zaman sonda</span>':`<span style="display:flex;gap:4px;flex-shrink:0"><button class="btn btn-secondary btn-sm" onclick="ozDegistir(${s.id},${s.kullanim})">Düzenle</button><button class="btn btn-danger btn-sm" onclick="ozSil(${s.id},${s.kullanim})">Kaldır</button></span>`}</div>`).join('')}</div>
+      <div style="display:flex;gap:6px;margin-top:10px"><input id="oz-yeni-${o.id}" placeholder="Yeni değer (ör. marka)" maxlength="100" onkeydown="if(event.key==='Enter')ozEkle(${o.id})"/><button class="btn btn-primary btn-sm" onclick="ozEkle(${o.id})">Ekle</button></div>`}
+  </div></div>`).join('')}</div>`;
+}
+async function ozEkle(tid){ const i=el('oz-yeni-'+tid); const v=i.value.trim(); if(!v) return;
+  await apiOk('/ozellik/'+tid+'/secenek',{method:'POST',body:JSON.stringify({deger:v})}); showToast('Eklendi ✓'); KAT_LISTE=null; vOzellikler(); }
+async function ozSil(id,n){ if(!confirm(n?`Bu değeri ${n} ilan kullanıyor. Listeden kaldırılsın mı? (Mevcut ilanlar değerini korur.)`:'Bu değer listeden kaldırılsın mı?')) return;
+  await apiOk('/secenek/'+id,{method:'DELETE'}); showToast('Kaldırıldı'); vOzellikler(); }
+async function ozDegistir(id,n){
+  const alt=document.querySelector(`.ozb-row[data-id="${id}"] .oz-deger`)?.textContent||'';
+  const d=document.createElement('div'); d.className='modal-backdrop'; d.onclick=e=>{ if(e.target===d) d.remove(); };
+  d.innerHTML=`<div class="modal"><p class="section-title">Değeri düzenle</p><input id="oz-duz" maxlength="100" value="${escH(alt)}"/>
+    ${n?`<label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-weight:500"><input type="checkbox" id="oz-mevcut"> Bu değeri kullanan ${n} ilan da güncellensin</label>`:''}
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn btn-secondary" onclick="this.closest('.modal-backdrop').remove()">Vazgeç</button><button class="btn btn-primary" id="oz-kaydet">Kaydet</button></div></div>`;
+  document.body.appendChild(d); el('oz-duz').focus();
+  el('oz-kaydet').onclick=async()=>{ const v=el('oz-duz').value.trim(); if(!v) return;
+    const r=await apiOk('/secenek/'+id,{method:'PUT',body:JSON.stringify({deger:v,mevcut:!!el('oz-mevcut')?.checked})}).catch(()=>null); if(!r) return;
+    d.remove(); showToast('Kaydedildi ✓'+(r.guncellenen_ilan?` · ${r.guncellenen_ilan} ilan güncellendi`:'')); vOzellikler(); };
+}
+async function ozSirala(tid,id,yon){
+  const ids=[...document.querySelectorAll(`[data-tanim="${tid}"] .ozb-row`)].map(x=>+x.dataset.id);
+  const i=ids.indexOf(id), j=i+yon; if(j<0||j>=ids.length) return; [ids[i],ids[j]]=[ids[j],ids[i]];
+  await apiOk('/ozellik/'+tid+'/sirala',{method:'POST',body:JSON.stringify({ids})}); vOzellikler();
 }
 
 // ═══════════════════════════════════════════════

@@ -173,7 +173,7 @@ const SZENARIEN = {
     await page.goBack(); await page.waitForTimeout(500);
     pruefe(page.url().endsWith('#/ilanonay') && await page.locator('#topbar-title').innerText() === 'İlan Onayı', `${b}: Browser-Zurück → İlan Onayı`);
     await page.goto(BASIS + '#/kategoriler'); await page.waitForTimeout(900);
-    pruefe(await page.locator('#topbar-title').innerText() === 'Kategoriler', `${b}: Direkteinstieg #/kategoriler nach Reload`);
+    pruefe(await page.locator('#topbar-title').innerText() === 'Kategoriler & Özellikler', `${b}: Direkteinstieg #/kategoriler nach Reload`);
     if (!mobil) {
       // Gruppe zuklappen bleibt nach Reload zu
       await page.click('.sb-grup-kopf[data-grup="finans"]'); await page.waitForTimeout(200);
@@ -281,6 +281,27 @@ const SZENARIEN = {
     await page.screenshot({ path: `${AUS}/admin-akte-${page.viewportSize().width}.png`, fullPage: true });
     const ueber = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     pruefe(ueber <= 1, `${b}: kein waagerechter Ueberlauf (${ueber})`);
+  },
+  // Kategoriler unter :3002 (frueher „0 ana kategori“) und Özellikler: Wert hinzufügen und wieder entfernen
+  async kategoriler(page, b) {
+    await anmelden(page);
+    await page.goto(BASIS + '#/kategoriler'); await page.waitForSelector('#kat-grid .card', { timeout: 8000 });
+    const n = await page.locator('#kat-grid .card').count();
+    pruefe(n >= 10, `${b}: ${n} Hauptkategorien unter :3002`);
+    await page.locator('#kat-grid .card').nth(1).click(); await page.waitForSelector('[data-tanim]', { timeout: 8000 });
+    pruefe(/#\/kategoriler\/ozellikler\?k=\d+/.test(page.url()), `${b}: Özellikler mit Kategorie in der Adresse`);
+    const karte = page.locator('[data-tanim]').filter({ hasText: 'marka' }).first();
+    const tid = await karte.getAttribute('data-tanim');
+    const wert = 'UiTestMarka' + Date.now();
+    await page.fill(`#oz-yeni-${tid}`, wert); await page.click(`[data-tanim="${tid}"] button:has-text("Ekle")`); await page.waitForTimeout(900);
+    const zeilen = await page.locator(`[data-tanim="${tid}"] .oz-deger`).allInnerTexts();
+    pruefe(zeilen.at(-2) === wert && zeilen.at(-1) === 'Diğer', `${b}: neuer Wert vor „Diğer“`);
+    await page.screenshot({ path: `${AUS}/admin-ozellikler-${page.viewportSize().width}.png` });
+    page.once('dialog', (d) => d.accept());
+    await page.locator(`[data-tanim="${tid}"] .ozb-row`).filter({ hasText: wert }).locator('button:has-text("Kaldır")').click(); await page.waitForTimeout(900);
+    pruefe(!(await page.locator(`[data-tanim="${tid}"] .oz-deger`).allInnerTexts()).includes(wert), `${b}: Wert entfernt`);
+    await page.goBack(); await page.waitForTimeout(800);
+    pruefe(page.url().endsWith('#/kategoriler'), `${b}: Zurück → Kategoriler`);
   },
   // Kundennummer-Abzeichen in den übrigen Listen mit Link auf die Akte
   async listen(page, b) {
