@@ -1263,25 +1263,125 @@ kilit, giris, entegrasyonlar, sidebar; 390/1280 px; `/tmp/kp-ui/admin-*.png`) un
 laden. Admin-Limits (Login 20, Entsperren 10, Şifremi unuttum 5 je 15 min) sind
 In-Memory und setzen sich beim Neustart des Admins zurück.
 
+**Arbeitspaket Kundenakte (Auftragssammlung A, G, H-Admin, L, M-Admin) — v1.22 bis v1.26.** Migrationen
+`api/migrations/20261108_09…11`, Freezes `kapbeni-freeze-20261108-005729` (vor v1.22) und
+`…-011444` (vor dem Seed).
+
+*v1.22.0 — A: IP- und Ereignisprotokoll.* Tabelle **`musteri_olaylari`** (user_id FK CASCADE, olay,
+hedef_tip, hedef_id, ip, sehir, ulke, isp, cihaz, tarayici, os, user_agent, detay, created_at; Indizes
+user+zeit, zeit, ip, olay). Zentral **`api/src/lib/olay.js`**: `istemciIp(req)` (X-Real-IP **nur**
+vom lokalen nginx), `geoBul(ip)` offline mit **geoip-lite** 1.4.10 (Il über den Regionscode = Plaka
+aus `iller`, private IPs „Yerel ağ“, sonst „—“), `uaCoz()` mit **ua-parser-js 1.0.41** (MIT; v2 ist
+AGPL — nicht hochziehen), `yaz()`/`kaydet()` (wirft nie, blockiert nie). ISP kennt geoip-lite nicht
+→ „—“ (GeoLite2-ASN bräuchte einen MaxMind-Schlüssel, offen). Geschrieben bei: kayit, giris,
+giris_basarisiz (mit sebep), ilan_olustur/duzenle (auch `PATCH /:id/fiyat`)/sil, ilan_kaldirildi,
+ilan_reddedildi, mesaj (mit tehlikeli), teklif, sikayet, belge (KYC submit), hesap_silme_talebi,
+hesap_askiya/aktif (Admin). `services/geoService.js` ruft **ip-api.com nicht mehr** auf (keine
+Kunden-IP an Dritte) und schreibt zusätzlich weiter `kullanici_girisler`. Cron 04:00 löscht
+Einträge > 2 Jahre (5651).
+
+*v1.23.0 — G: Archiv beendeter Inserate.* Tabelle **`ilan_arsiv`** (Snapshot: Titel, Beschreibung,
+Preis, Kategorie, Marke, Zustand, Ort, Merkmale, `bilder [{url, arsiv}]`, video, grund
+`silindi|reddedildi|admin_kaldirdi|hesap_kapatildi`, grund_detay, kaynak, admin_id, ip, Zeiten).
+**`api/src/lib/ilanArsiv.js`** ist der **eine** Löschweg (`ilanSilVeArsivle`) für Eigentümer
+(`DELETE /api/ilanlar/:uuid`), SPA-Admin (`DELETE /api/admin/ilanlar/:uuid`) und Express-Admin
+(`DELETE /admin/api/ilanlar/:uuid`, Grund Pflicht). Erhalten: Besitzprüfung (404), 409 bei offener
+Transaktion (jetzt in der Transaktion mit `FOR UPDATE`), Belege `ilan_id=NULL`, Gebote gehen mit,
+Dateien erst nach COMMIT, Meili-Delete, audit_log. Dateien werden **verschoben** nach
+`/var/www/kapbeni/uploads/archiv/<musteri_no>/<uuid>/` (Namensschranke `<uuid>_` wie früher);
+Ablehnen (`/admin/api/ilanlar/:id/reddet`) **kopiert** (Inserat bleibt). Kontoanonymisierung
+(`hesapSilme.anonimlestir`) archiviert jetzt alle Inserate (`kontoArsivle`, Fotozeilen weg).
+**Nie öffentlich:** API-Static sperrt `/uploads/archiv`, `/uploads/kyc_temp`, `/uploads/belgeler`
+(404), nginx `location ^~ /uploads/archiv/ { return 404; }` in `kapbeni.com` und `kapbeni-prod`
+(Sicherungen `/root/<vhost>.nginx.bak-20261108-arsiv`). Admin sieht Bilder über
+`GET /admin/api/arsiv/dosya/:id/:n?t=` — `<img>` kann keinen Bearer senden, daher kurzlebiges
+signiertes Token (30 min, mit `sid`; Sitzung muss offen und entsperrt sein). Cron 04:00 löscht
+Snapshots > 2 Jahre samt Dateien.
+
+*v1.23.1 — Rate-Limit je echter IP.* `api/src/index.js` hatte keinen `keyGenerator`: hinter nginx
+teilten sich **alle** Besucher ein Limit (z. B. 20 Anmeldungen/15 min für die ganze Seite). Jetzt
+Schlüssel = `olay.istemciIp`. Dabei: einige API-Dateien trugen nach dem Sync CRLF — auf LF
+normalisiert. **Achtung für Agenten:** Python unter Windows schreibt mit `open(...,'w')` CRLF;
+`newline=''` benutzen.
+
+*v1.24.0/1.24.1 — L: Testkunden.* Migration 11: **`users.cinsiyet`** (`k`/`e`/NULL, CHECK) und
+**`musteri_belgeleri`** (tur, dosya_url, durum bekliyor/onayli/reddedildi, red_sebebi, gecerlilik,
+inceleyen_admin). Seed **`api/scripts/seed-testkunden.js`** (idempotent; `--sil` entfernt nur die 8
+Konten per E-Mail-Liste **und** `test_verisi`, samt Inseraten, Dateien, Archiv, Ereignissen,
+Nachrichten, Geboten, Beschwerden): Ayşe Yılmaz (k, aktiv), Mehmet Demir (e, nicht aktiv, riskante
+Nachrichten, KYC manuell), Kaya Elektronik (kurumsal, onaylı, 10 Inserate), Zeynep Arslan (k, nicht
+aktiv), Emre Çelik (e, **Löschantrag** vor 12 Tagen), Deniz Oto (kurumsal, Onay offen), Burak Şahin
+(e, **askida**), Elif Koç (k, aktiv, **E2E-Konto**). TCKN/VKN gültig erfunden, Telefon
+`+90555001000x`, `@test.kapbeni.com`, 29 Inserate über 9 Hauptkategorien mit Marke/Zustand,
+Bilder selbst erzeugt (SVG-Fläche + Text, durch `lib/bild.js`), teils in İlan Onayı, 7 archiviert
+(gelöscht/Admin/abgelehnt), ~200 Ereignisse über Wochen mit verschiedenen IPs/Geräten. Passwörter
+**nur** in `/root/kp-testkunden.txt` (0600); das E2E-Konto zusätzlich in
+**`/root/kp-e2e-testkunde.txt`** (0600). Erneut anlegen: `node api/scripts/seed-testkunden.js`.
+
+*v1.25.0 — A: Kundenliste und Kundenakte* (Teile 3 und 4 in einer Version, sie teilen
+`admin/musteri.js` und die Admin-Seite). Sidebar TEMEL → **Müşteriler** (Bireysel, Kurumsal,
+Kurumsal Onay, KYC İstekleri); „Müşteri Akte – Hazırlanıyor“ entfernt, `#/kullanicilar[/<id>]`
+leitet um. **Liste** `GET /admin/api/musteriler` serverseitig: Suche Nummer/Name/Firma/E-Mail/
+Telefon (`telefonNormalize` + Ziffern)/VKN/IP, Filter Tip, Status (aktif 28 Tage / aktif değil /
+silme_bekliyor / silindi / askıda), Zeitraum, Test verisi, Sortierung (Whitelist), Seiten, KPI;
+Filter stehen in der Adresse (`replaceState`) — Zurück aus der Akte stellt sie wieder her.
+**Akte** `#/musteri/<no>/<reiter>` (Reiter per Hash, Zurück geht zum vorigen Reiter): Kopf mit
+Abzeichen (rot k / blau e / gelb kurumsal / grau ohne Angabe), pulsierendes AKTİF (letztes Inserat
+inkl. Archiv ≤ 28 Tage), rotes „Silme talebi · X gün kaldı“ / „Müşteri ayrıldı“, Askıda, TEST;
+sechs Kacheln, Gewerbe-Block (VKN-Prüfung). Reiter Özet (Geschlecht pflegbar), Zaman çizelgesi
+(`musteri_olaylari` + ältere Inserate + erhaltene Gebote + Kontovorgänge aus audit_log;
+Tageskarten, nur neuester Tag offen, Filter-Chips öffnen passende Tage, Tageschips springen und
+blinken, Blok/Liste/Kutucuk in `localStorage kp_akte_gorunum`), İlanlar (Bilder direkt aus
+`ilan_fotograflar`, beendete aus dem Archiv, Admin „Kaldır“ mit Grund), Mesajlar (riskante rot),
+Teklifler, Şikayetler, IP & Cihaz (Risiko, IP-/Geräteübersicht, andere Konten mit gleicher IP),
+Belgeler (Unterlagen Onayla/Reddet, Kurumsal-Onay über `/kurumsal-onayla`, KYC über
+`/kyc/:id/onayla|reddet` — **`reddet` fehlte bisher**, 404), İzinler (vorhandene
+Kommunikations-/Bildirim-Felder; eine versionierte KVKK-Einwilligungstabelle gibt es nicht),
+Notlar (`admin_kullanici_notlar`). Aktionen: Askıya al (Grund Pflicht) / Askıyı kaldır, Not ekle,
+Dışa aktar JSON (alles) / CSV (Zeitleiste). Inseratsbilder liefert der Admin selbst unter
+`/admin/uploads/ilanlar` (LAN :3002 kennt `/uploads` nicht). Kundennummer-Abzeichen mit Link
+jetzt auch in İlan Onayı (+ Marke/Zustand), Riskli Mesajlar, İlan Şikayetleri (Satıcı und
+Melder), KYC, Kurumsal Onay.
+
+*v1.26.0 — M: Markenlisten pflegbar.* `admin/kategori.js`: `GET /admin/api/kategoriler` aus der DB
+(**behebt „0 ana kategori“ unter :3002**), `GET …/kategoriler/:id/ozellikler` (eigene + geerbte
+Merkmale mit Verwendung je Wert), Wert hinzufügen (Dublette tr-insensitiv 409), umbenennen
+(optional vorhandene Inseratswerte mitziehen + Meili-Sync), sortieren, entfernen (Inserate behalten
+ihren Wert); „Diğer“ bleibt immer am Ende und ist nicht änderbar. Seite Kategoriler mit Reitern
+Kategoriler / Özellikler (`#/kategoriler/ozellikler?k=<id>`).
+
+*Tests:* neu `api/tests/o_olay`, `p_arsiv`, `q_testkunden`, `r_musteri`, `s_kategori` (Suite 27,
+alle grün); `m_durum_marka` räumt den Archivrest auf, `l_musteri_no` prüft die Reihenfolge nur für
+echte Konten (Seed-Konten sind zurückdatiert). UI `api/tests/ui/admin.js` Szenarien
+`musteriler`, `akte`, `kategoriler`, `listen` (390/1280 px). Neue Tests legen Konten direkt in der
+DB an (`test_verisi=true`) statt über `/auth/kayit` — das Registrierungslimit gilt je IP.
+`suite.sh`-Muster: Exit-Code von `node --test` weitergeben, sonst rollt `&& deploy.sh` trotz
+Fehlern aus (ist hier einmal passiert, Fehler waren nur Testlimits).
+
 ---
 
 ## 4. Offene Punkte / Backlog
 
 **Funktional**
-- `DELETE /api/ilanlar/:uuid` löscht endgültig — es gibt **kein** „vorübergehend zurückziehen"
+- `DELETE /api/ilanlar/:uuid` löscht endgültig (seit v1.23 mit Archiv, `lib/ilanArsiv.js`) — es gibt **kein** „vorübergehend zurückziehen"
   mehr in der Oberfläche. Die Route `PUT /:id/yeniden` (wieder veröffentlichen) existiert
   weiterhin, wird aber von keiner Ansicht benutzt. Drei Inserate stehen noch auf `pasif`
   (ids 11, 13, 23) und sind nur noch für ihren Eigentümer sichtbar.
 - ~~Neue Inserate landen nicht im Suchindex~~ — **erledigt in v1.12.0** (POST ruft
   `syncListing`, sofern das Inserat direkt aktiv ist).
-- **Admin (späterer Agent, Auftragssammlung H/L/M):** Abzeichen „Silme talebi · noch X Tage“ /
-  „Müşteri ayrıldı“ aus `users.durum`, `silinme_istegi`, `silindi_at`; Kundennummer
-  `musteri_no` in Kundenliste, Kundenakte, İlan Onayı, Riskli Mesajlar, Şikayetler; Filter
-  „Test verisi“ (`users.test_verisi`); Markenlisten unter Kategoriler → Özellikler pflegbar;
-  İl/İlçe-Combobox und Telefon-/VKN-Prüfung auch im Admin; Marke und Zustand in Kundenakte
-  und İlan Onayı. Der Admin liest Zustände noch mit den alten Codes, falls er welche zeigt.
-- Kontolöschung: Inseratsbilder gehen bei der Anonymisierung noch **nicht** ins Archiv
-  (Abschnitt G fehlt); KVKK-/Gizlilik-Text ist noch nicht an den Ablauf angepasst.
+- ~~Admin: Abzeichen Silme talebi/Müşteri ayrıldı, Kundennummer in den Listen, Filter Test
+  verisi, Markenlisten pflegbar, Marke/Zustand in Akte und İlan Onayı~~ — **erledigt v1.25/v1.26**.
+  Offen: İl/İlçe-Combobox und Telefon-/VKN-Prüfung in Admin-**Formularen** (der Admin bearbeitet
+  Kundendaten bisher gar nicht, nur Geschlecht).
+- Kundenakte, offen: ISP/Anbieter im IP-Protokoll braucht GeoLite2-ASN (MaxMind-Lizenzschlüssel,
+  Burak) — bis dahin „—“ (Demo-Daten tragen erfundene Anbieter). Versionierte
+  KVKK-Einwilligungen (Text-Version, Zeit, IP) werden nirgends gespeichert; Reiter „İzinler“ zeigt
+  nur die Tercih-Felder. Unterlagen-Upload für Kurumsal-Kunden fehlt im Frontend
+  (`musteri_belgeleri.dosya_url`, Ablage `uploads/belgeler` ist bereits gesperrt); „Görüntüle“
+  ist deshalb deaktiviert. „Mesaj gönder“ an Kunden und zweistufiges Löschen durch den Admin
+  (Cankartım) fehlen. Inserat „läuft aus“ (Cron parkt nur) erzeugt noch keinen Archiv-Snapshot.
+- Kontolöschung: ~~Bilder gehen nicht ins Archiv~~ (erledigt v1.23); KVKK-/Gizlilik-Text nennt die
+  Fristen (Archiv 2 Jahre, IP-Log 2 Jahre) noch nicht.
 - Telefon: id 5 (`0000000000`) und id 6 (`0500000000`) bleiben unnormalisiert (Platzhalter,
   keine echte Nummer). `adresler` speichert Telefon/Name/Typ gar nicht, obwohl die Maske
   sie abfragt.
@@ -1299,10 +1399,10 @@ In-Memory und setzen sich beim Neustart des Admins zurück.
   neue Google-Konten bekommen den Platzhalter `g-<hash>`. Abfrage der Telefonnummer nach dem
   ersten Login fehlt; vor dem Freischalten entscheiden.
 - Admin-Rollen: Entegrasyonlar speichern/testen nur `super_admin`; ein Rechtebaum (Cankartım
-  08) fehlt noch. Sidebar-Einträge Müşteri Akte, Medya Motoru, Yedekleme, Deploy Yönetimi,
-  Test Sunucu sind „Hazırlanıyor“-Seiten.
-- Admin-Seite „Kategoriler“ ruft `/api/kategoriler` relativ zur Seite auf — unter
-  `:3002/admin` gibt es das nicht (zeigt „0 ana kategori“), über kapbeni.com schon.
+  08) fehlt noch; Kundenakte/Sperren/Belege darf jeder aktive Admin. Sidebar-Einträge Medya
+  Motoru, Yedekleme, Deploy Yönetimi, Test Sunucu sind „Hazırlanıyor“-Seiten.
+- ~~Admin-Seite „Kategoriler“ zeigt unter :3002 „0 ana kategori“~~ — **erledigt v1.26**
+  (`/admin/api/kategoriler`).
 - Admin-Zurück: Hash-Routing gilt für Seiten und Kundendetail; Reiter innerhalb von Seiten
   und Modals haben noch keinen History-Eintrag.
 - Die Fehlergrenze schützt bislang nur die Dashboard-Reiter. Detailseite, Keşfet, Profil
