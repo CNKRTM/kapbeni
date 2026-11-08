@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.36.0 — 2026-11-08
+
+Login-Effekte nach Santral: Glaskarte, Ein-/Aufklappen, fallende Lichtstreifen in Kap-Beni-Rot (Admin-Login, Sperrbildschirm, Kunden-Login)
+
+- docs: CLAUDE.md – Chronik v1.35.0 Benachrichtigungen, Backlog
+
 ## 1.35.0 — 2026-11-08
 
 Benachrichtigungen: Glocke mit Liste, Ausloeser Nachricht/Angebot/Annahme/Ablehnung/Freigabe, echte Mesajlar-Zaehler

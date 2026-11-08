@@ -1,6 +1,6 @@
 // AuthModal.tsx — 1:1 nach Live-Bundle (_w-Komponente)
 // 3 Ansichten: giris | kayit (Bireysel) | kurumsal — mit Google-Button + Kurumsal Kayıt
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { X, Mail, Lock, Eye, EyeOff, User, Phone, Building2, Briefcase } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { ve } from '../api'
@@ -8,6 +8,7 @@ import TelefonInput from './TelefonInput'
 import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
 import Turnstile, { useAuthYapilandirma } from './Turnstile'
 import { useGeriKapat } from '../lib/geriTusu'
+import { einklappen, lichtFolgt, lichtstreifen, schuetteln } from '../lib/girisEfekt'
 
 const SEKTORLER = [
   'Elektronik', 'Beyaz Eşya', 'Mobilya & Dekorasyon', 'Giyim & Tekstil', 'Araç & Vasıta',
@@ -75,6 +76,30 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
   const [kPhone, setKPhone] = useState('')
   const [kPassword, setKPassword] = useState('')
   const [ticariAdres, setTicariAdres] = useState('')
+
+  // Login-Effekte nach Santral (v1.36): Glaskarte, Lichtstreifen auf dem Hintergrund, Schütteln bei Fehler.
+  // Einklappen (Raute + Kugel, Aufklappen bei Maus/Fokus) nur beim Login und nur mit Maus —
+  // am Handy ist das Fenster ein Bottom-Sheet, eine 170-px-Kachel wäre dort ein Rätsel.
+  const flaecheRef = useRef<HTMLDivElement>(null)
+  const hintergrundRef = useRef<HTMLDivElement>(null)
+  const karteRef = useRef<HTMLDivElement>(null)
+  const klappRef = useRef<{ auf: () => void }>({ auf: () => {} })
+  const fehlerRef = useRef('')
+  fehlerRef.current = error
+  useEffect(() => {
+    if (!isOpen) return
+    const streifenWeg = lichtstreifen(hintergrundRef.current, 9)
+    const lichtWeg = lichtFolgt(flaecheRef.current, karteRef.current)
+    const maus = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
+    const k = tab === 'giris' && maus ? einklappen(karteRef.current, () => !!fehlerRef.current) : null
+    klappRef.current = k ?? { auf: () => {} }
+    return () => { streifenWeg(); lichtWeg(); k?.aufraeumen() }
+  }, [isOpen, tab])
+  useEffect(() => {
+    if (!error) return
+    klappRef.current.auf()
+    schuetteln(karteRef.current)
+  }, [error])
 
   if (!isOpen) return null
 
@@ -160,9 +185,12 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
   // ── Giriş ──────────────────────────────────────────────────────
   if (tab === 'giris') {
     return (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-        <div className="relative bg-white w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+      <div ref={flaecheRef} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+        <div ref={hintergrundRef} className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+        <div ref={karteRef} data-testid="giris-karte" className="kp-glas w-full sm:max-w-md sm:rounded-[20px] rounded-t-[20px] overflow-hidden max-h-[92vh] flex flex-col">
+          <span className="kp-ecke tl" /><span className="kp-ecke tr" /><span className="kp-ecke bl" /><span className="kp-ecke br" />
+          <div className="kp-intro" aria-hidden="true"><span className="kp-raute"><img src="/kapbeni-ikon.webp" alt="" /></span><span className="kp-kugel" /></div>
+          <div className="kp-inhalt flex flex-col min-h-0 flex-1">
           <div className="flex items-center justify-between px-5 pt-5 pb-4 flex-shrink-0 border-b border-gray-100">
             <div>
               <h2 className="text-lg font-black text-gray-900">Giriş Yap</h2>
@@ -185,7 +213,7 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
                 <PassToggle />
               </div>
               <Turnstile key={tab} onToken={setTsToken} sifirla={tsSifirla} />
-              <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
+              <button type="submit" disabled={loading} className="kp-btn w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
               </button>
               <div className="flex items-center gap-3">
@@ -206,6 +234,7 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
               </p>
             </form>
           </div>
+          </div>
         </div>
       </div>
     )
@@ -213,9 +242,11 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
 
   // ── Kayıt (Bireysel / Kurumsal) ───────────────────────────────
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-2xl overflow-hidden max-h-[92vh] flex flex-col">
+    <div ref={flaecheRef} className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div ref={hintergrundRef} className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div ref={karteRef} className="kp-glas w-full sm:max-w-lg sm:rounded-[20px] rounded-t-[20px] overflow-hidden max-h-[92vh] flex flex-col">
+        <span className="kp-ecke tl" /><span className="kp-ecke tr" /><span className="kp-ecke bl" /><span className="kp-ecke br" />
+        <div className="kp-inhalt flex flex-col min-h-0 flex-1">
         <div className="flex items-center justify-between px-5 pt-5 pb-0 flex-shrink-0">
           <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
             <button onClick={() => switchTab('kayit')} className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${tab === 'kayit' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}>
@@ -265,7 +296,7 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
                 <PassToggle />
               </div>
               <Turnstile key={tab} onToken={setTsToken} sifirla={tsSifirla} />
-              <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
+              <button type="submit" disabled={loading} className="kp-btn w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Kayıt olunuyor...' : 'Kayıt Ol'}
               </button>
               <div className="flex items-center gap-3">
@@ -383,7 +414,7 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
                 <p>🔐 VKN / TCKN kontrol haneleriyle doğrulanır, kurumsal hesaplar ayrıca incelenir. Sahte bilgiler hesap iptaline neden olur.</p>
               </div>
               <Turnstile key={tab} onToken={setTsToken} sifirla={tsSifirla} />
-              <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
+              <button type="submit" disabled={loading} className="kp-btn w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Kayıt gönderiliyor...' : '🏢 Kurumsal Hesap Oluştur'}
               </button>
               {/* Rechtstexte öffnen in neuem Tab (target=_blank): das Fenster bleibt mit den
@@ -402,6 +433,7 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
               </p>
             </form>
           )}
+        </div>
         </div>
       </div>
     </div>

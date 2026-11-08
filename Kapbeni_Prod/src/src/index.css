@@ -59,3 +59,53 @@ body {
 .hukuk-metin .hukuk-icindekiler p { @apply mb-2; }
 .hukuk-metin .hukuk-icindekiler ul { @apply list-none pl-0 mb-0 grid gap-1 sm:grid-cols-2 space-y-0; }
 .hukuk-metin .hukuk-icindekiler a { @apply text-gray-700 hover:text-primary; }
+
+/* ── Login-Effekte nach Santral (v1.36, lib/girisEfekt.ts): Glaskarte, Ein-/Aufklappen,
+   fallende Lichtstreifen — Farben aus primary (#b61722) und #e53935. Gleiche Werte im
+   Express-Admin (admin/public/index.html, Klassen .kp-glas/.streak). ── */
+.kp-glas { position: relative; background: linear-gradient(160deg, #ffffffee, #ffffffd9); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 40px #b617221f, 0 2px 6px #b6172214, 0 25px 50px -12px rgb(0 0 0 / .25);
+  transition: width .75s cubic-bezier(.7,0,.2,1), height .75s cubic-bezier(.7,0,.2,1); margin-left: auto; margin-right: auto; }
+.kp-glas::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 0; background: radial-gradient(260px 260px at var(--mx,50%) var(--my,30%), #e5393522, transparent 65%); }
+.kp-glas::after { content: ""; position: absolute; inset: 0; pointer-events: none; padding: 1px; border-radius: inherit; z-index: 3;
+  background: linear-gradient(135deg, #e53935aa, #e5e7eb 30%, #e5e7eb 70%, #8a101988);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+.kp-glas > .kp-inhalt { position: relative; z-index: 1; transition: opacity .4s; }
+.kp-ecke { position: absolute; width: 14px; height: 14px; border: 0 solid #e53935; z-index: 2; opacity: .85; transition: transform .4s; pointer-events: none; }
+.kp-ecke.tl { top: 10px; left: 14px; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 8px; }
+.kp-ecke.tr { top: 10px; right: 14px; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 8px; }
+.kp-ecke.bl { bottom: 10px; left: 14px; border-bottom-width: 2px; border-left-width: 2px; border-bottom-left-radius: 8px; }
+.kp-ecke.br { bottom: 10px; right: 14px; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 8px; }
+.kp-glas:hover .kp-ecke.tl { transform: translate(-3px,-3px); } .kp-glas:hover .kp-ecke.tr { transform: translate(3px,-3px); }
+.kp-glas:hover .kp-ecke.bl { transform: translate(-3px,3px); } .kp-glas:hover .kp-ecke.br { transform: translate(3px,3px); }
+.kp-intro { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0; transition: opacity .35s; z-index: 2; }
+.kp-raute { width: 46px; height: 46px; border: 1.5px solid #b6172255; background: #ffffffaa; transform: rotate(45deg); display: grid; place-items: center; border-radius: 6px; animation: kpRaute 1.4s cubic-bezier(.6,0,.2,1) both; }
+.kp-raute img { width: 28px; height: 28px; object-fit: contain; transform: rotate(-45deg); }
+.kp-kugel { position: absolute; left: var(--ox,62%); top: var(--oy,58%); width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #fff, #ff8a80 35%, #e53935 60%, transparent 72%); box-shadow: 0 0 18px 6px #e5393566, 0 0 50px 16px #8a101930;
+  transition: left .25s ease-out, top .25s ease-out; animation: kpKugel 1.6s ease-in-out infinite; }
+@keyframes kpKugel { 50% { box-shadow: 0 0 26px 10px #e5393588, 0 0 70px 24px #8a101940; } }
+@keyframes kpRaute { from { transform: rotate(-135deg) scale(.4); opacity: 0; } to { transform: rotate(45deg) scale(1); opacity: 1; } }
+.kp-glas.intro { cursor: pointer; }
+.kp-glas.intro .kp-intro { opacity: 1; }
+.kp-glas.intro > .kp-inhalt { opacity: 0; }
+.kp-glas.reveal .kp-inhalt > *, .kp-glas.reveal .kp-inhalt form > * { animation: kpHoch .55s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i,0) * 70ms + 80ms); }
+@keyframes kpHoch { from { opacity: 0; transform: translateY(12px); filter: blur(3px); } to { opacity: 1; transform: none; filter: none; } }
+.kp-glas input:focus, .kp-glas select:focus { box-shadow: 0 0 0 3px #e539352e; }
+.kp-glas .kp-btn { position: relative; overflow: hidden; }
+.kp-glas .kp-btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 8px 18px #e539354d; }
+.kp-glas .kp-btn::after { content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%; background: linear-gradient(100deg, transparent, #ffffff80, transparent); transform: skewX(-20deg); transition: left .6s; }
+.kp-glas .kp-btn:hover::after { left: 120%; }
+.kp-glas.shake { animation: kpSchuetteln .45s; }
+@keyframes kpSchuetteln { 20%,60% { transform: translateX(-6px); } 40%,80% { transform: translateX(6px); } }
+.kp-streifen { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 0; }
+.kp-streif { position: absolute; top: 0; width: var(--w,2px); height: var(--h,45vh); border-radius: 3px; opacity: 0;
+  background: linear-gradient(180deg, transparent, #ffb4b0 25%, #e53935 55%, #b61722 75%, transparent);
+  box-shadow: 0 0 12px #e539354d; transform: translate(0,-60vh) rotate(var(--rot,-28deg)); animation: kpStreifen var(--dur,9s) linear var(--delay,0s) infinite; }
+.kp-streif.soft { filter: blur(3px); }
+@keyframes kpStreifen { 0% { transform: translate(0,-60vh) rotate(var(--rot)); opacity: 0; } 10% { opacity: var(--op,.75); } 85% { opacity: var(--op,.75); } 100% { transform: translate(var(--dx,-38vh),125vh) rotate(var(--rot)); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .kp-streifen, .kp-intro { display: none; }
+  .kp-glas, .kp-glas *, .kp-kugel, .kp-raute { animation: none !important; transition: none !important; }
+  .kp-glas.intro > .kp-inhalt { opacity: 1; }
+}
