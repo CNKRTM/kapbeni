@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.33.0 — 2026-11-08
+
+Cookie-Banner: Tümünü kabul / Reddet / Tercihler, kapbeni_cookie_consent v1.0, Footer Çerez Tercihleri, UI-Test rechtsseiten.js
+
 ## 1.32.0 — 2026-11-08
 
 Rechtsseiten: 15 Texte (Entwurf) unter eigenen Routen, Footer-Gruppen, Künye aus SIRKET, ETBİS-Platzhalter, Registrierungslinks

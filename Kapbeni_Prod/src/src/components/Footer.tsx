@@ -6,6 +6,7 @@ import { useState } from 'react'
 import { ChevronDown, X, Gift, Bookmark, Sparkles, Building2, Zap, Crown } from 'lucide-react'
 import { SIRKET, tamAdres } from '../data/sirket'
 import { useGeriKapat } from '../lib/geriTusu'
+import { cerezTercihleriniAc } from '../lib/cerezOnay'
 
 const KURUMSAL_LINKS = [
   { label: 'Hakkımızda', href: '/#/hakkimizda' },
@@ -219,6 +220,11 @@ export default function Footer() {
                     <a href={l.href} className="hover:text-white transition-colors">{l.label}</a>
                   </li>
                 ))}
+                <li>
+                  <button type="button" onClick={cerezTercihleriniAc} className="hover:text-white transition-colors text-left">
+                    Çerez Tercihleri
+                  </button>
+                </li>
                 <li><a href={`mailto:${SIRKET.destekEposta}`} className="hover:text-white transition-colors">{SIRKET.destekEposta}</a></li>
                 <li><a href={SIRKET.telefonHref} className="hover:text-white transition-colors">{SIRKET.telefon}</a></li>
               </ul>

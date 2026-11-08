@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import { AuthProvider } from './context/AuthContext'
 import App from './App'
+// Cookie-Banner liegt ausserhalb von App: erscheint auf jeder Ansicht, auch auf Rechtsseiten
+import CerezBanner from './components/CerezBanner'
 
 // Scrollposition stellt App.tsx je History-Station selbst wieder her.
 if ('scrollRestoration' in window.history) window.history.scrollRestoration = 'manual'
@@ -13,6 +15,7 @@ startNachOverlayBereinigung(() => createRoot(document.getElementById('root')!).r
   <StrictMode>
     <AuthProvider>
       <App />
+      <CerezBanner />
     </AuthProvider>
   </StrictMode>,
 ))
