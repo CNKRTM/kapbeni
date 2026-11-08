@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.17.0 — 2026-11-08
+
+Admin: neue Login-Seite (zweigeteilt, Staging-Banner, Version·Commit, Compendus-Fuß, IP-Hinweis), Sitzungen in admin_oturumlar, Login-Versuche mit IP im audit_log
+
 ## 1.16.0 — 2026-11-08
 
 Admin: Entegrasyonlar (Karten, Modus, Zustand, Pflichtfeld-Balken, Yapılandır maskiert, Bağlantı Testi; AES-256-GCM in entegrasyon_ayarlari), Meili-Schlüssel aus .env, Claude-Modell wählbar

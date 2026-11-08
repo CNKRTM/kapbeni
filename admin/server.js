@@ -17,6 +17,7 @@ const APP_VERSION = (() => {
 const rateLimit = require('../api/node_modules/express-rate-limit');
 
 const app = express();
+const entegrasyon = require('../api/src/lib/entegrasyon');
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(express.json());
@@ -48,21 +49,39 @@ const girisLimiter = rateLimit({
 });
 app.use('/admin/api/giris', girisLimiter);
 
-// Admin JWT — kaynak: 'admin' (API'nin 'api' kaynağından farklı)
-const adminToken = (user) => jwt.sign(
-  { id: user.id, email: user.email, rol: user.rol, kaynak: 'admin' },
-  process.env.JWT_SECRET, { expiresIn: '8h' }
+// Admin JWT — kaynak: 'admin' (API'nin 'api' kaynağından farklı).
+// Seit v1.17 traegt der Token die Sitzungs-ID (sid) aus admin_oturumlar: Abmelden
+// und (ab v1.18) die Bildschirmsperre wirken serverseitig, nicht nur im Browser.
+const OTURUM_SAAT = 8;
+const adminToken = (user, sid) => jwt.sign(
+  { id: user.id, email: user.email, rol: user.rol, kaynak: 'admin', sid },
+  process.env.JWT_SECRET, { expiresIn: OTURUM_SAAT + 'h' }
 );
+async function oturumAc(admin, req) {
+  const sid = require('crypto').randomUUID();
+  await db.query(
+    `INSERT INTO admin_oturumlar(id,admin_id,ip,user_agent,bitis) VALUES($1,$2,$3,$4,NOW()+($5||' hours')::interval)`,
+    [sid, admin.id, clientIp(req).slice(0, 45), String(req.headers['user-agent'] || '').slice(0, 400), String(OTURUM_SAAT)]);
+  return sid;
+}
 
-const adminAuth = (req, res, next) => {
+const adminAuth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1] || req.cookies?.admin_token;
   if (!token) return res.status(401).json({ hata: 'Giriş gerekli' });
+  let d;
+  try { d = jwt.verify(token, process.env.JWT_SECRET); } catch { return res.status(401).json({ hata: 'Geçersiz token' }); }
+  if (d.kaynak !== 'admin') return res.status(403).json({ hata: 'Yetkisiz' });
+  if (!d.sid) return res.status(401).json({ hata: 'Oturum yenilendi, lütfen tekrar giriş yapın' });
   try {
-    const d = jwt.verify(token, process.env.JWT_SECRET);
-    if (d.kaynak !== 'admin') return res.status(403).json({ hata: 'Yetkisiz' });
-    req.admin = d;
+    const { rows } = await db.query(
+      `SELECT o.*, a.aktif AS admin_aktif FROM admin_oturumlar o JOIN admin_users a ON a.id=o.admin_id
+       WHERE o.id=$1 AND o.admin_id=$2`, [d.sid, d.id]);
+    const o = rows[0];
+    if (!o || o.kapandi_at || new Date(o.bitis) < new Date() || !o.admin_aktif)
+      return res.status(401).json({ hata: 'Oturum sona erdi' });
+    req.admin = d; req.oturum = o;
     next();
-  } catch { res.status(401).json({ hata: 'Geçersiz token' }); }
+  } catch (e) { console.error('[adminAuth]', e.message); res.status(500).json({ hata: 'Oturum kontrol edilemedi' }); }
 };
 
 const auditAdmin = async (olay, admin_id, opts = {}) => {
@@ -74,13 +93,46 @@ const auditAdmin = async (olay, admin_id, opts = {}) => {
 
 // ── ADMIN AUTH ──────────────────────────────────────────────────────────
 
+// Jeder Versuch kommt mit IP ins audit_log (Hinweis auf der Login-Seite).
+const adminOzet = (a) => ({ id: a.id, email: a.email, ad_soyad: a.ad_soyad, rol: a.rol });
 app.post('/admin/api/giris', async (req, res) => {
-  const { email, password } = req.body;
-  const { rows } = await db.query('SELECT * FROM admin_users WHERE email=$1 AND aktif=true', [email]);
-  if (!rows[0] || !await bcrypt.compare(password, rows[0].password_hash))
-    return res.status(401).json({ hata: 'Hatalı giriş' });
-  await db.query('UPDATE admin_users SET son_giris=NOW() WHERE id=$1', [rows[0].id]);
-  res.json({ token: adminToken(rows[0]), admin: { id: rows[0].id, email: rows[0].email, rol: rows[0].rol } });
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const password = String(req.body?.password || '');
+    const ip = clientIp(req).slice(0, 45);
+    const { rows } = await db.query('SELECT * FROM admin_users WHERE lower(email)=$1 AND aktif=true', [email]);
+    if (!rows[0] || !await bcrypt.compare(password, rows[0].password_hash)) {
+      await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.giris_hata','admin',$1,$2,$3)`,
+        [rows[0]?.id || null, JSON.stringify({ email: email.slice(0, 120) }), ip]);
+      return res.status(401).json({ hata: 'E-posta veya şifre hatalı' });
+    }
+    const sid = await oturumAc(rows[0], req);
+    await db.query('UPDATE admin_users SET son_giris=NOW() WHERE id=$1', [rows[0].id]);
+    await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.giris','admin',$1,$2,$3)`,
+      [rows[0].id, JSON.stringify({ yontem: 'sifre' }), ip]);
+    res.json({ token: adminToken(rows[0], sid), admin: adminOzet(rows[0]) });
+  } catch (e) { console.error('[admin/giris]', e.message); res.status(500).json({ hata: 'Giriş yapılamadı' }); }
+});
+
+app.get('/admin/api/ben', adminAuth, async (req, res) => {
+  const { rows } = await db.query('SELECT * FROM admin_users WHERE id=$1', [req.admin.id]);
+  res.json({ admin: adminOzet(rows[0]), kilitli: !!req.oturum.kilitli });
+});
+
+app.post('/admin/api/cikis', adminAuth, async (req, res) => {
+  await db.query('UPDATE admin_oturumlar SET kapandi_at=NOW() WHERE id=$1', [req.oturum.id]);
+  await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,ip_adresi) VALUES('admin.cikis','admin',$1,$2)`, [req.admin.id, clientIp(req).slice(0, 45)]);
+  res.json({ ok: true });
+});
+
+// Oeffentlich: was die Login-Seite braucht (keine Geheimnisse).
+app.get('/admin/api/giris-yapilandirma', async (req, res) => {
+  let turnstile = { aktif: false }, google = { aktif: false }, mail = { kanal: 'log' };
+  try { turnstile = await entegrasyon.turnstileGenel(); } catch {}
+  try { google = { aktif: !!(await entegrasyon.googleAyar('admin')) }; } catch {}
+  try { mail = await entegrasyon.mailKanal(); } catch {}
+  await bauLesen();
+  res.json({ version: APP_VERSION, commit: _bau.commit, ortam: entegrasyon.ORTAM, turnstile, google, mail_kanali: mail.kanal });
 });
 
 // ── DASHBOARD ──────────────────────────────────────────────────────────
@@ -271,12 +323,14 @@ app.get('/admin/api/mesajlar/tehlikeli', adminAuth, async (req, res) => {
 // deploy.sh committet NACH dem Neuladen der Dienste — der Hash wird deshalb
 // nicht beim Start, sondern bei Bedarf gelesen (60 s zwischengespeichert).
 let _bau = { at: 0, commit: '' };
-app.get('/admin/api/bau', (req, res) => {
-  const fertig = () => res.json({ version: APP_VERSION, commit: _bau.commit,
-    ortam: process.env.KAPBENI_ORTAM === 'prod' ? 'prod' : 'staging' });
-  if (Date.now() - _bau.at < 60000) return fertig();
+const bauLesen = () => new Promise((ok) => {
+  if (Date.now() - _bau.at < 60000) return ok(_bau);
   require('child_process').execFile('git', ['-C', path.join(__dirname, '..'), 'rev-parse', '--short', 'HEAD'],
-    { timeout: 3000 }, (e, out) => { _bau = { at: Date.now(), commit: e ? '' : String(out).trim() }; fertig(); });
+    { timeout: 3000 }, (e, out) => { _bau = { at: Date.now(), commit: e ? '' : String(out).trim() }; ok(_bau); });
+});
+app.get('/admin/api/bau', async (req, res) => {
+  await bauLesen();
+  res.json({ version: APP_VERSION, commit: _bau.commit, ortam: process.env.KAPBENI_ORTAM === 'prod' ? 'prod' : 'staging' });
 });
 
 // ── SIDEBAR-ZAEHLER (Klammern hinter den Menuepunkten) ───────────────────
@@ -397,7 +451,6 @@ app.get('/admin/api/vitaminler', adminAuth, async (req,res)=>{ res.json((await d
 
 // ── ENTEGRASYONLAR (ersetzt „API Bağlantılar“, v1.16) ─────────────────
 // Konfiguration und Tests liegen in api/src/lib/entegrasyon.js (gemeinsam mit der API).
-const entegrasyon = require('../api/src/lib/entegrasyon');
 const nurSuperAdmin = (req, res, next) => req.admin?.rol === 'super_admin' ? next()
   : res.status(403).json({ hata: 'Bu işlem yalnız süper admin içindir' });
 

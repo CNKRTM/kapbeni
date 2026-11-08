@@ -35,6 +35,31 @@ async function anmelden(page) {
 }
 
 const SZENARIEN = {
+  // Login-Seite: zweigeteilt, Banner, Hinweise, Fuss, Google „Yakında“, Fehler und Erfolg.
+  async giris(page, b, mobil) {
+    await page.goto(BASIS); await page.waitForSelector('#login-email', { timeout: 8000 });
+    pruefe(page.url().endsWith('#/giris'), `${b}: Adresse #/giris`);
+    pruefe(await page.getByText('Yönetici Girişi').count() === 1, `${b}: Titel Yönetici Girişi`);
+    pruefe(await page.locator('.giris-banner').count() === 1, `${b}: Staging-Banner`);
+    pruefe(await page.locator('.giris-sol').isVisible() === !mobil, `${b}: linke Fläche ${mobil ? 'ausgeblendet' : 'sichtbar'}`);
+    pruefe(await page.getByText('Tüm giriş denemeleri IP adresi ile kayıt altına alınır.').count() === 1, `${b}: IP-Hinweis`);
+    pruefe(await page.getByText('Bu alan yalnızca yetkili personel içindir.', { exact: false }).count() === 1, `${b}: Hinweis yetkili personel`);
+    pruefe(/Kap Beni v\d+\.\d+\.\d+ · [0-9a-f]{7}/.test(await page.locator('#giris-version').innerText()), `${b}: Fuss Version · Commit`);
+    pruefe(await page.locator('.giris-fuss img[alt="Compendus"]').count() === 1, `${b}: Compendus-Logo im Fuss`);
+    pruefe(await page.locator('#google-btn').isDisabled() && /Yakında/.test(await page.locator('#google-btn').innerText()), `${b}: Google-Knopf deaktiviert „Yakında“`);
+    await page.fill('#login-email', TEST_EMAIL); await page.fill('#login-pw', 'falsch-xyz'); await page.click('#login-btn');
+    await page.waitForTimeout(800);
+    pruefe(/hatalı/i.test(await page.locator('#login-err').innerText()), `${b}: Fehlermeldung bei falschem Passwort`);
+    await page.screenshot({ path: `${AUS}/admin-giris-${page.viewportSize().width}.png` });
+    await page.fill('#login-pw', pw()); await page.click('#login-btn');
+    await page.waitForSelector('#sidebar', { timeout: 8000 });
+    pruefe(page.url().endsWith('#/dashboard'), `${b}: nach Login #/dashboard`);
+    await page.waitForTimeout(800);
+    pruefe(/UI Test Admin/.test(await page.locator('#topbar-admin').innerText()), `${b}: angemeldeter Admin oben rechts`);
+    if (mobil) await page.click('.sb-hamburger');
+    await page.locator('.sidebar-footer .nav-item').click(); await page.waitForTimeout(600);
+    pruefe(await page.locator('#login-email').count() === 1 && page.url().endsWith('#/giris'), `${b}: Abmelden fuehrt zur Login-Seite`);
+  },
   // Entegrasyonlar: Karten, Zustands-Badges, Balken, Yapılandır mit Maske, Bağlantı Testi.
   async entegrasyonlar(page, b) {
     const { q } = require('../_hilfe');

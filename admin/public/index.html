@@ -48,8 +48,9 @@ tailwind.config={theme:{extend:{colors:{
 .btn-blue{background:#dbeafe;color:#1d4ed8}
 .btn-blue:hover{background:#bfdbfe}
 .btn-sm{padding:6px 12px;font-size:12px}
-input,select,textarea{border:1.5px solid #e2e8f0;border-radius:9px;padding:9px 13px;font-size:13.5px;font-family:inherit;width:100%;transition:border .15s;background:#fff}
-input:focus,select:focus,textarea:focus{outline:none;border-color:#e53935}
+/* :not() hebt die Spezifitaet ueber das Tailwind-Preflight (das sonst padding:0 setzt) */
+input:not([type=checkbox]):not([type=radio]),select:not(.x),textarea:not(.x){border:1.5px solid #e2e8f0;border-radius:9px;padding:9px 13px;font-size:13.5px;font-family:inherit;width:100%;transition:border .15s;background:#fff}
+input:not([type=checkbox]):focus,select:focus,textarea:focus{outline:none;border-color:#e53935}
 label{font-size:12.5px;font-weight:600;color:#475569;display:block;margin-bottom:5px}
 table{width:100%;border-collapse:collapse;font-size:13.5px}
 th{text-align:left;padding:10px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;border-bottom:2px solid #f1f5f9;white-space:nowrap}
@@ -119,6 +120,16 @@ tr:hover td{background:#fafafa}
 @media(max-width:900px){.ent-grid{grid-template-columns:1fr}}
 .ent-link{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;font-size:12.5px;font-weight:600;color:#475569;padding:0;margin:10px 0}
 .ent-link:hover{color:#1a2e4a}
+.giris-wrap{display:flex;min-height:100vh;background:#f8fafc}
+.giris-sol{flex:0 0 44%;background:#1a2e4a;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px}
+.giris-logo-karte{background:#fff;border-radius:18px;padding:36px 32px;width:100%;max-width:380px;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25);display:flex;flex-direction:column;align-items:center}
+.giris-sag{flex:1;display:flex;flex-direction:column;min-width:0}
+.giris-banner{background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;text-align:center;font-size:11.5px;font-weight:700;padding:6px 12px}
+.giris-mitte{flex:1;display:flex;align-items:center;justify-content:center;padding:32px 16px}
+.giris-fuss{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 16px;padding:14px 16px;font-size:11.5px;color:#94a3b8;border-top:1px solid #e2e8f0;text-align:center}
+.giris-mobil-logo{display:none;height:40px;width:auto;margin:0 auto 12px}
+.ts-slot:empty{display:none}
+@media(max-width:900px){.giris-sol{display:none}.giris-mobil-logo{display:block}}
 .star-filled{color:#f59e0b}
 .star-empty{color:#e2e8f0}
 </style>
@@ -153,7 +164,17 @@ function showToast(msg,type='ok'){
   _toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
 }
 
-function logout(){ localStorage.removeItem('admin_token'); TOKEN=''; renderLogin(); }
+let ADMIN=null;
+// Abmelden: Sitzung serverseitig schliessen, dann lokal aufraeumen.
+function logout(){
+  const t=TOKEN; localStorage.removeItem('admin_token'); TOKEN=''; ADMIN=null; clearInterval(_sbTimer);
+  if(t) fetch(API+'/cikis',{method:'POST',headers:{'Authorization':'Bearer '+t}}).catch(()=>{});
+  history.replaceState(null,'','#/giris'); renderLogin();
+}
+async function benLaden(){
+  try{ const r=await fetch(API+'/ben',{headers:{...H(),'X-Kp-Arka':'1'}}); if(r.status===401){ logout(); return null; }
+    const d=await r.json(); ADMIN=d.admin; const t=el('topbar-admin'); if(t&&ADMIN) t.textContent=(ADMIN.ad_soyad||ADMIN.email)+' · '+ADMIN.rol; return d; }catch{ return null; }
+}
 const el=id=>document.getElementById(id);
 const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Number(n||0).toLocaleString('tr-TR');
@@ -162,60 +183,101 @@ const fmtDateTime=d=>d?new Date(d).toLocaleString('tr-TR',{day:'2-digit',month:'
 const stars=n=>{let s='';for(let i=0;i<5;i++)s+=`<span class="${i<(n||0)?'star-filled':'star-empty'}">★</span>`;return s;}
 
 // ═══════════════════════════════════════════════
-// LOGIN
+// LOGIN (Aufbau nach Compendus Medical, Farben/Schrift Kapbeni-Admin)
+// Links: Flaeche #1a2e4a mit weisser Logo-Karte. Rechts: Staging-Banner,
+// Titel, Formular-Karte, Hinweise, Fuss mit Version/Commit und Compendus.
+// Unterseiten per Hash: #/giris, #/sifremi-unuttum, #/yeni-sifre?t=…
 // ═══════════════════════════════════════════════
-function renderLogin(){
+let GIRIS_CFG=null;
+async function girisCfgLaden(){
+  if(GIRIS_CFG) return GIRIS_CFG;
+  try{ const r=await fetch(API+'/giris-yapilandirma'); GIRIS_CFG=r.ok?await r.json():{}; }catch{ GIRIS_CFG={}; }
+  return GIRIS_CFG;
+}
+const ORTAM='__APP_ORTAM__';
+function girisSayfasi(inner){
+  const c=GIRIS_CFG||{};
+  const staging=ORTAM!=='prod';
   document.getElementById('app').innerHTML=`
-  <div class="min-h-screen flex items-center justify-center" style="background:linear-gradient(135deg,#1a2e4a 0%,#2f4d7a 100%)">
-    <div class="bg-white rounded-2xl shadow-2xl p-9 w-full max-w-sm">
-      <div class="text-center mb-7">
-        <div class="inline-flex items-center gap-1 mb-2">
-          <span style="font-size:28px;font-weight:800;color:#1a2e4a;letter-spacing:-.5px">Kap</span>
-          <span style="font-size:28px;font-weight:800;color:#e53935;letter-spacing:-.5px">Beni</span>
-        </div>
-        <p style="font-size:12px;color:#94a3b8;font-weight:600;text-transform:uppercase;letter-spacing:.1em">Yönetim Paneli</p>
+  <div class="giris-wrap">
+    <div class="giris-sol">
+      <div class="giris-logo-karte">
+        <img src="img/kapbeni-logo.webp" alt="Kap Beni" style="width:100%;max-width:300px;height:auto"/>
+        <p style="font-size:17px;font-weight:800;color:#1a2e4a;margin-top:18px">Kap Beni – Yönetim Paneli</p>
+        ${staging?'<span class="badge amber" style="margin-top:10px">Test Staging Server</span>':''}
       </div>
-      <div id="login-err" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium"></div>
-      <div class="space-y-3">
-        <div>
-          <label>E-posta</label>
-          <input id="login-email" type="email" placeholder="admin@kapbeni.com" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <p style="color:#94a3b8;font-size:12.5px;margin-top:22px;text-align:center;max-width:320px;line-height:1.6">İlanlar, müşteriler ve sistem ayarları için yetkili personel paneli.</p>
+    </div>
+    <div class="giris-sag">
+      ${staging?'<div class="giris-banner">TEST SUNUCUSU (STAGING) · Burası canlı sistem değildir. Veriler test amaçlıdır.</div>':''}
+      <div class="giris-mitte">
+        <div style="width:100%;max-width:400px">
+          <div style="text-align:center;margin-bottom:18px">
+            <img src="img/kapbeni-logo.webp" alt="Kap Beni" class="giris-mobil-logo"/>
+            <h1 id="giris-baslik" style="font-size:22px;font-weight:800;color:#1a2e4a">Yönetici Girişi</h1>
+          </div>
+          ${inner}
+          <div style="margin-top:18px;font-size:12px;color:#64748b;line-height:1.7;text-align:center">
+            <div>🔒 Bu alan yalnızca yetkili personel içindir.</div>
+            <div>Tüm giriş denemeleri IP adresi ile kayıt altına alınır.</div>
+          </div>
         </div>
-        <div>
-          <label>Şifre</label>
-          <input id="login-pw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
-        </div>
-        <button id="login-btn" onclick="doLogin()" class="btn btn-primary w-full justify-center mt-2" style="width:100%;justify-content:center;padding:13px">
-          Giriş Yap
-        </button>
+      </div>
+      <div class="giris-fuss">
+        <span id="giris-version">Kap Beni v${escH(c.version||'__APP_VERSION__')}${c.commit?' · '+escH(c.commit):''}</span>
+        <img src="img/compendus-logo.webp" alt="Compendus" style="height:22px;width:auto"/>
+        <span>© Compendus Ltd. Şti. — Kap Beni bir Compendus ürünüdür</span>
       </div>
     </div>
   </div>`;
 }
-
-async function doLogin(){
-  const email=el('login-email')?.value, pw=el('login-pw')?.value;
-  if(!email||!pw)return;
-  try{
-    const r=await fetch(API+'/giris',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw})});
-    const d=await r.json();
-    if(!r.ok){
-      const err=el('login-err');
-      err.textContent=d.hata||d.message||'Giriş başarısız';
-      err.classList.remove('hidden');
-      return;
-    }
-    TOKEN=d.token; localStorage.setItem('admin_token',TOKEN);
-    renderApp(); routeAnwenden();
-  }catch(e){
-    const err=el('login-err');
-    if(err){err.textContent='Sunucuya bağlanılamadı';err.classList.remove('hidden');}
-  }
+function girisFehler(t){ const e=el('login-err'); if(!e) return; e.textContent=t; e.classList.remove('hidden'); }
+function girisFormHtml(){
+  const c=GIRIS_CFG||{};
+  const g=c.google||{};
+  return `<div class="card"><div class="card-body" style="padding:24px">
+    <div id="login-err" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium"></div>
+    <div id="login-info" class="hidden mb-4 p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-sm font-medium"></div>
+    <div class="space-y-3">
+      <div><label for="login-email">E-posta</label><input id="login-email" type="email" autocomplete="username" placeholder="ad@kapbeni.com" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div><label for="login-pw">Şifre</label><input id="login-pw" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
+      <div id="ts-giris" class="ts-slot"></div>
+      <button id="login-btn" onclick="doLogin()" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px">Giriş Yap</button>
+      <div id="sifre-unuttum-link" style="text-align:right"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin:16px 0 12px"><div style="flex:1;height:1px;background:#e2e8f0"></div><span style="font-size:12px;color:#94a3b8">veya</span><div style="flex:1;height:1px;background:#e2e8f0"></div></div>
+    <button id="google-btn" class="btn btn-secondary" style="width:100%;justify-content:center;padding:12px" ${g.aktif?`onclick="location.href=API+'/google/baslat'"`:'disabled title="Yakında"'}>
+      <svg width="16" height="16" viewBox="0 0 48 48"><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v8.6h12.7c-.6 3-2.3 5.5-4.8 7.2v6h7.7c4.5-4.1 7-10.2 7-17.3z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.8-5.8l-7.7-6c-2.1 1.4-4.8 2.3-8.1 2.3-6.2 0-11.5-4.2-13.4-9.9H2.7v6.2C6.5 42.5 14.7 48 24 48z"/><path fill="#FBBC05" d="M10.6 28.6c-.5-1.4-.8-2.9-.8-4.6s.3-3.2.8-4.6v-6.2H2.7C1 16.2 0 20 0 24s1 7.8 2.7 10.8l7.9-6.2z"/><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.9 2.4 30.5 0 24 0 14.7 0 6.5 5.5 2.7 13.4l7.9 6.2C12.5 13.7 17.8 9.5 24 9.5z"/></svg>
+      Google ile giriş${g.aktif?'':' <span class="badge gray" style="margin-left:4px">Yakında</span>'}
+    </button>
+  </div></div>`;
+}
+async function renderLogin(){ await girisCfgLaden(); girisRoute(); }
+function girisRoute(){
+  if(TOKEN&&el('view')) return;
+  girisSayfasi(girisFormHtml());
+  setTimeout(()=>el('login-email')?.focus(),50);
 }
 
-// ═══════════════════════════════════════════════
-// APP SHELL
-// ═══════════════════════════════════════════════
+async function doLogin(){
+  const email=el('login-email')?.value.trim(), pw=el('login-pw')?.value;
+  if(!email||!pw){ girisFehler('E-posta ve şifre gerekli'); return; }
+  const btn=el('login-btn'); if(btn){btn.disabled=true;btn.textContent='Giriş yapılıyor…';}
+  try{
+    const r=await fetch(API+'/giris',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,password:pw,turnstile:tsToken('ts-giris')})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ girisFehler(d.hata||d.message||'Giriş başarısız'); tsReset('ts-giris'); return; }
+    TOKEN=d.token; localStorage.setItem('admin_token',TOKEN);
+    ADMIN=d.admin||null;
+    if(!location.hash||/^#\/(giris|sifremi-unuttum|yeni-sifre)/.test(location.hash)) history.replaceState(null,'','#/dashboard');
+    renderApp(); routeAnwenden();
+  }catch(e){ girisFehler('Sunucuya bağlanılamadı'); }
+  finally{ if(btn){btn.disabled=false;btn.textContent='Giriş Yap';} }
+}
+// Turnstile kommt in v1.20 — bis dahin liefern die Helfer leere Werte.
+function tsToken(){ return null; }
+function tsReset(){}
+
 // ═══════════════════════════════════════════════
 // SIDEBAR (Aufbau nach Cankartım lib/admin/sidebar-config.ts + Sidebar.tsx)
 // Gruppen klappbar (localStorage), Zaehler in Klammern aus /sidebar-sayac,
@@ -378,7 +440,7 @@ function renderApp(){
     </div>
   </div>`;
   if(el('ortam-banner').dataset.ortam==='prod') el('ortam-banner').remove();
-  renderSidebar(); sbBauLaden(); sbSayacLaden();
+  renderSidebar(); sbBauLaden(); sbSayacLaden(); benLaden();
   clearInterval(_sbTimer); _sbTimer=setInterval(sbSayacLaden,60000);
 }
 
@@ -394,6 +456,7 @@ function routeAnwenden(){
   if(!el('view')) return;
   const {r,arg,alias}=aktuelleRoute();
   if(alias) history.replaceState(null,'','#/'+r);
+  if(/^(giris|sifremi-unuttum|yeni-sifre)$/.test(r)){ history.replaceState(null,'','#/dashboard'); return routeAnwenden(); }
   renderSidebar();
   const eintrag=sbEintrag(r);
   const t=el('topbar-title'); if(t) t.textContent=PAGE_TITLES[r]||eintrag?.label||r;
@@ -1451,7 +1514,7 @@ function vAyarlar(){
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-if(TOKEN){ renderApp(); routeAnwenden(); } else { renderLogin(); }
+if(TOKEN){ renderApp(); routeAnwenden(); } else { if(!/^#\/(giris|sifremi-unuttum|yeni-sifre)/.test(location.hash)) history.replaceState(null,'','#/giris'); renderLogin(); }
 </script>
 </body>
 </html>
