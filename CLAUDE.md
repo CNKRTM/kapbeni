@@ -1667,6 +1667,9 @@ Vorlage: Santral `docs/LOGIN-EFFEKTE.md` (live santral.compendus.com). Farben st
   auf (Felder blenden gestaffelt ein), Verlassen klappt nach 500 ms zu — **außer** Feld fokussiert,
   Maus über der Karte (Turnstile-iframe) oder Fehlermeldung sichtbar; `?hata=` startet offen.
   Touch: `pointerleave` wird ignoriert (kommt direkt nach dem Tippen), zu nur über `focusout`.
+  **Skript-Füllen (v1.36.2, Wunsch Santral):** auch `input`/`change` in der Karte klappt auf — die
+  Erweiterung „Santral Fill“ und Passwortmanager setzen Werte ohne Fokus/Maus. Eingeklappt bleiben die
+  Felder deshalb im DOM (nur `opacity:0`, nie `display:none`); beim Umbau so lassen.
   **Kein Autofokus** mehr auf E-posta, solange eingeklappt (der Fokus würde sofort aufklappen).
   Falsches Passwort schüttelt die Karte. 9 fallende Lichtstreifen in der hellen rechten Fläche, jede
   Runde neue Position/Neigung/Länge/Dauer/Deckkraft. Logo-Karte links schwebt. Şifremi unuttum /
@@ -1684,7 +1687,7 @@ Vorlage: Santral `docs/LOGIN-EFFEKTE.md` (live santral.compendus.com). Farben st
   gemessen genau so breit wie die Felder (Admin 352/310 px, Website 408/350 px). Wenn Google live geht
   und auf `renderButton` umgestellt wird: Breite aus `clientWidth` (200–400) + ResizeObserver wie Santral.
 - `prefers-reduced-motion: reduce` schaltet Streifen, Intro und Animationen ab, die Karte bleibt offen.
-- **Test** `api/tests/ui/giris-efekt.js` (1280/390 px, 59 Prüfungen; Kunden-Login ohne Anmeldung,
+- **Test** `api/tests/ui/giris-efekt.js` (1280/390 px, 67 Prüfungen inkl. Skript-Füllen; Kunden-Login ohne Anmeldung,
   Admin-Teil mit Test-Admin id=3, Passwort aus `/root/kp-admin-test.pw`, nie ausgegeben). Vorher gegen
   Admin :3912 + Vorschau :3905, danach live ALLES OK, Suite 47/47, Test-Admin wieder `aktif=false`.
 
