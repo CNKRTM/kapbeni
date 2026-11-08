@@ -203,6 +203,26 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     return () => { active = false }
   }, [user, listing?.id])
 
+  // „Medya işleniyor…“ aktualisiert sich selbst: solange die Engine am Video rechnet,
+  // alle 5 s nachfragen (hoechstens 3 min). Vorher musste der Nutzer neu laden
+  // (Backlog Medien, E2E-Test v1.33.5). `?medya=1` zaehlt keinen Seitenaufruf.
+  useEffect(() => {
+    if (!medien.isleniyor || !listing?.id) return
+    let active = true
+    let n = 0
+    const t = setInterval(() => {
+      if (++n > 36) { clearInterval(t); return }
+      ve.get<any>(`/ilanlar/${listing.id}?medya=1`)
+        .then((data: any) => {
+          if (!active || !data || data.video_durum === 'isleniyor') return
+          setMedien((m) => ({ ...m, video: data.video_url || null, poster: data.video_poster_url || null, isleniyor: false,
+            hata: data.video_durum === 'hata' ? (data.video_hata || 'Video işlenemedi.') : null }))
+        })
+        .catch(() => {})
+    }, 5000)
+    return () => { active = false; clearInterval(t) }
+  }, [medien.isleniyor, listing?.id])
+
   // overnight5: Görüntülenme sayacı (öffentlich) + Takip durumu (Token-Auth über ve)
   useEffect(() => {
     if (!ilanNumId) return

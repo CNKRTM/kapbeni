@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.33.5 — 2026-11-08
+
+E2E-Fix: „Medya işleniyor…“ auf der Detailseite aktualisiert sich selbst (Nachfrage ohne Aufrufzählung)
+
 ## 1.33.4 — 2026-11-08
 
 E2E-Fix: Meldung nach dem Anlegen nennt İlan Onayı statt immer „yayınlandı“

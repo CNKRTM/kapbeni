@@ -208,6 +208,37 @@ const SCHRITTE = {
     pruefe(d === 'moderasyonda' ? /incelemeye alındı/.test(r.toast) : /yayınlandı/.test(r.toast), `toast: Meldung passt zum Ergebnis (${d})`);
     await ctx.close();
   },
+  // v1.33.5: „Medya işleniyor…“ verschwindet ohne Reload, sobald die Engine fertig ist.
+  async medyayenile() {
+    const { api, tokenFuer } = require('../_hilfe');
+    const form = new FormData();
+    form.append('baslik', 'Logitech G29 direksiyon seti pedallı');
+    form.append('aciklama', 'Az kullanıldı, pedal seti ve masa bağlantısı dahil. Kadıköy elden teslim veya kargo.');
+    form.append('fiyat', '6500'); form.append('durum', 'az_kullanilmis'); form.append('kategori_id', '89');
+    form.append('sehir', 'İstanbul'); form.append('ilce', 'Kadıköy');
+    form.append('fotograflar', new Blob([fs.readFileSync(`${MEDIEN}/foto2.jpg`)], { type: 'image/jpeg' }), 'foto2.jpg');
+    form.append('video', new Blob([fs.readFileSync(`${MEDIEN}/video55s.mp4`)], { type: 'video/mp4' }), 'video55s.mp4');
+    const r = await api('POST', '/ilanlar', { token: await tokenFuer(78), form });
+    const il = (r.body && r.body.ilan) || {};
+    st.ilan5 = { id: il.id, uuid: il.uuid, durum: il.ilan_durum }; merke();
+    notiz(`medyayenile: Inserat ${r.status} ${il.ilan_durum}, video_durum ${il.video_durum}`);
+    if (il.ilan_durum !== 'aktif') await q("UPDATE ilanlar SET ilan_durum='aktif' WHERE id=$1 AND user_id=78", [il.id]);
+    const vorher = (await q('SELECT goruntulenme FROM ilanlar WHERE id=$1', [il.id])).rows[0].goruntulenme;
+    const { ctx, page } = await seite('B', DESKTOP);
+    await page.goto(`${BASIS}/#/ilan/${il.uuid}`); await page.reload(); await warte(page, 2500);
+    // zweite Galerie-Station (Video bzw. „Medya işleniyor…“) anwählen
+    await page.getByRole('button', { name: 'Fotoğraf 2', exact: true }).click(); await warte(page, 600);
+    const anfang = await page.getByText(/Medya işleniyor/).count() > 0;
+    await foto(page, 'medya-isleniyor');
+    let weg = false; let s = 0;
+    for (; s < 90 && !weg; s += 3) { await warte(page, 3000); weg = await page.getByText(/Medya işleniyor/).count() === 0 && await page.locator('video').count() > 0; }
+    const db = (await q('SELECT video_durum, goruntulenme FROM ilanlar WHERE id=$1', [il.id])).rows[0];
+    pruefe(anfang, 'medyayenile: Detail zeigt anfangs „Medya işleniyor…“');
+    pruefe(weg && db.video_durum === 'tamam', `medyayenile: verschwindet ohne Reload nach ~${s} s (DB ${db.video_durum})`);
+    await foto(page, 'medya-fertig');
+    notiz(`medyayenile: Aufrufe ${vorher} → ${db.goruntulenme} (Nachfragen mit ?medya=1 zählen nach dem Ausrollen nicht)`);
+    await ctx.close();
+  },
   // 1d) Inserate in İlan Onayı → mit dem Test-Admin freigeben; danach Suchindex prüfen.
   async moderasyon() {
     // Drittes Inserat (über die API als A) mit Kapora/IBAN-Hinweis — soll in die Warteschlange.
@@ -466,7 +497,9 @@ const SCHRITTE = {
   // Aufräumen: alles, was dieser Test angelegt hat (nur Testkonten 71/78).
   async aufraeumen() {
     const start = fs.readFileSync('/root/kp-e2e-start.txt', 'utf8').trim();
-    const ilanIds = (await q("SELECT id, uuid FROM ilanlar WHERE user_id=78 AND created_at >= $1::timestamptz", [start + 'Z'])).rows;
+    // BEHALTEN=206,…: Zwischenaufräumen, diese Inserate bleiben (z. B. für weitere Schritte)
+    const behalten = (process.env.BEHALTEN || '').split(',').filter(Boolean).map(Number);
+    const ilanIds = (await q("SELECT id, uuid FROM ilanlar WHERE user_id=78 AND created_at >= $1::timestamptz", [start + 'Z'])).rows.filter((r) => !behalten.includes(r.id));
     notiz(`aufraeumen: ${ilanIds.length} Inserate von A seit ${start}`);
     const ilanArsiv = require('../../src/lib/ilanArsiv');
     for (const r of ilanIds) {
@@ -481,6 +514,7 @@ const SCHRITTE = {
       fs.rmSync(`/var/www/kapbeni/uploads/archiv/${no}/${r.uuid}`, { recursive: true, force: true });
     }
     await q("DELETE FROM ilan_arsiv WHERE user_id=78 AND created_at >= $1::timestamptz", [start + 'Z']).catch((e) => notiz('ilan_arsiv: ' + e.message));
+    if (behalten.length) return;
     await q("DELETE FROM medya_isleri WHERE user_id=78 AND created_at >= $1::timestamptz", [start + 'Z']).catch((e) => notiz('medya_isleri: ' + e.message));
     await q("DELETE FROM musteri_olaylari WHERE user_id IN (71,78) AND created_at >= $1::timestamptz", [start + 'Z']);
     await q("DELETE FROM bildirimler WHERE user_id IN (71,78) AND olusturma_tarihi >= $1::timestamp", [start]);

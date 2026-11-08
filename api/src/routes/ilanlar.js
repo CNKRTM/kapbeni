@@ -312,7 +312,8 @@ router.get('/:uuid', async (req, res) => {
     const ozellikler = await ozellik.ilanOzellikleri(rows[0].id);
     // Eigene Aufrufe nicht mitzaehlen — sonst faelscht schon das Oeffnen der
     // eigenen Bearbeiten-Maske die Aufrufzahl des eigenen Inserats.
-    if (!istEigentuemer) await query('UPDATE ilanlar SET goruntulenme=goruntulenme+1 WHERE id=$1', [rows[0].id]);
+    // ?medya=1: Nachfrage der Detailseite nach dem Video-Status (v1.33.5) — kein neuer Aufruf
+    if (!istEigentuemer && !req.query.medya) await query('UPDATE ilanlar SET goruntulenme=goruntulenme+1 WHERE id=$1', [rows[0].id]);
     const antwort = { ...rows[0], fotograflar: foto, ozellikler, durum_etiket: ozellik.DURUM_ETIKET[rows[0].durum] || null };
     // Fehlertext der Medien-Engine sieht nur der Eigentuemer.
     if (!istEigentuemer) delete antwort.video_hata;
