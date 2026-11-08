@@ -5,7 +5,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const { api, tokenFuer, q, pool } = require('./_hilfe');
+const { api, tokenFuer, q, pool, adminApi, adminGiris } = require('./_hilfe');
 
 const FRONT = '/opt/kapbeni/Kapbeni_Prod/src/src';
 const KAEUFER = 71;   // Ayşe Yılmaz (Seed-Testkunde)
@@ -49,6 +49,34 @@ test('v1.33.2 Combobox: Escape bei offener Liste wird nicht an das Fenster weite
   const gt = fs.readFileSync(`${FRONT}/lib/geriTusu.ts`, 'utf8');
   assert.match(gt, /if \(e\.defaultPrevented\) return/);
   // Verhalten im Browser: api/tests/ui/e2e.js Schritt „escape“ (390/1280 px)
+});
+
+/** Dokument im Meili-Index vorhanden? */
+async function imIndex(uuid) {
+  const { meili } = require('../src/lib/meili');
+  try { const d = await meili('GET', `/indexes/ilanlar/documents/${encodeURIComponent(uuid)}`); return !!(d && d.uuid); }
+  catch { return false; }
+}
+const warte = (ms) => new Promise((r) => setTimeout(r, ms));
+/** Wartet, bis Meili die Aufgabe verarbeitet hat (asynchron, meist < 1 s). */
+async function indexWarten(uuid, soll) { for (let i = 0; i < 20; i++) { if (await imIndex(uuid) === soll) return soll; await warte(300); } return !soll; }
+
+test('v1.33.3 İlan Onayı: Freigabe nimmt das Inserat sofort in den Suchindex', async () => {
+  const sahip = (await q("SELECT id FROM users WHERE email='elif.koc@test.kapbeni.com' AND test_verisi")).rows[0].id;
+  const { rows } = await q(`INSERT INTO ilanlar(user_id,kategori_id,baslik,aciklama,fiyat,durum,ilan_durum,sehir,ilce)
+    VALUES($1,3,'Test Onay Meili w_e2e','Freigabe-Test, wird sofort entfernt.',123,'kullanilmis','moderasyonda','İstanbul','Kadıköy') RETURNING id, uuid`, [sahip]);
+  const il = rows[0];
+  try {
+    assert.strictEqual(await imIndex(il.uuid), false);
+    const t = await adminGiris();
+    const r = await adminApi('POST', `/ilanlar/${il.id}/onayla`, { token: t });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual(await indexWarten(il.uuid, true), true, 'nach Freigabe im Index');
+    await adminApi('POST', '/cikis', { token: t });
+  } finally {
+    await require('../src/lib/meiliSync').deleteListing(il.uuid);
+    await q('DELETE FROM ilanlar WHERE id=$1 AND user_id=$2', [il.id, sahip]);
+  }
 });
 
 module.exports = { fremdesTestinserat, KAEUFER, FRONT };

@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.33.3 — 2026-11-08
+
+E2E-Fix: Freigabe in İlan Onayı nimmt das Inserat sofort in den Suchindex, Ablehnen entfernt es
+
 ## 1.33.2 — 2026-11-08
 
 E2E-Fix: Escape in offener Combobox schloss die ganze Verkaufsmaske (Eingaben weg)

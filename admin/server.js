@@ -368,8 +368,11 @@ app.get('/admin/api/ilanlar', adminAuth, async (req, res) => {
 });
 
 app.post('/admin/api/ilanlar/:id/onayla', adminAuth, async (req, res) => {
-  await db.query("UPDATE ilanlar SET ilan_durum='aktif' WHERE id=$1", [req.params.id]);
+  const { rows } = await db.query("UPDATE ilanlar SET ilan_durum='aktif' WHERE id=$1 RETURNING uuid", [req.params.id]);
   await auditAdmin('ilan.onayla', req.admin.id, { hedefTip:'ilan', hedefId:+req.params.id });
+  // Suchindex sofort nachziehen — vorher erschien ein freigegebenes Inserat erst nach dem
+  // naechsten Neuaufbau in Suche/Kategorie-Suche (Backlog, E2E-Test v1.33.3). syncListing wirft nie.
+  if (rows[0]) await require('../api/src/lib/meiliSync').syncListing(String(rows[0].uuid));
   res.json({ mesaj: 'İlan onaylandı' });
 });
 
@@ -377,7 +380,9 @@ app.post('/admin/api/ilanlar/:id/onayla', adminAuth, async (req, res) => {
 // Snapshot + KOPIE der Bilder ins Archiv (Auftragssammlung G, v1.23).
 app.post('/admin/api/ilanlar/:id/reddet', adminAuth, async (req, res) => {
   const { sebep } = req.body;
-  await db.query("UPDATE ilanlar SET ilan_durum='reddedildi', ai_not=$1 WHERE id=$2", [sebep, req.params.id]);
+  const red = await db.query("UPDATE ilanlar SET ilan_durum='reddedildi', ai_not=$1 WHERE id=$2 RETURNING uuid", [sebep, req.params.id]);
+  // Abgelehnt = nicht mehr suchbar (falls es vorher aktiv im Index stand)
+  if (red.rows[0]) await require('../api/src/lib/meiliSync').deleteListing(String(red.rows[0].uuid));
   await auditAdmin('ilan.reddet', req.admin.id, { hedefTip:'ilan', hedefId:+req.params.id, detay:{sebep} });
   try {
     const a = await ilanArsiv.ilanKopieArsivle(+req.params.id, { grund: 'reddedildi', grundDetay: sebep || null, kaynak: 'admin', adminId: req.admin.id, ip: clientIp(req) });
