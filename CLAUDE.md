@@ -1654,6 +1654,39 @@ Erste Lücke aus dem E2E-Test geschlossen: Nach Nachricht, Angebot oder Freigabe
   Seitenfehler). Sitzung per `tokenFuer` (15 min), kein Passwort. Vor dem Ausrollen gegen API :3911 /
   Admin :3912 / Vorschau :3906 (47/47, UI grün, `zurueck.js` 66× OK), danach live 47/47.
 
+#### Login-Effekte nach Santral (v1.36.0)
+
+Auftrag von Burak über die Santral-Sitzung („alle mit gleichen Effekten … jeweils farblich abgestimmt“).
+Vorlage: Santral `docs/LOGIN-EFFEKTE.md` (live santral.compendus.com). Farben statt Gold: Streifen
+`#ffb4b0 → #e53935 → #b61722`, Kugel/Ecken/Glow `#e53935`, Rand-Verlauf `#e53935` → Grau → Navy
+`#1a2e4a` (Admin) bzw. `#8a1019` (Website). Kein Dark Mode.
+- **Admin** (`admin/public/index.html`, Helfer `glasAuf`, `kpStreifen`, `kpLicht`, `kpEinklappen`,
+  `kpSchuetteln`; CSS-Block „Login-Effekte nach Santral“): Login-Karte als Glaskarte (20 px, Blur,
+  Maus-Spotlight, vier Eck-Klammern). Ruhezustand 170×170 mit drehender Raute (`img/kapbeni-ikon.webp`,
+  Preisschild aus `logo-navbar.png` geschnitten) und Kugel, die der Maus folgt; Maus/Fokus/Tippen klappt
+  auf (Felder blenden gestaffelt ein), Verlassen klappt nach 500 ms zu — **außer** Feld fokussiert,
+  Maus über der Karte (Turnstile-iframe) oder Fehlermeldung sichtbar; `?hata=` startet offen.
+  Touch: `pointerleave` wird ignoriert (kommt direkt nach dem Tippen), zu nur über `focusout`.
+  **Kein Autofokus** mehr auf E-posta, solange eingeklappt (der Fokus würde sofort aufklappen).
+  Falsches Passwort schüttelt die Karte. 9 fallende Lichtstreifen in der hellen rechten Fläche, jede
+  Runde neue Position/Neigung/Länge/Dauer/Deckkraft. Logo-Karte links schwebt. Şifremi unuttum /
+  Yeni şifre: Glaskarte offen, ohne Einklappen. **Sperrbildschirm:** 11 Streifen (fixed) hinter der
+  Sperrkarte, Sperrkarte als Glaskarte, falsches Passwort schüttelt.
+- **Website** (`lib/girisEfekt.ts` — gleiche Logik als DOM-Helfer; CSS am Ende von `index.css`,
+  Klassen `.kp-glas`, `.kp-streif`): AuthModal Login und Registrierung als Glaskarte mit Streifen auf
+  dem abgedunkelten Hintergrund, Glanzstreifen auf dem Hauptknopf, Schütteln bei Fehler.
+  **Einklappen nur beim Login und nur mit Maus** (`(hover: hover) and (pointer: fine)`): am Handy ist das
+  Fenster ein Bottom-Sheet, die Registrierung ein langes Formular — beide starten offen. Die Karte
+  trägt einen festen `className`, damit React die per DOM gesetzten Klassen `intro/reveal/shake` nicht
+  überschreibt.
+- **Google-Knopf** war schon ein eigener Knopf mit voller Breite (kein GSI-Button, Login „Yakında“) —
+  gemessen genau so breit wie die Felder (Admin 352/310 px, Website 408/350 px). Wenn Google live geht
+  und auf `renderButton` umgestellt wird: Breite aus `clientWidth` (200–400) + ResizeObserver wie Santral.
+- `prefers-reduced-motion: reduce` schaltet Streifen, Intro und Animationen ab, die Karte bleibt offen.
+- **Test** `api/tests/ui/giris-efekt.js` (1280/390 px, 56 Prüfungen; Kunden-Login ohne Anmeldung,
+  Admin-Teil mit Test-Admin id=3, Passwort aus `/root/kp-admin-test.pw`, nie ausgegeben). Vorher gegen
+  Admin :3912 + Vorschau :3905, danach live ALLES OK, Suite 47/47, Test-Admin wieder `aktif=false`.
+
 ---
 
 ## 4. Offene Punkte / Backlog
