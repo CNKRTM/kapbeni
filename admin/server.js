@@ -21,7 +21,9 @@ const db = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), { index: false }));
+// Auch unter /admin/… (z. B. /admin/img/…), falls die Seite mit Schraegstrich aufgerufen wird.
+app.use('/admin', express.static(path.join(__dirname, 'public'), { index: false, redirect: false }));
 
 // ── Brute-Force-Schutz fuer den Admin-Login ───────────────────────────────
 // Analog zu api/src/index.js: 20 Versuche je 15 Minuten.
@@ -263,6 +265,32 @@ app.get('/admin/api/mesajlar/tehlikeli', adminAuth, async (req, res) => {
      WHERE m.tehlikeli=true ORDER BY m.created_at DESC LIMIT 50`
   );
   res.json(rows);
+});
+
+// ── BAU: Version + Git-Kurz-Hash (oeffentlich, auch fuer die Login-Seite) ──
+// deploy.sh committet NACH dem Neuladen der Dienste — der Hash wird deshalb
+// nicht beim Start, sondern bei Bedarf gelesen (60 s zwischengespeichert).
+let _bau = { at: 0, commit: '' };
+app.get('/admin/api/bau', (req, res) => {
+  const fertig = () => res.json({ version: APP_VERSION, commit: _bau.commit,
+    ortam: process.env.KAPBENI_ORTAM === 'prod' ? 'prod' : 'staging' });
+  if (Date.now() - _bau.at < 60000) return fertig();
+  require('child_process').execFile('git', ['-C', path.join(__dirname, '..'), 'rev-parse', '--short', 'HEAD'],
+    { timeout: 3000 }, (e, out) => { _bau = { at: Date.now(), commit: e ? '' : String(out).trim() }; fertig(); });
+});
+
+// ── SIDEBAR-ZAEHLER (Klammern hinter den Menuepunkten) ───────────────────
+app.get('/admin/api/sidebar-sayac', adminAuth, async (req, res) => {
+  const z = async (sql) => { try { return (await db.query(sql)).rows[0].c; } catch { return null; } };
+  const [ilanonay, riskmesaj, kyc, kurumsalonay, destek, ilansikayet] = await Promise.all([
+    z("SELECT count(*)::int c FROM ilanlar WHERE ilan_durum='moderasyonda'"),
+    z("SELECT count(*)::int c FROM mesajlar WHERE tehlikeli=true"),
+    z("SELECT count(*)::int c FROM kyc_results WHERE durum='manuel_inceleme'"),
+    z("SELECT count(*)::int c FROM users WHERE hesap_tipi='kurumsal' AND kurumsal_onaylandi=false"),
+    z("SELECT count(*)::int c FROM destek_talepleri WHERE durum='acik'"),
+    z("SELECT count(*)::int c FROM sikayet WHERE COALESCE(durum,'beklemede') IN ('beklemede','acik','yeni')"),
+  ]);
+  res.json({ ilanonay, riskmesaj, kyc, kurumsalonay, destek, ilansikayet });
 });
 
 // ── HEALTH ────────────────────────────────────────────────────────────

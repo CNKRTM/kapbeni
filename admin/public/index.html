@@ -66,13 +66,38 @@ tr:hover td{background:#fafafa}
 .toggle input:checked+.slider{background:#22c55e}
 .toggle input:checked+.slider:before{transform:translateX(19px)}
 #app{min-height:100vh;background:#f8fafc}
-.sidebar{width:248px;flex-shrink:0;background:#1a2e4a;min-height:100vh;display:flex;flex-direction:column}
-.sidebar-logo{padding:22px 18px 16px;border-bottom:1px solid rgba(255,255,255,.08)}
-.sidebar-logo .brand{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.5px}
-.sidebar-logo .brand span{color:#e53935}
-.sidebar-logo .sub{font-size:10.5px;color:#64748b;font-weight:600;text-transform:uppercase;letter-spacing:.12em;margin-top:2px}
-.sidebar-nav{flex:1;padding:10px 8px;overflow-y:auto}
-.sidebar-footer{padding:12px 8px;border-top:1px solid rgba(255,255,255,.08)}
+/* ── Sidebar nach Cankartım-Muster (Aufbau), Farben/Schrift Kapbeni-Admin ── */
+.sidebar{width:var(--sb-w,248px);flex-shrink:0;background:#1a2e4a;height:100vh;position:sticky;top:0;display:flex;flex-direction:column;z-index:40;transition:width .15s}
+.sidebar.daralt{width:72px}
+.sidebar-logo{padding:16px 14px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.sidebar-logo img{height:34px;max-width:170px;object-fit:contain;object-position:left}
+.sidebar.daralt .sidebar-logo{flex-direction:column;padding:12px 6px}
+.sidebar.daralt .sidebar-logo img{height:22px;max-width:56px}
+.sb-ikon-btn{background:transparent;border:none;color:#94a3b8;cursor:pointer;font-size:16px;line-height:1;padding:6px;border-radius:8px}
+.sb-ikon-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+.sb-panel{background:#b61722;color:#fff;font-size:11px;font-weight:800;letter-spacing:.14em;text-align:center;padding:8px 6px;text-transform:uppercase}
+.sidebar-nav{flex:1;padding:8px 8px 10px;overflow-y:auto;overflow-x:hidden}
+.sb-grup+.sb-grup{margin-top:8px;padding-top:8px;border-top:2px solid #b61722}
+.sb-grup-kopf{width:100%;display:flex;align-items:center;justify-content:space-between;background:none;border:none;cursor:pointer;padding:8px 10px;font-size:10.5px;font-weight:800;color:#94a3b8;letter-spacing:.1em;text-transform:uppercase}
+.sb-grup-kopf:hover{color:#fff}
+.sb-grup-kopf .pfeil{color:#e53935;font-size:13px;transition:transform .15s}
+.sb-grup-kopf.zu .pfeil{transform:rotate(-90deg)}
+.nav-item .label{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.nav-item .sayac{font-size:11.5px;font-weight:800;color:#f87171}
+.nav-item.active .sayac{color:#fff}
+.nav-item .hz{font-size:9.5px;font-weight:700;color:#64748b;border:1px solid #334155;border-radius:6px;padding:0 5px}
+.nav-alt{margin:2px 0 2px 18px;padding-left:8px;border-left:1px solid rgba(148,163,184,.25)}
+.yeni-plakette{font-size:9px;font-weight:800;letter-spacing:.05em;background:#fbbf24;color:#422006;border-radius:5px;padding:1px 5px;margin-left:4px}
+.sidebar.daralt .nav-item{justify-content:center;padding:9px 0}
+.sidebar.daralt .nav-item .label,.sidebar.daralt .nav-item .sayac,.sidebar.daralt .nav-item .hz,.sidebar.daralt .yeni-plakette,.sidebar.daralt .sb-grup-kopf,.sidebar.daralt .sb-version{display:none}
+.sidebar.daralt .nav-alt{margin-left:0;padding-left:0;border-left:none}
+.sidebar-footer{padding:10px 8px;border-top:1px solid rgba(255,255,255,.08)}
+.sb-version{margin-top:6px;background:rgba(255,255,255,.06);border-radius:8px;padding:7px 8px;font-size:12px;font-weight:700;color:#e2e8f0;text-align:center;letter-spacing:.02em}
+.sb-zieh{position:absolute;top:0;right:-3px;width:6px;height:100%;cursor:col-resize;z-index:41}
+.sb-zieh:hover,.sb-zieh.aktiv{background:rgba(229,57,53,.5)}
+.sidebar.daralt .sb-zieh{display:none}
+.sb-hamburger{display:none}
+.sb-schleier{display:none}
 .topbar{background:#fff;border-bottom:1px solid #e2e8f0;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
 .topbar-title{font-size:16px;font-weight:700;color:#1a2e4a}
 .view-wrap{padding:24px;max-width:1200px}
@@ -80,7 +105,16 @@ tr:hover td{background:#fafafa}
 .toast.show{transform:translateY(0);opacity:1}
 .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:100;display:flex;align-items:center;justify-content:center}
 .modal{background:#fff;border-radius:18px;padding:28px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.25)}
-@media(max-width:768px){.sidebar{display:none}}
+@media(max-width:768px){
+  .sidebar{position:fixed;left:0;top:0;transform:translateX(-100%);transition:transform .2s;width:272px!important;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+  .sidebar.mobil-offen{transform:none}
+  .sidebar.daralt .nav-item .label,.sidebar.daralt .sb-grup-kopf,.sidebar.daralt .sb-version{display:revert}
+  .sb-zieh{display:none}
+  .sb-hamburger{display:inline-flex;margin-right:10px;background:#f1f5f9;border:none;border-radius:9px;padding:7px 10px;font-size:16px;cursor:pointer}
+  .sb-schleier.offen{display:block;position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:39}
+  .topbar{padding:12px 14px}
+  .view-wrap{padding:14px}
+}
 .star-filled{color:#f59e0b}
 .star-empty{color:#e2e8f0}
 </style>
@@ -117,6 +151,7 @@ function showToast(msg,type='ok'){
 
 function logout(){ localStorage.removeItem('admin_token'); TOKEN=''; renderLogin(); }
 const el=id=>document.getElementById(id);
+const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const fmt=n=>Number(n||0).toLocaleString('tr-TR');
 const fmtDate=d=>d?new Date(d).toLocaleDateString('tr-TR',{day:'2-digit',month:'short',year:'numeric'}):'—';
 const fmtDateTime=d=>d?new Date(d).toLocaleString('tr-TR',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
@@ -146,7 +181,7 @@ function renderLogin(){
           <label>Şifre</label>
           <input id="login-pw" type="password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/>
         </div>
-        <button onclick="doLogin()" class="btn btn-primary w-full justify-center mt-2" style="width:100%;justify-content:center;padding:13px">
+        <button id="login-btn" onclick="doLogin()" class="btn btn-primary w-full justify-center mt-2" style="width:100%;justify-content:center;padding:13px">
           Giriş Yap
         </button>
       </div>
@@ -167,7 +202,7 @@ async function doLogin(){
       return;
     }
     TOKEN=d.token; localStorage.setItem('admin_token',TOKEN);
-    renderApp(); route('dashboard');
+    renderApp(); routeAnwenden();
   }catch(e){
     const err=el('login-err');
     if(err){err.textContent='Sunucuya bağlanılamadı';err.classList.remove('hidden');}
@@ -177,103 +212,211 @@ async function doLogin(){
 // ═══════════════════════════════════════════════
 // APP SHELL
 // ═══════════════════════════════════════════════
-const MENU=[
-  {section:'Ana'},
-  {id:'dashboard',icon:'📊',label:'Dashboard'},
-  {section:'Kullanıcılar'},
-  {id:'kullanicilar',icon:'👥',label:'Kullanıcılar'},
-  {id:'kyc',icon:'🪪',label:'KYC İstekleri'},
-  {id:'kurumsalonay',icon:'🏢',label:'Kurumsal Onay'},
-  {section:'İlanlar'},
-  {id:'ilanonay',icon:'🛡️',label:'İlan Onayı'},
-  {id:'ilanlaryayin',icon:'📢',label:'Yayın Yönetimi'},
-  {id:'ilansikayet',icon:'🚩',label:'İlan Şikayetleri'},
-  {id:'degerlendirmeler',icon:'⭐',label:'Değerlendirmeler'},
-  {section:'Destek'},
-  {id:'destektickets',icon:'🎫',label:'Destek Talepleri'},
-  {id:'riskmesaj',icon:'⚠️',label:'Riskli Mesajlar'},
-  {id:'oneriler',icon:'💡',label:'Öneriler & Geri Bildirim'},
-  {section:'Finans'},
-  {id:'abonelikler',icon:'💳',label:'Abonelikler'},
-  {id:'paketler',icon:'🎁',label:'Paketler'},
-  {id:'kuponlar',icon:'🏷️',label:'Kuponlar'},
-  {section:'Pazaryeri'},
-  {id:'vitaminler',icon:'✨',label:'Vitaminler'},
-  {id:'slider',icon:'🖼️',label:'Hero Slider'},
-  {id:'kategoriler',icon:'📁',label:'Kategoriler'},
-  {section:'Sistem'},
-  {id:'waayar',icon:'📱',label:'WhatsApp Ayarları'},
-  {id:'apibaglantilar',icon:'🔌',label:'API Bağlantıları'},
-  {id:'ayarlar',icon:'⚙️',label:'Ayarlar'},
+// ═══════════════════════════════════════════════
+// SIDEBAR (Aufbau nach Cankartım lib/admin/sidebar-config.ts + Sidebar.tsx)
+// Gruppen klappbar (localStorage), Zaehler in Klammern aus /sidebar-sayac,
+// Plakette YENİ (14 Tage ab Datum), 72 px Icon-Leiste, Breite per Ziehen.
+// Eintraege mit hazirlaniyor:true fuehren auf die Seite „Hazırlanıyor“.
+// ═══════════════════════════════════════════════
+const YENI_GUN=14;
+const SIDEBAR=[
+  {id:'temel',label:'Temel',items:[
+    {id:'dashboard',icon:'📊',label:'Dashboard'},
+    {id:'kullanicilar',icon:'👥',label:'Müşteriler',children:[
+      {id:'kurumsalonay',icon:'🏢',label:'Kurumsal Onay',sayac:'kurumsalonay'},
+      {id:'kyc',icon:'🪪',label:'KYC İstekleri',sayac:'kyc'},
+      {id:'musteriakte',icon:'🗂️',label:'Müşteri Akte',hazirlaniyor:true,
+        aciklama:'Medical yapısında müşteri dosyası: İlanlar, Mesajlar, Teklifler, Şikayetler, Login-IP, KVKK onayları, Belgeler ve Notlar sekmeleri.'},
+    ]},
+    {id:'ilanlar',icon:'📢',label:'İlanlar',children:[
+      {id:'ilanonay',icon:'🛡️',label:'İlan Onayı',sayac:'ilanonay'},
+      {id:'ilanlaryayin',icon:'📣',label:'Yayın Yönetimi'},
+      {id:'ilansikayet',icon:'🚩',label:'İlan Şikayetleri',sayac:'ilansikayet'},
+    ]},
+    {id:'riskmesaj',icon:'⚠️',label:'Riskli Mesajlar',sayac:'riskmesaj'},
+    {id:'degerlendirmeler',icon:'⭐',label:'Değerlendirmeler'},
+  ]},
+  {id:'pazaryeri',label:'Pazaryeri',items:[
+    {id:'vitaminler',icon:'✨',label:'Vitaminler'},
+    {id:'slider',icon:'🖼️',label:'Hero Slider'},
+    {id:'kategoriler',icon:'📁',label:'Kategoriler'},
+  ]},
+  {id:'destek',label:'Destek',items:[
+    {id:'destektickets',icon:'🎫',label:'Destek Talepleri',sayac:'destek'},
+    {id:'oneriler',icon:'💡',label:'Öneriler & Geri Bildirim'},
+  ]},
+  {id:'finans',label:'Muhasebe & Finans',items:[
+    {id:'abonelikler',icon:'💳',label:'Abonelikler'},
+    {id:'paketler',icon:'🎁',label:'Paketler'},
+    {id:'kuponlar',icon:'🏷️',label:'Kuponlar'},
+  ]},
+  {id:'sistem',label:'Sistem',items:[
+    {id:'entegrasyonlar',icon:'🔌',label:'Entegrasyonlar',yeni:'2026-11-08'},
+    {id:'medya',icon:'🎞️',label:'Medya Motoru',hazirlaniyor:true,
+      aciklama:'Görsel ve videolar için kendi medya motoru: küçültme, WebP/AVIF, filigran, arşiv.'},
+    {id:'yedekleme',icon:'💾',label:'Yedekleme',hazirlaniyor:true,
+      aciklama:'Gece yedeği (veritabanı + yüklemeler + harici kopya), yedek geçmişi ve geri yükleme testi.'},
+    {id:'waayar',icon:'📱',label:'WhatsApp Ayarları'},
+    {id:'ayarlar',icon:'⚙️',label:'Sistem Ayarları'},
+  ]},
+  {id:'deploy',label:'GitHub / Deploy',lang:'en',items:[
+    {id:'deployyonetimi',icon:'🚀',label:'Deploy Yönetimi',hazirlaniyor:true,
+      aciklama:'Sürümler, değişiklik günlüğü, geri alma ve GitHub durumu.'},
+    {id:'testsunucu',icon:'🧪',label:'Test Sunucu',hazirlaniyor:true,
+      aciklama:'Prod ve Staging yan yana: sürüm, commit, sağlık durumu ve geçiş adımları.'},
+  ]},
 ];
+// Alte Adressen, die auf neue Seiten zeigen
+const ROUTE_ALIAS={apibaglantilar:'entegrasyonlar'};
+
+const sbEintraege=()=>{const out=[];SIDEBAR.forEach(g=>g.items.forEach(i=>{out.push(i);(i.children||[]).forEach(c=>out.push(c));}));return out;};
+const sbEintrag=id=>sbEintraege().find(i=>i.id===id);
+const yeniSichtbar=i=>{ if(!i||!i.yeni) return false; const t=new Date(i.yeni+'T00:00:00'); return (Date.now()-t.getTime())<YENI_GUN*864e5; };
+const lsGet=(k,d)=>{try{const v=localStorage.getItem(k);return v==null?d:JSON.parse(v);}catch{return d;}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch{}};
+let SB_SAYAC={}, SB_BAU={version:'__APP_VERSION__',commit:''};
+const istMobil=()=>window.matchMedia('(max-width:768px)').matches;
+
+function sbItemHtml(i,aktiv){
+  const say=i.sayac&&SB_SAYAC[i.sayac]!=null?`<span class="sayac">(${fmt(SB_SAYAC[i.sayac])})</span>`:'';
+  return `<a class="nav-item${aktiv===i.id?' active':''}" id="nav-${i.id}" href="#/${i.id}" title="${escH(i.label)}" onclick="sbMobilZu()">
+    <span class="icon">${i.icon}</span><span class="label">${escH(i.label)}</span>${say}${yeniSichtbar(i)?'<span class="yeni-plakette">YENİ</span>':''}${i.hazirlaniyor?'<span class="hz">yakında</span>':''}</a>`;
+}
+function renderSidebar(){
+  const sb=el('sidebar'); if(!sb) return;
+  const aktiv=aktuelleRoute().r;
+  const offen=lsGet('kp_sb_gruplar',{});
+  const daralt=!istMobil()&&lsGet('kp_sb_daralt',false);
+  sb.classList.toggle('daralt',daralt);
+  sb.style.setProperty('--sb-w',lsGet('kp_sb_genislik',248)+'px');
+  const gruppen=SIDEBAR.map(g=>{
+    const enthaeltAktiv=g.items.some(i=>i.id===aktiv||(i.children||[]).some(c=>c.id===aktiv));
+    const auf=daralt||enthaeltAktiv||offen[g.id]!==false;
+    const yeni=g.items.some(i=>yeniSichtbar(i)||(i.children||[]).some(yeniSichtbar));
+    const items=g.items.map(i=>{
+      if(!i.children) return sbItemHtml(i,aktiv);
+      // Eltern mit eigener Seite (Müşteriler) bleiben klickbar; ohne Seite (İlanlar) nur Ueberschrift.
+      const kopf=i.id==='ilanlar'
+        ? `<div class="nav-item" style="cursor:default" title="${escH(i.label)}"><span class="icon">${i.icon}</span><span class="label">${escH(i.label)}</span></div>`
+        : sbItemHtml(i,aktiv);
+      return kopf+`<div class="nav-alt">${i.children.map(c=>sbItemHtml(c,aktiv)).join('')}</div>`;
+    }).join('');
+    return `<div class="sb-grup">
+      <button class="sb-grup-kopf${auf?'':' zu'}" data-grup="${g.id}" onclick="sbGruppe('${g.id}',${auf})"><span${g.lang?` lang="${g.lang}"`:''}>${escH(g.label)}${yeni?'<span class="yeni-plakette">YENİ</span>':''}</span><span class="pfeil">▾</span></button>
+      ${auf?`<div>${items}</div>`:''}
+    </div>`;
+  }).join('');
+  sb.innerHTML=`
+    <div class="sidebar-logo">
+      <a href="#/dashboard"><img src="img/kapbeni-logo-acik.webp" alt="Kap Beni"/></a>
+      <button class="sb-ikon-btn" onclick="sbDaralt()" title="${daralt?'Genişlet':'Daralt'}">${daralt?'»':'«'}</button>
+    </div>
+    <div class="sb-panel">${daralt?'⚙':'Yönetim Paneli'}</div>
+    <nav class="sidebar-nav">${gruppen}</nav>
+    <div class="sidebar-footer">
+      <a class="nav-item" onclick="logout()" style="color:#f87171" title="Çıkış Yap"><span class="icon">🚪</span><span class="label">Çıkış Yap</span></a>
+      <div class="sb-version" id="sb-version" title="Sürüm · Commit">Kap Beni v${escH(SB_BAU.version)}${SB_BAU.commit?' · '+escH(SB_BAU.commit):''}</div>
+    </div>
+    <div class="sb-zieh" onmousedown="sbZiehStart(event)" title="Genişliği ayarla"></div>`;
+}
+// Gruppe auf/zu; der aktuelle Zustand kommt aus dem Render (auf=true/false).
+function sbGruppe(id,auf){ const o=lsGet('kp_sb_gruplar',{}); o[id]=!auf; lsSet('kp_sb_gruplar',o); renderSidebar(); }
+function sbDaralt(){ lsSet('kp_sb_daralt',!lsGet('kp_sb_daralt',false)); renderSidebar(); }
+function sbZiehStart(e){
+  e.preventDefault(); const sb=el('sidebar'); const griff=e.target; griff.classList.add('aktiv');
+  document.body.style.cursor='col-resize'; document.body.style.userSelect='none';
+  const bewegen=ev=>{ const w=Math.min(420,Math.max(220,ev.clientX)); sb.style.setProperty('--sb-w',w+'px'); };
+  const ende=ev=>{ document.removeEventListener('mousemove',bewegen); document.removeEventListener('mouseup',ende);
+    document.body.style.cursor=''; document.body.style.userSelect=''; griff.classList.remove('aktiv');
+    lsSet('kp_sb_genislik',Math.min(420,Math.max(220,ev.clientX))); };
+  document.addEventListener('mousemove',bewegen); document.addEventListener('mouseup',ende);
+}
+function sbMobilAuf(){ el('sidebar')?.classList.add('mobil-offen'); el('sb-schleier')?.classList.add('offen'); }
+function sbMobilZu(){ el('sidebar')?.classList.remove('mobil-offen'); el('sb-schleier')?.classList.remove('offen'); }
+// Zaehler laufen im Hintergrund — sie zaehlen nicht als Aktivitaet (Bildschirmsperre).
+async function sbSayacLaden(){
+  try{ const r=await fetch(API+'/sidebar-sayac',{headers:{...H(),'X-Kp-Arka':'1'}}); if(r.ok){ SB_SAYAC=await r.json(); renderSidebar(); } }catch{}
+}
+async function sbBauLaden(){
+  try{ const r=await fetch(API+'/bau'); if(r.ok){ SB_BAU=await r.json(); renderSidebar(); } }catch{}
+}
+let _sbTimer=null;
 
 const PAGE_TITLES={
-  dashboard:'Dashboard',kullanicilar:'Kullanıcılar',kyc:'KYC İstekleri',kurumsalonay:'Kurumsal Onay',
+  dashboard:'Dashboard',kullanicilar:'Müşteriler',kyc:'KYC İstekleri',kurumsalonay:'Kurumsal Onay',
   ilanonay:'İlan Onayı',riskmesaj:'Riskli Mesajlar',ilanlaryayin:'Yayın Yönetimi',ilansikayet:'İlan Şikayetleri',degerlendirmeler:'Değerlendirmeler',
   destektickets:'Destek Talepleri',oneriler:'Öneriler & Geri Bildirim',
   abonelikler:'Abonelikler',paketler:'Paketler',kuponlar:'Kuponlar',
   vitaminler:'Vitaminler',slider:'Hero Slider',kategoriler:'Kategoriler',
-  waayar:'WhatsApp Ayarları',apibaglantilar:'API Bağlantıları',ayarlar:'Sistem Ayarları'
+  waayar:'WhatsApp Ayarları',entegrasyonlar:'Entegrasyonlar',ayarlar:'Sistem Ayarları'
 };
 
 function renderApp(){
-  const navHtml=MENU.map(m=>{
-    if(m.section) return `<div class="nav-section">${m.section}</div>`;
-    return `<div class="nav-item" id="nav-${m.id}" onclick="route('${m.id}')"><span class="icon">${m.icon}</span>${m.label}</div>`;
-  }).join('');
-
   document.getElementById('app').innerHTML=`
   <div style="display:flex;min-height:100vh">
-    <div class="sidebar">
-      <div class="sidebar-logo">
-        <div class="brand">Kap<span>Beni</span></div>
-        <div class="sub">Yönetim Paneli</div>
-      </div>
-      <div class="sidebar-nav">${navHtml}</div>
-      <div class="sidebar-footer">
-        <div class="nav-item" onclick="logout()" style="color:#ef4444">
-          <span class="icon">🚪</span>Çıkış Yap
-        </div>
-        <!-- Wird von server.js aus /opt/kapbeni/VERSION ersetzt, gleiche Quelle
-             wie die Fusszeile der Hauptseite. -->
-        <div style="padding:8px 12px 2px;font-size:11px;color:rgba(255,255,255,.35)">v__APP_VERSION__</div>
-      </div>
-    </div>
-    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div class="sb-schleier" id="sb-schleier" onclick="sbMobilZu()"></div>
+    <aside class="sidebar" id="sidebar"></aside>
+    <div style="flex:1;display:flex;flex-direction:column;min-width:0">
       <div id="ortam-banner" data-ortam="__APP_ORTAM__" style="background:#fffbeb;border-bottom:1px solid #fde68a;color:#92400e;text-align:center;font-size:11.5px;font-weight:700;padding:5px 12px">TEST SUNUCUSU (STAGING) · Burası canlı sistem değildir. Veriler test amaçlıdır.</div>
-      <script>if(document.getElementById('ortam-banner').dataset.ortam==='prod')document.getElementById('ortam-banner').remove()</script>
       <div class="topbar">
-        <div class="topbar-title" id="topbar-title">Dashboard</div>
+        <div style="display:flex;align-items:center;min-width:0"><button class="sb-hamburger" onclick="sbMobilAuf()" aria-label="Menü">☰</button><div class="topbar-title" id="topbar-title">Dashboard</div></div>
         <div style="display:flex;align-items:center;gap:12px">
           <div id="topbar-badge" style="display:none" class="badge amber">
             <div class="dot amber"></div>
             <span id="topbar-badge-text"></span>
           </div>
-          <div style="font-size:13px;color:#64748b;font-weight:500">KapBeni Admin</div>
+          <div id="topbar-admin" style="font-size:13px;color:#64748b;font-weight:500">KapBeni Admin</div>
         </div>
       </div>
-      <div style="flex:1;overflow-y:auto;background:#f8fafc">
+      <div style="flex:1;background:#f8fafc">
         <div class="view-wrap" id="view"></div>
       </div>
     </div>
   </div>`;
+  if(el('ortam-banner').dataset.ortam==='prod') el('ortam-banner').remove();
+  renderSidebar(); sbBauLaden(); sbSayacLaden();
+  clearInterval(_sbTimer); _sbTimer=setInterval(sbSayacLaden,60000);
 }
 
-function route(r){
-  document.querySelectorAll('.nav-item').forEach(a=>a.classList.remove('active'));
-  const n=document.getElementById('nav-'+r);
-  if(n) n.classList.add('active');
-  const t=document.getElementById('topbar-title');
-  if(t) t.textContent=PAGE_TITLES[r]||r;
+// ── Hash-Routing: #/<seite>[/<arg>][?query] — Browser-Zurück bleibt im Admin ──
+function aktuelleRoute(){
+  const h=location.hash.replace(/^#\/?/,''); const [pfad,qs]=h.split('?');
+  const t=(pfad||'').split('/').filter(Boolean).map(x=>{try{return decodeURIComponent(x)}catch{return x}});
+  let r=t[0]||'dashboard'; const alias=!!ROUTE_ALIAS[r]; if(alias) r=ROUTE_ALIAS[r];
+  return {r,arg:t[1]||null,q:new URLSearchParams(qs||''),alias};
+}
+function route(r){ const h='#/'+r; if(location.hash!==h) location.hash=h; else routeAnwenden(); }
+function routeAnwenden(){
+  if(!el('view')) return;
+  const {r,arg,alias}=aktuelleRoute();
+  if(alias) history.replaceState(null,'','#/'+r);
+  renderSidebar();
+  const eintrag=sbEintrag(r);
+  const t=el('topbar-title'); if(t) t.textContent=PAGE_TITLES[r]||eintrag?.label||r;
+  window.scrollTo(0,0);
+  if(eintrag?.hazirlaniyor) return vHazirlaniyor(eintrag);
+  if(r==='kullanicilar'&&arg) return kDetayGoster(arg);
   const views={
     dashboard:vDashboard,kullanicilar:vKullanicilar,kyc:vKyc,kurumsalonay:vKurumsalOnay,
     ilanonay:vIlanOnay,riskmesaj:vRiskMesaj,ilanlaryayin:vIlanlarYayin,ilansikayet:vIlanSikayet,degerlendirmeler:vDegerlendirmeler,
     destektickets:vDestekTickets,oneriler:vOneriler,
     abonelikler:vAbonelikler,paketler:vPaketler,kuponlar:vKuponlar,
     vitaminler:vVitaminler,slider:vSlider,kategoriler:vKategoriler,
-    waayar:vWaAyar,apibaglantilar:vApi,ayarlar:vAyarlar
+    waayar:vWaAyar,entegrasyonlar:vEntegrasyonlar,ayarlar:vAyarlar
   };
   (views[r]||vDashboard)();
+}
+window.addEventListener('hashchange',()=>{ if(TOKEN&&el('view')) routeAnwenden(); else if(typeof girisRoute==='function') girisRoute(); });
+
+function vHazirlaniyor(i){
+  V(`<div style="max-width:640px"><div class="card"><div class="card-body" style="padding:32px">
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:14px">
+      <div style="width:48px;height:48px;border-radius:12px;background:#f1f5f9;display:flex;align-items:center;justify-content:center;font-size:24px">${i.icon}</div>
+      <div><p class="section-title" style="margin:0">${escH(i.label)}</p><span class="badge amber" style="margin-top:4px">Hazırlanıyor</span></div>
+    </div>
+    <p style="color:#475569;font-size:13.5px;line-height:1.7">${escH(i.aciklama||'Bu bölüm hazırlanıyor.')}</p>
+    <p style="color:#94a3b8;font-size:12.5px;margin-top:14px">Bu sayfa sonraki bir sürümde eklenecek. Menü yeri ve adresi (<code>#/${i.id}</code>) şimdiden sabittir.</p>
+  </div></div></div>`);
 }
 
 const V=html=>{const v=document.getElementById('view');if(v)v.innerHTML=html;};
@@ -427,7 +570,8 @@ async function searchK(){
   if(tbody) tbody.innerHTML=renderKRows(d.kullanicilar||[]);
 }
 
-async function kDetay(id){
+function kDetay(id){ location.hash='#/kullanicilar/'+encodeURIComponent(id); }
+async function kDetayGoster(id){
   Vloading();
   const [u,g,il]=await Promise.all([
     api('/kullanicilar/'+id).catch(()=>({})),
@@ -520,7 +664,7 @@ async function kDetay(id){
 async function kAksiyon(id,a){
   await api('/kullanicilar/'+id+'/'+a,{method:'PUT'});
   showToast('İşlem tamamlandı ✓');
-  kDetay(id);
+  kDetayGoster(id);
 }
 
 // ═══════════════════════════════════════════════
@@ -586,7 +730,6 @@ async function ilanYayinDurum(uuid,durum){
 // GET /ilanlar?durum=moderasyonda, POST /ilanlar/:id/onayla und /reddet.
 // Nutzertexte werden escaped, weil sie per innerHTML eingesetzt werden.
 // ═══════════════════════════════════════════════
-const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 async function vIlanOnay(){
   Vloading();
   const d=await api('/ilanlar?durum=moderasyonda&limit=100').catch(()=>[]);
@@ -1151,6 +1294,8 @@ async function waSave(){
 // ═══════════════════════════════════════════════
 // API BAĞLANTILARI
 // ═══════════════════════════════════════════════
+// Uebergang bis v1.16: Entegrasyonlar zeigt die alte Seite
+function vEntegrasyonlar(){ return vApi(); }
 async function vApi(){
   Vloading();
   const d=await api('/api-durum').catch(()=>[]);
@@ -1201,7 +1346,7 @@ function vAyarlar(){
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-if(TOKEN){ renderApp(); route('dashboard'); } else { renderLogin(); }
+if(TOKEN){ renderApp(); routeAnwenden(); } else { renderLogin(); }
 </script>
 </body>
 </html>

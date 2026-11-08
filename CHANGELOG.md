@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.15.0 — 2026-11-08
+
+Admin: Sidebar nach Cankartım-Muster (Gruppen, Zähler, YENİ, 72 px, Ziehen, Version·Commit), Hash-Routing, Hazırlanıyor-Seiten
+
+- docs: CLAUDE.md – Chronik 2026-11-08 (F/L/M/H, v1.9–v1.14), Backlog; Test f_iller schont das Rate-Limit
+
 ## 1.14.0 — 2026-11-07
 
 H: Kontoloeschung ein Weg (silme_bekliyor 30 Tage, Anmeldung widerruft, taeglicher Anonymisierungs-Cron, DELETE /users/me umgeleitet, Fehler sichtbar, audit_log, users.silindi_at)
