@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.18.0 — 2026-11-08
+
+Admin: Bildschirmsperre nach 15 min (Overlay, Uhr, Datum, KVKK, Admin-Karte), serverseitig in admin_oturumlar, 423 solange gesperrt, Entsperren mit Passwort, Fehlversuche begrenzt und protokolliert
+
 ## 1.17.0 — 2026-11-08
 
 Admin: neue Login-Seite (zweigeteilt, Staging-Banner, Version·Commit, Compendus-Fuß, IP-Hinweis), Sitzungen in admin_oturumlar, Login-Versuche mit IP im audit_log

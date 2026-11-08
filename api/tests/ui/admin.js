@@ -35,6 +35,37 @@ async function anmelden(page) {
 }
 
 const SZENARIEN = {
+  // Bildschirmsperre: Kilitle, Overlay mit Uhr/Datum/KVKK/Admin-Karte, Reload bleibt gesperrt,
+  // falsches Passwort, Entsperren, Sperre durch Inaktivitaet (Server).
+  async kilit(page, b) {
+    const { q } = require('../_hilfe');
+    await anmelden(page);
+    await page.goto(BASIS + '#/ilanonay'); await page.waitForTimeout(800);
+    await page.click('#kilitle-btn'); await page.waitForSelector('#kilit', { timeout: 5000 });
+    pruefe(await page.locator('#view').innerHTML() === '', `${b}: Inhalt geleert`);
+    pruefe(/^\d{2}:\d{2}$/.test(await page.locator('#kilit-saat').innerText()), `${b}: Uhrzeit`);
+    pruefe(/202\d/.test(await page.locator('#kilit-tarih').innerText()), `${b}: Datum tr (${await page.locator('#kilit-tarih').innerText()})`);
+    pruefe(await page.getByText('Müşteri verileri kilitli ekranda gizlidir (KVKK)', { exact: false }).count() === 1, `${b}: KVKK-Hinweis`);
+    pruefe(/UI Test Admin/.test(await page.locator('#kilit-ad').innerText()), `${b}: Admin-Karte`);
+    pruefe(await page.getByText('Başka kullanıcıyla giriş / Çıkış').count() === 1, `${b}: Başka kullanıcıyla giriş / Çıkış`);
+    const blur = await page.locator('#kilit').evaluate((e) => getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter);
+    pruefe(/blur/.test(blur), `${b}: Hintergrund verschwommen`);
+    await page.screenshot({ path: `${AUS}/admin-kilit-${page.viewportSize().width}.png` });
+    await page.reload(); await page.waitForTimeout(1200);
+    pruefe(await page.locator('#kilit').count() === 1 && await page.locator('#view').innerHTML() === '', `${b}: nach Reload weiter gesperrt, keine Daten`);
+    await page.fill('#kilit-pw', 'falsch-xyz'); await page.click('#kilit-btn'); await page.waitForTimeout(700);
+    pruefe(/hatalı/i.test(await page.locator('#kilit-hata').innerText()), `${b}: falsches Passwort abgewiesen`);
+    await page.fill('#kilit-pw', pw()); await page.click('#kilit-btn'); await page.waitForTimeout(1000);
+    pruefe(await page.locator('#kilit').count() === 0 && await page.locator('#topbar-title').innerText() === 'İlan Onayı', `${b}: entsperrt, zurueck auf İlan Onayı`);
+    // Inaktivitaet serverseitig simulieren -> naechster Seitenwechsel sperrt
+    const tok = await page.evaluate(() => localStorage.getItem('admin_token'));
+    const sid = JSON.parse(Buffer.from(tok.split('.')[1], 'base64url').toString()).sid;
+    await q("UPDATE admin_oturumlar SET son_aktivite=NOW()-interval '16 minutes' WHERE id=$1", [sid]);
+    await page.goto(BASIS + '#/kullanicilar'); await page.waitForTimeout(1200);
+    pruefe(await page.locator('#kilit').count() === 1, `${b}: nach 15 min Inaktivitaet gesperrt`);
+    await page.getByText('Başka kullanıcıyla giriş / Çıkış').click(); await page.waitForTimeout(700);
+    pruefe(await page.locator('#login-email').count() === 1, `${b}: Çıkış fuehrt zum Login`);
+  },
   // Login-Seite: zweigeteilt, Banner, Hinweise, Fuss, Google „Yakında“, Fehler und Erfolg.
   async giris(page, b, mobil) {
     await page.goto(BASIS); await page.waitForSelector('#login-email', { timeout: 8000 });

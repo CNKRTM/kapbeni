@@ -65,6 +65,8 @@ async function oturumAc(admin, req) {
   return sid;
 }
 
+const KILIT_DK = 15;
+const KILIT_SERBEST = new Set(['/admin/api/ben', '/admin/api/kilit-ac', '/admin/api/cikis', '/admin/api/kilitle']);
 const adminAuth = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1] || req.cookies?.admin_token;
   if (!token) return res.status(401).json({ hata: 'Giriş gerekli' });
@@ -79,6 +81,19 @@ const adminAuth = async (req, res, next) => {
     const o = rows[0];
     if (!o || o.kapandi_at || new Date(o.bitis) < new Date() || !o.admin_aktif)
       return res.status(401).json({ hata: 'Oturum sona erdi' });
+    // Bildschirmsperre (v1.18): 15 min ohne Aktivitaet -> gesperrt; gesperrt = 423
+    // fuer alles ausser /ben, /kilit-ac, /cikis, /kilitle. Hintergrundabrufe
+    // (Header X-Kp-Arka: 1, z. B. Sidebar-Zaehler) zaehlen nicht als Aktivitaet.
+    let kilitli = o.kilitli;
+    if (!kilitli && Date.now() - new Date(o.son_aktivite).getTime() > KILIT_DK * 60000) {
+      const u = await db.query('UPDATE admin_oturumlar SET kilitli=true, kilit_at=NOW() WHERE id=$1 AND kilitli=false', [o.id]);
+      if (u.rowCount) await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.kilit','admin',$1,$2,$3)`,
+        [d.id, JSON.stringify({ sebep: 'zaman_asimi' }), clientIp(req).slice(0, 45)]);
+      kilitli = true; o.kilitli = true;
+    }
+    const yol = req.originalUrl.split('?')[0].replace(/\/+$/, '');
+    if (kilitli && !KILIT_SERBEST.has(yol)) return res.status(423).json({ hata: 'Ekran kilitli', kilitli: true });
+    if (!kilitli && req.headers['x-kp-arka'] !== '1') await db.query('UPDATE admin_oturumlar SET son_aktivite=NOW() WHERE id=$1', [o.id]);
     req.admin = d; req.oturum = o;
     next();
   } catch (e) { console.error('[adminAuth]', e.message); res.status(500).json({ hata: 'Oturum kontrol edilemedi' }); }
@@ -122,6 +137,41 @@ app.get('/admin/api/ben', adminAuth, async (req, res) => {
 app.post('/admin/api/cikis', adminAuth, async (req, res) => {
   await db.query('UPDATE admin_oturumlar SET kapandi_at=NOW() WHERE id=$1', [req.oturum.id]);
   await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,ip_adresi) VALUES('admin.cikis','admin',$1,$2)`, [req.admin.id, clientIp(req).slice(0, 45)]);
+  res.json({ ok: true });
+});
+
+// ── Bildschirmsperre ───────────────────────────────────────────────────
+app.post('/admin/api/kilitle', adminAuth, async (req, res) => {
+  const sebep = ['manuel', 'hareketsizlik'].includes(req.body?.sebep) ? req.body.sebep : 'manuel';
+  const u = await db.query('UPDATE admin_oturumlar SET kilitli=true, kilit_at=NOW() WHERE id=$1 AND kilitli=false', [req.oturum.id]);
+  if (u.rowCount) await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.kilit','admin',$1,$2,$3)`,
+    [req.admin.id, JSON.stringify({ sebep }), clientIp(req).slice(0, 45)]);
+  res.json({ ok: true, kilitli: true });
+});
+app.post('/admin/api/aktivite', adminAuth, (req, res) => res.json({ ok: true }));
+// Entsperren: Passwort serverseitig, 10 Versuche je 15 min und IP, nach 5 Fehlern
+// in derselben Sitzung wird sie geschlossen (zurueck zum Login).
+const kilitLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, standardHeaders: true, legacyHeaders: false, skipSuccessfulRequests: true,
+  keyGenerator: clientIp, message: { hata: 'Çok fazla deneme. 15 dakika sonra tekrar deneyin.' } });
+app.post('/admin/api/kilit-ac', kilitLimiter, adminAuth, async (req, res) => {
+  const ip = clientIp(req).slice(0, 45);
+  const { rows } = await db.query('SELECT password_hash FROM admin_users WHERE id=$1 AND aktif=true', [req.admin.id]);
+  const ok = rows[0] && await bcrypt.compare(String(req.body?.password || ''), rows[0].password_hash);
+  if (!ok) {
+    const { rows: o } = await db.query('UPDATE admin_oturumlar SET kilit_hata=kilit_hata+1 WHERE id=$1 RETURNING kilit_hata', [req.oturum.id]);
+    const n = o[0]?.kilit_hata || 0;
+    await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.kilit_ac_hata','admin',$1,$2,$3)`,
+      [req.admin.id, JSON.stringify({ deneme: n }), ip]);
+    if (n >= 5) {
+      await db.query('UPDATE admin_oturumlar SET kapandi_at=NOW() WHERE id=$1', [req.oturum.id]);
+      await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.kilit_cikis','admin',$1,$2,$3)`,
+        [req.admin.id, JSON.stringify({ sebep: '5 hatalı deneme' }), ip]);
+      return res.status(401).json({ hata: '5 hatalı deneme — oturum kapatıldı. Lütfen tekrar giriş yapın.', cikis: true });
+    }
+    return res.status(403).json({ hata: `Şifre hatalı (${n}/5)` });
+  }
+  await db.query('UPDATE admin_oturumlar SET kilitli=false, kilit_hata=0, son_aktivite=NOW() WHERE id=$1', [req.oturum.id]);
+  await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,ip_adresi) VALUES('admin.kilit_ac','admin',$1,$2)`, [req.admin.id, ip]);
   res.json({ ok: true });
 });
 

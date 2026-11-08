@@ -130,6 +130,15 @@ tr:hover td{background:#fafafa}
 .giris-mobil-logo{display:none;height:40px;width:auto;margin:0 auto 12px}
 .ts-slot:empty{display:none}
 @media(max-width:900px){.giris-sol{display:none}.giris-mobil-logo{display:block}}
+.kilit{position:fixed;inset:0;z-index:300;display:flex;background:rgba(15,23,42,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.kilit-sol{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:48px 6vw;color:#fff}
+.kilit-saat{font-size:88px;font-weight:800;line-height:1;letter-spacing:-2px}
+.kilit-tarih{font-size:18px;font-weight:600;color:#cbd5e1;margin-top:8px;text-transform:capitalize}
+.kilit-compendus{background:#fff;border-radius:14px;padding:16px 18px;margin-top:32px}
+.kilit-kvkk{margin-top:16px;font-size:13px;color:#e2e8f0;font-weight:600}
+.kilit-sag{flex:0 0 460px;display:flex;align-items:center;justify-content:center;padding:24px}
+.kilit-karte{background:#fff;border-radius:18px;padding:28px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+@media(max-width:900px){.kilit{flex-direction:column;overflow-y:auto}.kilit-sol{flex:0 0 auto;align-items:center;text-align:center;padding:28px 16px 8px}.kilit-saat{font-size:56px}.kilit-compendus{display:none}.kilit-sag{flex:1 0 auto;padding:12px 16px 24px}}
 .star-filled{color:#f59e0b}
 .star-empty{color:#e2e8f0}
 </style>
@@ -149,6 +158,7 @@ async function api(path,opts={}){
   try{
     const r=await fetch(API+path,{...opts,headers:{...H(),...(opts.headers||{})}});
     if(r.status===401){logout();throw new Error('401');}
+    if(r.status===423){kilitEkrani();throw new Error('401');}
     const ct=r.headers.get('content-type')||'';
     return ct.includes('json')?r.json():r.text();
   }catch(e){if(e.message!=='401')showToast('Bağlantı hatası: '+path,'err'); throw e;}
@@ -173,7 +183,9 @@ function logout(){
 }
 async function benLaden(){
   try{ const r=await fetch(API+'/ben',{headers:{...H(),'X-Kp-Arka':'1'}}); if(r.status===401){ logout(); return null; }
-    const d=await r.json(); ADMIN=d.admin; const t=el('topbar-admin'); if(t&&ADMIN) t.textContent=(ADMIN.ad_soyad||ADMIN.email)+' · '+ADMIN.rol; return d; }catch{ return null; }
+    const d=await r.json(); ADMIN=d.admin; const t=el('topbar-admin'); if(t&&ADMIN) t.textContent=(ADMIN.ad_soyad||ADMIN.email)+' · '+(TR_ROL[ADMIN.rol]||ADMIN.rol);
+    if(d.kilitli){ el('kilit')?.remove(); kilitEkrani(); } else if(KILITLI){ kilitKaldir(); routeAnwenden(); }
+    return d; }catch{ return null; }
 }
 const el=id=>document.getElementById(id);
 const escH=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -270,13 +282,96 @@ async function doLogin(){
     TOKEN=d.token; localStorage.setItem('admin_token',TOKEN);
     ADMIN=d.admin||null;
     if(!location.hash||/^#\/(giris|sifremi-unuttum|yeni-sifre)/.test(location.hash)) history.replaceState(null,'','#/dashboard');
-    renderApp(); routeAnwenden();
+    kilitKaldir(); renderApp(); kilitWaechter(); routeAnwenden();
   }catch(e){ girisFehler('Sunucuya bağlanılamadı'); }
   finally{ if(btn){btn.disabled=false;btn.textContent='Giriş Yap';} }
 }
 // Turnstile kommt in v1.20 — bis dahin liefern die Helfer leere Werte.
 function tsToken(){ return null; }
 function tsReset(){}
+
+// ═══════════════════════════════════════════════
+// BILDSCHIRMSPERRE (Aufbau nach Compendus Medical „Ekran kilitli“)
+// Nach 15 Minuten ohne Aktivitaet: Overlay, Inhalt verschwommen und geleert.
+// Der Server fuehrt den Zustand (admin_oturumlar.kilitli) und verweigert
+// solange jede Datenanfrage mit 423 — die Sperre uebersteht ein Neuladen.
+// ═══════════════════════════════════════════════
+const KILIT_MS=15*60*1000;
+let _sonAktivite=Date.now(), _sonHerzschlag=Date.now(), _kilitUhr=null, _kilitTimer=null, KILITLI=false;
+['mousemove','keydown','click','scroll','touchstart'].forEach(ev=>document.addEventListener(ev,()=>{ if(!KILITLI) _sonAktivite=Date.now(); },{passive:true,capture:true}));
+function kilitWaechter(){
+  clearInterval(_kilitTimer);
+  _kilitTimer=setInterval(()=>{
+    if(!TOKEN||KILITLI||!el('view')) return;
+    const jetzt=Date.now();
+    if(jetzt-_sonAktivite>=KILIT_MS){ kilitle('hareketsizlik'); return; }
+    // Herzschlag hoechstens jede Minute, nur wenn der Nutzer wirklich etwas tat
+    if(_sonAktivite>_sonHerzschlag&&jetzt-_sonHerzschlag>=60000){
+      _sonHerzschlag=jetzt; fetch(API+'/aktivite',{method:'POST',headers:H()}).then(r=>{ if(r.status===423) kilitEkrani(); }).catch(()=>{});
+    }
+  },15000);
+}
+async function kilitle(sebep='manuel'){
+  kilitEkrani();
+  try{ await fetch(API+'/kilitle',{method:'POST',headers:H(),body:JSON.stringify({sebep})}); }catch{}
+}
+const TR_ROL={super_admin:'Süper Admin',admin:'Admin',support:'Destek',moderator:'Moderatör'};
+function kilitEkrani(){
+  KILITLI=true; lsSet('kp_kilitli',true);
+  const v=el('view'); if(v) v.innerHTML='';           // Daten verschwinden, nicht nur verdeckt (KVKK)
+  document.querySelectorAll('.modal-backdrop').forEach(m=>m.remove());
+  if(el('kilit')) return;
+  const a=ADMIN||{}; const ad=a.ad_soyad||a.email||'Yönetici';
+  const ini=ad.split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join('').toLocaleUpperCase('tr-TR')||'KB';
+  const d=document.createElement('div'); d.id='kilit'; d.className='kilit';
+  d.innerHTML=`
+    <div class="kilit-sol">
+      <div id="kilit-saat" class="kilit-saat"></div>
+      <div id="kilit-tarih" class="kilit-tarih"></div>
+      <div class="kilit-compendus"><img src="img/compendus-logo.webp" alt="Compendus" style="height:30px;width:auto"/><p style="font-size:12px;color:#64748b;margin-top:8px">Kap Beni bir Compendus ürünüdür</p></div>
+      <p class="kilit-kvkk">🔒 Müşteri verileri kilitli ekranda gizlidir (KVKK)</p>
+    </div>
+    <div class="kilit-sag">
+      <div class="kilit-karte">
+        <img src="img/kapbeni-logo.webp" alt="Kap Beni" style="height:40px;width:auto;margin:0 auto 14px;display:block"/>
+        <h2 style="font-size:20px;font-weight:800;color:#1a2e4a;text-align:center">Ekran kilitli</h2>
+        <p style="font-size:13px;color:#64748b;text-align:center;margin:6px 0 16px;line-height:1.6">Bir süre işlem yapılmadığı için ekran kilitlendi. Oturumunuz açık; devam etmek için şifrenizi girin.</p>
+        <div style="display:flex;align-items:center;gap:12px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:14px">
+          <div style="width:42px;height:42px;border-radius:50%;background:#1a2e4a;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800">${escH(ini)}</div>
+          <div style="min-width:0"><p id="kilit-ad" style="font-weight:700;color:#1a2e4a;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escH(ad)}</p><p style="font-size:12px;color:#64748b">${escH(TR_ROL[a.rol]||a.rol||'')}</p></div>
+        </div>
+        <div id="kilit-hata" class="hidden mb-3 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium"></div>
+        <label for="kilit-pw">Şifre</label>
+        <input id="kilit-pw" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')kilitAc()"/>
+        <button id="kilit-btn" class="btn btn-primary" style="width:100%;justify-content:center;padding:12px;margin-top:12px" onclick="kilitAc()">Kilidi aç</button>
+        <button class="ent-link" style="margin:14px auto 0" onclick="kilitCikis()">Başka kullanıcıyla giriş / Çıkış</button>
+      </div>
+    </div>`;
+  document.body.appendChild(d);
+  const uhr=()=>{ const n=new Date(); const s=el('kilit-saat'), t=el('kilit-tarih'); if(!s) return clearInterval(_kilitUhr);
+    s.textContent=n.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+    t.textContent=n.toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long',year:'numeric'}); };
+  uhr(); clearInterval(_kilitUhr); _kilitUhr=setInterval(uhr,1000);
+  setTimeout(()=>el('kilit-pw')?.focus(),50);
+}
+function kilitKaldir(){
+  KILITLI=false; lsSet('kp_kilitli',false); clearInterval(_kilitUhr);
+  el('kilit')?.remove(); _sonAktivite=Date.now(); _sonHerzschlag=Date.now();
+}
+async function kilitAc(){
+  const pw=el('kilit-pw')?.value; const h=el('kilit-hata');
+  if(!pw){ el('kilit-pw')?.focus(); return; }
+  const btn=el('kilit-btn'); btn.disabled=true;
+  try{
+    const r=await fetch(API+'/kilit-ac',{method:'POST',headers:H(),body:JSON.stringify({password:pw})});
+    const d=await r.json().catch(()=>({}));
+    if(r.ok){ kilitKaldir(); routeAnwenden(); sbSayacLaden(); return; }
+    if(d.cikis||r.status===401){ kilitKaldir(); logout(); setTimeout(()=>girisFehler(d.hata||'Oturum kapatıldı'),100); return; }
+    h.textContent=d.hata||'Şifre hatalı'; h.classList.remove('hidden'); el('kilit-pw').value=''; el('kilit-pw').focus();
+  }catch{ h.textContent='Sunucuya bağlanılamadı'; h.classList.remove('hidden'); }
+  finally{ btn.disabled=false; }
+}
+function kilitCikis(){ kilitKaldir(); logout(); }
 
 // ═══════════════════════════════════════════════
 // SIDEBAR (Aufbau nach Cankartım lib/admin/sidebar-config.ts + Sidebar.tsx)
@@ -432,6 +527,7 @@ function renderApp(){
             <span id="topbar-badge-text"></span>
           </div>
           <div id="topbar-admin" style="font-size:13px;color:#64748b;font-weight:500">KapBeni Admin</div>
+          <button id="kilitle-btn" class="btn btn-secondary btn-sm" onclick="kilitle('manuel')" title="Ekranı kilitle">🔒 Kilitle</button>
         </div>
       </div>
       <div style="flex:1;background:#f8fafc">
@@ -1514,7 +1610,7 @@ function vAyarlar(){
 // ═══════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════
-if(TOKEN){ renderApp(); routeAnwenden(); } else { if(!/^#\/(giris|sifremi-unuttum|yeni-sifre)/.test(location.hash)) history.replaceState(null,'','#/giris'); renderLogin(); }
+if(TOKEN){ renderApp(); kilitWaechter(); if(lsGet('kp_kilitli',false)) kilitEkrani(); else routeAnwenden(); } else { if(!/^#\/(giris|sifremi-unuttum|yeni-sifre)/.test(location.hash)) history.replaceState(null,'','#/giris'); renderLogin(); }
 </script>
 </body>
 </html>
