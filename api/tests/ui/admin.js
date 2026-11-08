@@ -332,6 +332,38 @@ const SZENARIEN = {
     await page.goBack(); await page.waitForTimeout(900);
     pruefe(page.url().endsWith('#/medya'), `${b}: Zurück → Genel bakış`);
   },
+  // Browser-Zurück im Admin (K, v1.31): Reiter, Fenster, Handy-Schublade, Reload
+  async zurueck(page, b, mobil) {
+    const { q } = require('../_hilfe');
+    const kaya = (await q("SELECT musteri_no FROM users WHERE email='satis.kayaelektronik@test.kapbeni.com'")).rows[0].musteri_no;
+    await anmelden(page);
+    await page.goto(BASIS + '#/dashboard'); await page.waitForTimeout(900);
+    await page.goto(BASIS + `#/musteri/${kaya}/zaman`); await page.waitForSelector('.akte-kopf', { timeout: 8000 });
+    await page.click('a.akte-tab[data-r="ilanlar"]'); await page.waitForTimeout(1200);
+    pruefe(page.url().endsWith(`/${kaya}/ilanlar`), `${b}: Reiter İlanlar in der Adresse`);
+    // Fenster: Galerie öffnen → Zurück schließt, Reiter bleibt
+    const gor = page.locator('#view button:has-text("Gör")').first();
+    if (await gor.count()) {
+      await gor.click(); await page.waitForTimeout(500);
+      pruefe(await page.locator('.modal-backdrop').count() === 1, `${b}: Galerie offen`);
+      await page.goBack(); await page.waitForTimeout(700);
+      pruefe(await page.locator('.modal-backdrop').count() === 0 && page.url().endsWith(`/${kaya}/ilanlar`), `${b}: Zurück schließt Galerie, Reiter bleibt`);
+      await gor.click(); await page.waitForTimeout(500);
+      await page.locator('.modal-backdrop button:has-text("✕")').first().click(); await page.waitForTimeout(700);
+      pruefe(await page.locator('.modal-backdrop').count() === 0, `${b}: ✕ schließt Galerie`);
+    }
+    await page.goBack(); await page.waitForTimeout(900);
+    pruefe(page.url().endsWith(`/${kaya}/zaman`), `${b}: Zurück → Reiter Zaman (kein toter Eintrag)`);
+    await page.reload(); await page.waitForSelector('.akte-kopf', { timeout: 8000 });
+    await page.goBack(); await page.waitForTimeout(900);
+    pruefe(page.url().endsWith('#/dashboard'), `${b}: nach Reload Zurück → Dashboard`);
+    if (mobil) {
+      await page.click('.sb-hamburger'); await page.waitForTimeout(400);
+      pruefe(await page.locator('#sidebar.mobil-offen').count() === 1, `${b}: Schublade offen`);
+      await page.goBack(); await page.waitForTimeout(600);
+      pruefe(await page.locator('#sidebar.mobil-offen').count() === 0 && page.url().endsWith('#/dashboard'), `${b}: Zurück schließt Schublade`);
+    }
+  },
 };
 
 (async () => {

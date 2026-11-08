@@ -674,6 +674,47 @@ function sbZiehStart(e){
 }
 function sbMobilAuf(){ el('sidebar')?.classList.add('mobil-offen'); el('sb-schleier')?.classList.add('offen'); }
 function sbMobilZu(){ el('sidebar')?.classList.remove('mobil-offen'); el('sb-schleier')?.classList.remove('offen'); }
+
+// ── Browser-Zurück für Fenster (Auftragssammlung K, v1.31) ─────────────────
+// Seiten und Reiter laufen schon über den Hash. Fenster (.modal-backdrop) und
+// die Handy-Schublade bekommen hier je einen History-Eintrag mit gleicher
+// Adresse: Zurück schließt das oberste Fenster; schließt die Seite ein Fenster
+// selbst (✕, Vazgeç, Speichern), wird sein Eintrag per history.back() entfernt.
+// Ein MutationObserver beobachtet das, damit nicht jede der ~10 Fensterstellen
+// einzeln angepasst werden muss.
+const OV={tiefe:0,ignor:0,geplant:0};
+const ovOffen=()=>document.querySelectorAll('body > .modal-backdrop').length+(el('sidebar')?.classList.contains('mobil-offen')?1:0);
+function ovZurueck(n){ OV.geplant+=n; if(OV.geplant!==n) return; queueMicrotask(()=>{ const k=OV.geplant; OV.geplant=0; OV.ignor++; history.go(-k); }); }
+function ovAbgleich(){
+  const n=ovOffen();
+  while(OV.tiefe<n){ OV.tiefe++; history.pushState({...(history.state||{}),kpOv:OV.tiefe},'',location.href); }
+  if(OV.tiefe>n){
+    OV.tiefe=n;
+    // Erst nach dem aktuellen Ereignis pruefen: ein Menue-Link schliesst die Schublade im
+    // onclick, die Adresse wechselt aber erst danach (Standardaktion). Nur eigene, dann noch
+    // oben liegende Eintraege zuruecknehmen — nach einem Seitenwechsel liegen sie nicht mehr oben.
+    setTimeout(()=>{ const oben=history.state?.kpOv||0; const weg=Math.max(0,oben-ovOffen()); if(weg) ovZurueck(weg); },0);
+  }
+}
+function ovObersteSchliessen(){
+  const m=[...document.querySelectorAll('body > .modal-backdrop')].pop();
+  if(m){ document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})); if(m.isConnected) m.remove(); return; }
+  if(el('sidebar')?.classList.contains('mobil-offen')) sbMobilZu();
+}
+window.addEventListener('popstate',()=>{
+  if(OV.ignor>0){ OV.ignor--; return; }
+  const ziel=history.state?.kpOv||0;
+  OV.tiefe=Math.min(OV.tiefe,ziel);
+  let schutz=10; while(ovOffen()>ziel&&schutz--) ovObersteSchliessen();
+  OV.tiefe=ovOffen();
+  // Toter Fenster-Eintrag (Fenster längst zu, z. B. nach Seitenwechsel aus der Schublade): überspringen
+  if(ziel>OV.tiefe&&ovOffen()===0) { OV.ignor++; history.back(); }
+});
+new MutationObserver(ovAbgleich).observe(document.body,{childList:true});
+// Schublade: #sidebar entsteht erst mit renderApp() — daher Klassenwechsel unter #app beobachten
+new MutationObserver(ovAbgleich).observe(document.getElementById('app'),{subtree:true,attributes:true,attributeFilter:['class']});
+// Reload bei offenem Fenster: das Fenster ist jetzt zu — toten Eintrag entfernen
+if(history.state?.kpOv){ OV.ignor++; history.back(); }
 // Zaehler laufen im Hintergrund — sie zaehlen nicht als Aktivitaet (Bildschirmsperre).
 async function sbSayacLaden(){
   try{ const r=await fetch(API+'/sidebar-sayac',{headers:{...H(),'X-Kp-Arka':'1'}}); if(r.ok){ SB_SAYAC=await r.json(); renderSidebar(); } }catch{}

@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.31.0 — 2026-11-08
+
+Browser-Zurück im Admin: Fenster und Handy-Schublade mit History-Eintrag, tote Einträge werden übersprungen (Auftragssammlung K)
+
 ## 1.30.0 — 2026-11-08
 
 Browser-Zurück Website: #/destek, #/paketler, History-Eintrag je Fenster, Scrollposition, Chat nur über API-ID, Rechtsseiten (Auftragssammlung K)
