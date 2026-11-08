@@ -1158,6 +1158,111 @@ des Testkontos an und räumen sie wieder ab. Oberfläche: `api/tests/ui/masken.j
 das vorhandene Chromium in `~/.cache/ms-playwright`. Achtung Rate-Limit `/api` 120/min:
 Node-Tests und UI-Tests nicht direkt hintereinander ohne Pause laufen lassen.
 
+**Arbeitspaket Admin (Auftragssammlung N, B, C) — v1.15 bis v1.21.** Sieben Versionen, je
+eine Migration `api/migrations/20261108_05…08`, vor der ersten Datenmigration Freeze
+`kapbeni-freeze-20261108-001313`.
+
+*v1.15.0 — Sidebar nach Cankartım (B).* `admin/public/index.html`, Konfiguration `SIDEBAR`
+(Gruppen TEMEL, PAZARYERİ, DESTEK, MUHASEBE & FİNANS, SİSTEM, GITHUB/DEPLOY; alle vorhandenen
+Seiten einsortiert). Kopf mit `img/kapbeni-logo-acik.webp` und rotem Balken „YÖNETİM PANELİ“
+(`#b61722`), Gruppen klappbar (`localStorage kp_sb_gruplar`), Zähler in Klammern aus
+`GET /admin/api/sidebar-sayac` (İlan Onayı, Şikayetler, Riskli Mesajlar, KYC, Kurumsal Onay,
+Destek; alle 60 s, Header `X-Kp-Arka`), Plakette YENİ 14 Tage ab `yeni:'JJJJ-MM-TT'`, Leiste
+auf 72 px (`kp_sb_daralt`), Breite per Ziehen 220–420 px (`kp_sb_genislik`), am Handy
+Schublade mit ☰. Fuß „Kap Beni vX · Commit“ aus `GET /admin/api/bau` (öffentlich; Hash per
+`git rev-parse`, 60 s Cache — deploy.sh committet erst nach dem Neuladen). Vorbereitete
+Einträge `hazirlaniyor:true` (Müşteri Akte, Medya Motoru, Yedekleme, Deploy Yönetimi, Test
+Sunucu) zeigen „Hazırlanıyor“. **Hash-Routing** `#/<seite>[/<arg>]` (`aktuelleRoute`,
+`routeAnwenden`, `hashchange`); Kundendetail `#/kullanicilar/<id>`; Alias `#/apibaglantilar`
+→ `#/entegrasyonlar`. Logos als WebP unter `admin/public/img/` (aus `Kapbeni_Prod/src/public`,
+mit sharp beschnitten/verkleinert), Static zusätzlich unter `/admin` (`index:false,
+redirect:false` — sonst 301 auf `/admin/`, deploy.sh bricht ab). `admin_users.test_verisi`
+neu (Migration 05).
+
+*v1.16.0 — Entegrasyonlar (C).* Kern `api/src/lib/entegrasyon.js` (von API **und** Admin
+benutzt): Anbieter claude, iyzico, smtp, resend, turnstile, google_musteri, google_admin,
+netgsm (vorbereitet), r2 (vorbereitet), meilisearch, nominatim. Tabelle
+`entegrasyon_ayarlari` (Migration 06): `credentials` = AES-256-GCM-Umschlag `{v,iv,tag,ct}`
+mit **`INTEGRATION_ENCRYPTION_KEY`** (neu in `/etc/kapbeni.env`, per `openssl rand -hex 32`
+erzeugt, 0600; Sicherung `/etc/kapbeni.env.bak-20261108-entegrasyon`). Lesereihenfolge je
+Feld DB → .env → Standard, Herkunft wird angezeigt; Geheimfelder nur maskiert `••••1234`,
+leer/Maske beim Speichern = unverändert, `__SIL__` leert. Cache 10 s je Prozess (Änderungen
+aus dem Admin erreichen die API nach ≤ 10 s). Readiness wie Cankartım: Devre Dışı / Eksik /
+Hazır / Doğrulanmış (letzter Test ok und nach der letzten Änderung). Tests lesend: Claude
+`models.retrieve`, iyzico `installmentInfo` per IYZWSv2-Signatur **immer Sandbox** solange
+nicht prod (Modus live auf Staging wird abgelehnt), SMTP `verify`, Resend `/domains`,
+Turnstile `siteverify` (Testschlüssel bzw. Dummy-Token), Google Token-Endpunkt mit
+unbrauchbarem Code (`invalid_grant` = Zugang stimmt), Meili `/health`+`/indexes`, Nominatim
+reverse. API: `GET /admin/api/entegrasyonlar`, `POST …/:provider`, `POST …/:provider/test`,
+`GET …/claude/modeller` (Modellliste). Speichern/Test nur `super_admin`; audit_log nur
+Feldnamen. `/admin/api/api-durum` → 308 auf `entegrasyonlar`, `api-test` → 410. Claude-Modell
+und An/Aus wirken in `services/ai.service.js` (`claudeAyar`). **Meili-Schlüssel** aus
+`meili.js` entfernt → `MEILI_HOST`/`MEILI_MASTER_KEY` in `/etc/kapbeni.env` (Wert unverändert
+übernommen). Nominatim-User-Agent aus der Integration (`routes/iller.js`).
+
+*v1.17.0 — Admin-Login (N).* Zweigeteilt wie Medical: links `#1a2e4a` mit weißer Logo-Karte
+(„Kap Beni – Yönetim Paneli“, „Test Staging Server“), rechts Staging-Banner, „Yönetici
+Girişi“, Karte E-posta/Şifre/Turnstile-Platz/„Giriş Yap“/„Şifremi unuttum“, „Google ile
+giriş“ (deaktiviert, „Yakında“), Hinweise yetkili personel + IP-Protokoll, Fuß Version ·
+Commit, Compendus-Logo, „© Compendus Ltd. Şti. — …“. Unterseiten `#/giris`,
+`#/sifremi-unuttum`, `#/yeni-sifre?t=`. Öffentlich `GET /admin/api/giris-yapilandirma`.
+**Sitzungen** `admin_oturumlar` (Migration 07): Token trägt `sid`, `adminAuth` prüft Sitzung
+(offen, nicht abgelaufen, Admin aktiv); alte Tokens ohne `sid` → 401 (jeder Admin musste sich
+einmal neu anmelden). `POST /admin/api/cikis` schließt serverseitig, `GET /admin/api/ben`.
+Jeder Versuch mit IP im audit_log (`admin.giris`, `admin.giris_hata`). Nebenbei: Eingabefelder
+bekamen wieder Innenabstand (Tailwind-Preflight setzte `padding:0`, Selektoren mit `:not()`).
+
+*v1.18.0 — Bildschirmsperre (N).* 15 min ohne Aktivität (Maus/Tasten/Scroll/Touch; Herzschlag
+`POST /admin/api/aktivite` höchstens 1×/min) → `POST /kilitle`, Overlay mit Blur, Inhalt von
+`#view` wird geleert; links Uhr, Datum tr, Compendus-Karte, KVKK-Hinweis; rechts Logo, „Ekran
+kilitli“, Admin-Karte (Initialen, Name, Rolle), Passwort, „Kilidi aç“, „Başka kullanıcıyla
+giriş / Çıkış“; Knopf „🔒 Kilitle“ oben. **Serverseitig**: `adminAuth` sperrt selbst, wenn
+`son_aktivite` > 15 min (Hintergrundabrufe mit `X-Kp-Arka: 1` zählen nicht), und antwortet
+gesperrt mit **423** außer `/ben`, `/kilit-ac`, `/cikis`, `/kilitle` — die Sperre übersteht
+Reload. `POST /kilit-ac`: bcrypt, Limit 10 Fehlversuche/15 min je IP
+(`skipSuccessfulRequests`), nach 5 Fehlern in der Sitzung wird sie geschlossen; audit
+`admin.kilit`, `admin.kilit_ac`, `admin.kilit_ac_hata`, `admin.kilit_cikis`.
+
+*v1.19.0 — Şifremi unuttum (N).* `admin_sifre_sifirlama` (Migration 08): Token 32 Byte
+base64url, nur SHA-256 gespeichert, 30 min, einmal nutzbar (atomares UPDATE), ältere offene
+Tokens verfallen. `POST /admin/api/sifre-unuttum` (5/15 min je IP, Antwort immer „Eğer bu
+e-posta kayıtlıysa …“, audit `admin.sifre_unuttum` mit `bulundu`), `GET …/sifre-yenile/
+kontrol`, `POST …/sifre-yenile` (≥ 10 Zeichen, groß, klein, Ziffer, nicht der E-Mail-Name;
+schließt alle Sitzungen des Admins; audit `admin.sifre_yenilendi`). Link
+`${ADMIN_PUBLIC_URL|https://kapbeni.com/kapbeniadmin/admin}#/yeni-sifre?t=…`.
+**`api/src/utils/mailer.js` neu**: Resend (live) > SMTP (live, Rückfall `SMTP_*` aus .env) >
+nur Protokoll; `logIcerik` (Reset-Link) steht nur außerhalb prod im pm2-Log. Rückgabe
+`{gonderildi,kanal}`. Die Maske zeigt „gönderilmez, yalnızca sunucu günlüğüne yazılır“,
+solange kein Kanal steht — heute der Fall.
+
+*v1.20.0 — Turnstile (N).* Admin-Login, Şifremi unuttum (Admin), Kunden-Login, Bireysel- und
+Kurumsal-Registrierung (`components/Turnstile.tsx` im AuthModal, `authApi.login/register`
+mit `turnstile`). Öffentlich `GET /api/auth/yapilandirma` (Site-Key, Google-Status).
+Server: `entegrasyon.turnstileDogrula()` — `test` (Standard) = offizielle Testschlüssel, keine
+Prüfung; `live` = `siteverify`, ohne/abgelehntes Token 400 (`alan:'turnstile'`); `disabled`
+oder fehlende Schlüssel = keine Prüfung. Das Widget rendert in einer Shadow-DOM — Tests
+prüfen `input[name="cf-turnstile-response"]`, nicht das iframe.
+
+*v1.21.0 — Google-Login vorbereitet (N).* Knöpfe im Admin-Login und AuthModal sichtbar,
+deaktiviert mit „Yakında“, bis die Integration live und vollständig ist. Gerüst:
+`GET /api/auth/google/baslat|callback` und `GET /admin/api/google/baslat|callback` (sonst
+404), state als JWT (10 min), Code-Tausch + `tokeninfo` (aud, email_verified) in
+`entegrasyon.googleCodeTausch`. Kunde: Konto per `google_id`/E-Mail, sonst Neuanlage
+(`musteri_no` per Trigger, Telefon-Platzhalter `g-<sha1>` — offen, s. Backlog), Rückkehr
+`/#/google-giris?token=` (AuthContext übernimmt). Admin: nur `izinliler` (E-Mail oder
+`@domain`) **und** vorhandenes aktives `admin_users`-Konto, keine Neuanlage.
+
+*Tests:* `api/tests/n_entegrasyon`, `n_admin_giris`, `n_admin_kilit`, `n_admin_sifre`,
+`n_turnstile`, `n_google` (Suite jetzt 20 Tests, alle grün). `_hilfe.js`: `adminGiris()`,
+`adminApi()` — nur Test-Admin `ui-test-admin@test.kapbeni.com` (`admin_users.id=3`,
+`test_verisi=true`, Passwort zufällig in `/root/kp-admin-test.pw`, 0600). **Nach den Tests
+deaktiviert** (`aktif=false`); für neue Läufe vorher `UPDATE admin_users SET aktif=true WHERE
+id=3 AND test_verisi` und danach wieder aus. UI: `api/tests/ui/admin.js` (Szenarien sifre,
+kilit, giris, entegrasyonlar, sidebar; 390/1280 px; `/tmp/kp-ui/admin-*.png`) und Szenario
+`turnstile` in `masken.js`. Achtung: `pm2 reload a b` lädt nur `a` — Dienste einzeln neu
+laden. Admin-Limits (Login 20, Entsperren 10, Şifremi unuttum 5 je 15 min) sind
+In-Memory und setzen sich beim Neustart des Admins zurück.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1182,8 +1287,24 @@ Node-Tests und UI-Tests nicht direkt hintereinander ohne Pause laufen lassen.
   sie abfragt.
 - `services/ai.service.js`: `aciklamaOner` nutzt den Claude-Pfad; ob `mesajKontrol` und
   `fiyatOner` schon umgestellt sind, ist hier nicht geprüft.
-- Meili-Schlüssel steht hartkodiert in `api/src/lib/meili.js` — gehört nach
-  `/etc/kapbeni.env`.
+- ~~Meili-Schlüssel steht hartkodiert in `api/src/lib/meili.js`~~ — **erledigt in v1.16.0**
+  (`MEILI_MASTER_KEY` in `/etc/kapbeni.env`). Der alte Wert steht aber in der Git-Historie:
+  Schlüssel in Meilisearch wechseln (Neustart mit neuem Master-Key) und in .env bzw.
+  Entegrasyonlar eintragen.
+- **Burak trägt in Admin → Entegrasyonlar ein** (Schlüssel nie in Dateien/Chat): SMTP oder
+  Resend (sonst kein Mailversand, Reset-Links nur im Log), Turnstile Site-/Secret-Key und
+  Modus live (heute test), iyzico Sandbox-Schlüssel (Merchant-ID), NetGSM, R2; Google-Login
+  (Admin + Kunde) **erst nach dem Prod-Start**; Claude-Modell bei Bedarf.
+- Google-Login (Gerüst v1.21): `users.phone` ist NOT NULL, Google liefert keine Nummer —
+  neue Google-Konten bekommen den Platzhalter `g-<hash>`. Abfrage der Telefonnummer nach dem
+  ersten Login fehlt; vor dem Freischalten entscheiden.
+- Admin-Rollen: Entegrasyonlar speichern/testen nur `super_admin`; ein Rechtebaum (Cankartım
+  08) fehlt noch. Sidebar-Einträge Müşteri Akte, Medya Motoru, Yedekleme, Deploy Yönetimi,
+  Test Sunucu sind „Hazırlanıyor“-Seiten.
+- Admin-Seite „Kategoriler“ ruft `/api/kategoriler` relativ zur Seite auf — unter
+  `:3002/admin` gibt es das nicht (zeigt „0 ana kategori“), über kapbeni.com schon.
+- Admin-Zurück: Hash-Routing gilt für Seiten und Kundendetail; Reiter innerhalb von Seiten
+  und Modals haben noch keinen History-Eintrag.
 - Die Fehlergrenze schützt bislang nur die Dashboard-Reiter. Detailseite, Keşfet, Profil
   und Einstellungen haben keine — dort nimmt ein Renderfehler weiterhin die Seite mit.
   Dasselbe Muster (`FehlerGrenze` + `Inhalt`) ließe sich dort anwenden.
