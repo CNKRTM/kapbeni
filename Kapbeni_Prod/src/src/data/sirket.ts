@@ -5,7 +5,7 @@
 // Quelle: compendus.com (Impressum/Footer), Stand 2026-11-07.
 //
 // OFFEN (vom Betreiber zu liefern, vor dem Ausrollen eintragen):
-//   vkn, vergiDairesi, mersis, ticaretSicilNo
+//   vkn, vergiDairesi, mersis, ticaretSicilNo, kep, odaAdi, etbisKayitNo
 // Solange ein Feld leer ist, blenden Footer und Rechtsseiten die Zeile aus,
 // statt einen Platzhalter zu zeigen.
 
@@ -28,10 +28,15 @@ export const SIRKET = {
   vergiDairesi: '',
   mersis: '',
   ticaretSicilNo: '',
+  // Bagli olunan meslek kurulusu (Kuenye), z. B. die zustaendige Ticaret Odasi
+  odaAdi: '',
   naceKodu: '479114',
   naceAciklama: 'İnternet üzerinden perakende ticaret / aracılık',
   // ETBİS: Kayit muss fuer kapbeni.com selbst unter Compendus bestehen. Der
   // QR/Link einer anderen Seite (z. B. cankartim.com) darf hier NICHT stehen.
+  // Eigene ETBIS-Kayit von kapbeni.com (siteId/Kayit-Nr.). Leer = Platzhalter
+  // "ETBİS kaydı yapılıyor" in Footer und Kuenye, ohne Logo-Link und ohne QR.
+  etbisKayitNo: '',
   etbisDogrulamaUrl: 'https://www.eticaret.gov.tr/sitedogrulama',
 } as const
 

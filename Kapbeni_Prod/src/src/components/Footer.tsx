@@ -1,16 +1,36 @@
 // Footer.tsx — 1:1 nach Live-Bundle (index-B_ZskGvg.js)
-// 5 Spalten: Logo | Kurumsal | Paketler (Buttons → PaketModal) | Yardım | İletişim
+// Spalten: Logo | Kurumsal | Yasal | Paketler (Buttons → PaketModal) | Yardım | İletişim
+// Arbeitspaket D: Rechtsseiten in Gruppen Kurumsal / Yasal / Yardım, „Çerez Tercihleri“
+// öffnet den Cookie-Banner erneut, ETBİS nur noch als Platzhalter bis zur eigenen Kayit.
 import { useState } from 'react'
 import { ChevronDown, X, Gift, Bookmark, Sparkles, Building2, Zap, Crown } from 'lucide-react'
 import { SIRKET, tamAdres } from '../data/sirket'
 import { useGeriKapat } from '../lib/geriTusu'
 
-const LEGAL_LINKS = [
-  { label: 'Kullanım Koşulları', href: '/#/kullanim-kosullari' },
+const KURUMSAL_LINKS = [
+  { label: 'Hakkımızda', href: '/#/hakkimizda' },
+  { label: 'Künye ve İletişim', href: '/#/kunye' },
+  { label: 'Kurumsal Satıcı Sözleşmesi', href: '/#/kurumsal-satici-sozlesmesi' },
+  { label: 'Hak İhlali Bildirimi', href: '/#/hak-ihlali-bildirimi' },
+]
+
+const YASAL_LINKS = [
+  { label: 'KVKK Aydınlatma Metni', href: '/#/kvkk' },
+  { label: 'Açık Rıza Metni', href: '/#/acik-riza' },
   { label: 'Gizlilik Politikası', href: '/#/gizlilik-politikasi' },
-  { label: 'Mesafeli Satış', href: '/#/mesafeli-satis' },
   { label: 'Çerez Politikası', href: '/#/cerez-politikasi' },
-  { label: 'İade ve Geri Ödeme Politikası', href: '/#/iade-politikasi' },
+  { label: 'Kullanım Koşulları', href: '/#/kullanim-kosullari' },
+  { label: 'Üyelik Sözleşmesi', href: '/#/uyelik-sozlesmesi' },
+  { label: 'Mesafeli Satış Sözleşmesi', href: '/#/mesafeli-satis' },
+  { label: 'Ön Bilgilendirme Formu', href: '/#/on-bilgilendirme' },
+  { label: 'İade ve İptal Politikası', href: '/#/iade-politikasi' },
+]
+
+const YARDIM_LINKS = [
+  { label: 'Nasıl Çalışır?', href: '/#/nasil-calisir' },
+  { label: 'Güvenli Alışveriş', href: '/#/guvenli-alisveris' },
+  { label: 'İlan Verme Kuralları', href: '/#/ilan-verme-kurallari' },
+  { label: 'Yasaklı Ürünler', href: '/#/yasakli-urunler' },
 ]
 
 interface Paket {
@@ -121,10 +141,10 @@ export default function Footer() {
       {activePaket && <PaketModal paket={activePaket} onClose={() => setActivePaket(null)} />}
       <footer className="bg-gray-900 text-gray-300 mt-16">
         <div className="max-w-6xl mx-auto px-4 py-12">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-8">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8">
 
             {/* Logo + tagline */}
-            <div>
+            <div className="col-span-2 md:col-span-3 lg:col-span-1">
               <img src="/logo-footer.png" alt="Kap Beni" className="h-[108px] w-auto object-contain mb-4" />
               <p className="text-sm text-gray-400 leading-relaxed">
                 Türkiye'nin güvenilir ikinci el alışveriş platformu. Beğen, kap, senin olsun.
@@ -135,8 +155,19 @@ export default function Footer() {
             <div>
               <h3 className="text-white font-semibold mb-4">Kurumsal</h3>
               <ul className="space-y-2 text-sm">
-                <li><a href="/#/hakkimizda" className="hover:text-white transition-colors">Hakkımızda</a></li>
-                {LEGAL_LINKS.map((l) => (
+                {KURUMSAL_LINKS.map((l) => (
+                  <li key={l.href}>
+                    <a href={l.href} className="hover:text-white transition-colors">{l.label}</a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Yasal */}
+            <div>
+              <h3 className="text-white font-semibold mb-4">Yasal</h3>
+              <ul className="space-y-2 text-sm">
+                {YASAL_LINKS.map((l) => (
                   <li key={l.href}>
                     <a href={l.href} className="hover:text-white transition-colors">{l.label}</a>
                   </li>
@@ -183,15 +214,18 @@ export default function Footer() {
             <div>
               <h3 className="text-white font-semibold mb-4">Yardım</h3>
               <ul className="space-y-2 text-sm">
-                <li><a href="/#/nasil-calisir" className="hover:text-white transition-colors">Nasıl Çalışır?</a></li>
-                <li><a href="/#/guvenli-alisveris" className="hover:text-white transition-colors">Güvenli Alışveriş</a></li>
+                {YARDIM_LINKS.map((l) => (
+                  <li key={l.href}>
+                    <a href={l.href} className="hover:text-white transition-colors">{l.label}</a>
+                  </li>
+                ))}
                 <li><a href={`mailto:${SIRKET.destekEposta}`} className="hover:text-white transition-colors">{SIRKET.destekEposta}</a></li>
                 <li><a href={SIRKET.telefonHref} className="hover:text-white transition-colors">{SIRKET.telefon}</a></li>
               </ul>
             </div>
 
             {/* İletişim + ETBİS */}
-            <div>
+            <div className="col-span-2 md:col-span-1">
               <h3 className="text-white font-semibold mb-4">İletişim</h3>
               <button
                 type="button"
@@ -224,7 +258,10 @@ export default function Footer() {
                   <img src="/compendus-logo.webp" alt="Compendus" className="h-7 w-auto object-contain" />
                 </span>
               </a>
-              <div className="mt-4">
+              {/* ETBİS: Logo/Link erst mit eigener Kayit von kapbeni.com (SIRKET.etbisKayitNo).
+                  Bis dahin neutraler Platzhalter, kein fremder QR (Auftragssammlung E). */}
+              {SIRKET.etbisKayitNo ? (
+                <div className="mt-4">
                 <a
                   href={SIRKET.etbisDogrulamaUrl}
                   target="_blank"
@@ -238,6 +275,12 @@ export default function Footer() {
                   <span className="text-xs font-medium text-gray-300">ETBİS'e Kayıtlıdır.</span>
                 </a>
               </div>
+              ) : (
+                <a href="/#/kunye" className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-700 px-3 py-2 text-xs text-gray-400 hover:text-white transition-colors">
+                  <i className="ti ti-clock" />
+                  ETBİS kaydı yapılıyor
+                </a>
+              )}
             </div>
           </div>
 
@@ -251,7 +294,8 @@ export default function Footer() {
             </p>
             <p>
               Faaliyet Kodu: {SIRKET.naceKodu} – {SIRKET.naceAciklama} |{' '}
-              <a href="/#/gizlilik-politikasi" className="hover:text-gray-300 transition-colors">KVKK</a>
+              <a href="/#/kvkk" className="hover:text-gray-300 transition-colors">KVKK</a> |{' '}
+              <a href="/#/kunye" className="hover:text-gray-300 transition-colors">Künye</a>
             </p>
           </div>
         </div>

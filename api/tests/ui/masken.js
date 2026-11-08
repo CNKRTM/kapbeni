@@ -131,6 +131,8 @@ const SZENARIEN = {
     for (const name of wahl) for (const br of BREITEN) {
       const ctx = await browser.newContext({ viewport: { width: br.width, height: br.height }, locale: 'tr-TR' });
       await ctx.addInitScript((t) => { try { localStorage.setItem('sg_token', t) } catch {} }, token);
+      // Cookie-Entscheidung vorbelegen (Banner seit Arbeitspaket D), damit er keine Klicks abfaengt
+      await ctx.addInitScript(() => { try { if (!localStorage.getItem('kapbeni_cookie_consent')) localStorage.setItem('kapbeni_cookie_consent', JSON.stringify({ v: '1.0', zorunlu: true, analitik: false, pazarlama: false, zaman: new Date().toISOString() })) } catch {} });
       const page = await ctx.newPage();
       const konsole = [];
       page.on('pageerror', (e) => konsole.push(e.message));

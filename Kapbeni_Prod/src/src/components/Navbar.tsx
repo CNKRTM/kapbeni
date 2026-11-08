@@ -54,8 +54,9 @@ export default function Navbar({
             <img src="/logo-navbar.png" alt="Kap Beni" className="h-[66px] w-auto object-contain" />
           </button>
 
-          {/* Search */}
-          <div className="flex-grow max-w-xl relative">
+          {/* Search — min-w-0: sonst schiebt die Mindestbreite des Eingabefelds die
+              Handy-Knoepfe 4 px ueber den Rand (waagerechter Ueberlauf auf 390 px) */}
+          <div className="flex-grow min-w-0 max-w-xl relative">
             <div className="absolute inset-y-0 left-3.5 flex items-center pointer-events-none text-gray-400">
               <Search className="h-4.5 w-4.5" />
             </div>

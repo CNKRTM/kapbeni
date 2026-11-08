@@ -9,6 +9,7 @@
 //  Hash statt Pfad, weil die Legal-Seiten bereits Hash nutzen (#/kullanim-…)
 //  und nginx alles auf index.html leitet — so bleiben beide Systeme verträglich.
 // ════════════════════════════════════════════════════════════════════════════
+import { HUKUK_SLUGS, HUKUK_ALIAS } from './pages/legal/hukukMetinleri'
 
 export interface NavState {
   tab: string
@@ -25,11 +26,19 @@ export interface NavState {
 
 // Hash-Adressen der Legal-Seiten. Diese verwaltet App.tsx weiterhin selbst;
 // hashZuNav() gibt für sie null zurück, damit sich beide nicht ins Gehege kommen.
-export const LEGAL_HASHES = [
-  '#/kullanim-kosullari', '#/gizlilik-politikasi', '#/mesafeli-satis',
-  '#/cerez-politikasi', '#/iade-politikasi', '#/hakkimizda',
-  '#/nasil-calisir', '#/guvenli-alisveris',
-]
+// Seit Arbeitspaket D: 15 Rechtstexte (HUKUK_SLUGS) + Hakkımızda/Nasıl Çalışır,
+// dazu Alias-Adressen (werden in App.tsx per location.replace umgeleitet).
+// Eine Abschnittsangabe (#/kvkk?b=<id>) gehört zur selben Seite.
+export const LEGAL_SLUGS = [...HUKUK_SLUGS, 'hakkimizda', 'nasil-calisir']
+
+/** Slug der Rechtsseite (auch Alias) oder null, wenn der Hash keine ist. */
+export function legalSlug(hash: string): string | null {
+  const m = (hash || '').match(/^#\/([a-z0-9-]+)(?:\?.*)?$/)
+  if (!m) return null
+  const s = m[1]
+  if (LEGAL_SLUGS.includes(s) || s in HUKUK_ALIAS) return s
+  return null
+}
 
 const TAB_ZU_PFAD: Record<string, string> = {
   home: '/', discover: '/kesfet', messages: '/mesajlar', favorites: '/favoriler',
@@ -69,7 +78,7 @@ const sicherDecode = (v: string): string => {
 export function hashZuNav(hash: string): NavState | null {
   const h = (hash || '').trim()
   if (!h || h === '#' || h === '#/') return { tab: 'home' }
-  if (LEGAL_HASHES.includes(h)) return null
+  if (legalSlug(h)) return null
 
   const [pfadTeil, queryTeil] = h.replace(/^#/, '').split('?')
   let params: URLSearchParams

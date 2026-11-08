@@ -278,10 +278,18 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
                 Google ile Kayıt Ol
                 {!googleAktif && <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 text-[10px] font-extrabold uppercase tracking-wide">Yakında</span>}
               </button>
-              <p className="text-xs text-center text-gray-400">
+              {/* Rechtstexte öffnen in neuem Tab (target=_blank): das Fenster bleibt mit den
+                  Eingaben stehen und liegt nie über einer Rechtsseite (Backlog K). Açık rıza
+                  ist freiwillig und deshalb nur verlinkt, nicht „mit angenommen“. */}
+              <p className="text-xs text-center text-gray-400 leading-relaxed">
                 Kayıt olarak{' '}
+                <a href="/#/uyelik-sozlesmesi" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Üyelik Sözleşmesi</a>
+                'ni ve{' '}
                 <a href="/#/kullanim-kosullari" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Kullanım Koşulları</a>
-                'nı kabul etmiş olursunuz.
+                'nı kabul etmiş olursunuz. Kişisel verileriniz{' '}
+                <a href="/#/kvkk" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">KVKK Aydınlatma Metni</a>
+                {' '}kapsamında işlenir. İsteğe bağlı izinler:{' '}
+                <a href="/#/acik-riza" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Açık Rıza Metni</a>.
               </p>
             </form>
           )}
@@ -378,12 +386,19 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
               <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Kayıt gönderiliyor...' : '🏢 Kurumsal Hesap Oluştur'}
               </button>
-              <p className="text-xs text-center text-gray-400">
+              {/* Rechtstexte öffnen in neuem Tab (target=_blank): das Fenster bleibt mit den
+                  Eingaben stehen und liegt nie über einer Rechtsseite (Backlog K). Açık rıza
+                  ist freiwillig und deshalb nur verlinkt, nicht „mit angenommen“. */}
+              <p className="text-xs text-center text-gray-400 leading-relaxed">
                 Kayıt olarak{' '}
+                <a href="/#/kurumsal-satici-sozlesmesi" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Kurumsal Satıcı Sözleşmesi</a>{', '}
+                <a href="/#/uyelik-sozlesmesi" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Üyelik Sözleşmesi</a>
+                'ni ve{' '}
                 <a href="/#/kullanim-kosullari" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Kullanım Koşulları</a>
-                'nı ve{' '}
-                <a href="/#/gizlilik-politikasi" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">KVKK Aydınlatma Metni</a>
-                'ni kabul etmiş olursunuz.
+                'nı kabul etmiş olursunuz. Kişisel verileriniz{' '}
+                <a href="/#/kvkk" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">KVKK Aydınlatma Metni</a>
+                {' '}kapsamında işlenir. İsteğe bağlı izinler:{' '}
+                <a href="/#/acik-riza" target="_blank" rel="noopener noreferrer" className="text-primary font-medium hover:underline">Açık Rıza Metni</a>.
               </p>
             </form>
           )}

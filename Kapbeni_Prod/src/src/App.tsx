@@ -45,19 +45,17 @@ import GSMModal from './modals/GSMModal'
 import EditProfileModal from './modals/EditProfileModal'
 import PackagesModal from './modals/PackagesModal'
 
-import KullarimKosullari from './pages/legal/KullarimKosullari'
-import GizlilikPolitikasi from './pages/legal/GizlilikPolitikasi'
-import MesafeliSatis from './pages/legal/MesafeliSatis'
-import CerezPolitikasi from './pages/legal/CerezPolitikasi'
 import Hakkimizda from './pages/legal/Hakkimizda'
 import NasilCalisir from './pages/legal/NasilCalisir'
-import GuvenliAlisveris from './pages/legal/GuvenliAlisveris'
-import IadePolitikasi from './pages/legal/IadePolitikasi'
+// Arbeitspaket D: alle 15 Rechtstexte ueber eine Komponente (ersetzt die
+// frueheren Einzelseiten Kullanım/Gizlilik/Mesafeli/Çerez/İade/Güvenli Alışveriş)
+import HukukSayfasi from './pages/legal/HukukSayfasi'
+import { HUKUK_SLUGS, HUKUK_ALIAS } from './pages/legal/hukukMetinleri'
 
 import { useAuth } from './context/AuthContext'
 import { ilanlarApi, favorilerApi } from './api'
 import { useKategoriAgac, dbIdVonSlug, invalidateKategoriAgac } from './data/kategoriAgac'
-import { navZuHash, hashZuNav, navSchluessel, LEGAL_HASHES, type NavState } from './navigation'
+import { navZuHash, hashZuNav, navSchluessel, legalSlug, type NavState } from './navigation'
 import { nachZurueck, popVonOverlay } from './lib/geriTusu'
 import type { Listing } from './api'
 import { MOCK_LISTINGS, MOCK_CHATS } from './data/mockData'
@@ -250,7 +248,7 @@ export default function App() {
   useEffect(() => {
     const onHashChange = (e: HashChangeEvent) => {
       const alt = '#' + (e.oldURL.split('#')[1] || '')
-      if (LEGAL_HASHES.includes(window.location.hash) && !LEGAL_HASHES.includes(alt)) legalAusApp.current = true
+      if (legalSlug(window.location.hash) && !legalSlug(alt)) legalAusApp.current = true
       setHash(window.location.hash)
     }
     window.addEventListener('hashchange', onHashChange)
@@ -262,7 +260,15 @@ export default function App() {
   // native Zurueck-Button durch die App laeuft statt kapbeni.com zu verlassen.
   // Modals (Sat, Giris, KYC, GSM, Paketler, Destek, Filter) bleiben bewusst
   // aussen vor — sie sind keine eigene Route.
-  const legalAktiv = LEGAL_HASHES.includes(hash)
+  const aktuellerLegalSlug = legalSlug(hash)
+  const legalAktiv = aktuellerLegalSlug !== null
+  // Alias-Adressen (z. B. #/mesafeli-satis-sozlesmesi) auf die kanonische Route umschreiben,
+  // ohne neuen History-Eintrag
+  useEffect(() => {
+    if (aktuellerLegalSlug && HUKUK_ALIAS[aktuellerLegalSlug]) {
+      window.location.replace(window.location.pathname + window.location.search + '#/' + HUKUK_ALIAS[aktuellerLegalSlug])
+    }
+  }, [aktuellerLegalSlug])
   const navAktuell: NavState = {
     tab: activeTab,
     ilanId: activeTab === 'details' ? (selectedListing?.id ?? null) : null,
@@ -717,30 +723,16 @@ export default function App() {
 
   const favoriteListings = useMemo(() => listings.filter((l) => l.isFavorite), [listings])
 
-  const legalPages: Record<string, React.ReactNode> = {
-    '#/kullanim-kosullari': <KullarimKosullari />,
-    '#/gizlilik-politikasi': <GizlilikPolitikasi />,
-    '#/mesafeli-satis': <MesafeliSatis />,
-    '#/cerez-politikasi': <CerezPolitikasi />,
-    '#/iade-politikasi': (
-      <IadePolitikasi
-        onBack={legalZurueck}
-      />
-    ),
-    '#/hakkimizda': <Hakkimizda />,
-    '#/nasil-calisir': (
-      <NasilCalisir
-        onBack={legalZurueck}
-      />
-    ),
-    '#/guvenli-alisveris': (
-      <GuvenliAlisveris
-        onBack={legalZurueck}
-      />
-    ),
+  // Rechtsseiten: Slug aus dem Hash (Abschnitt ?b=… gehoert zur selben Seite)
+  let legalInhalt: React.ReactNode = null
+  if (aktuellerLegalSlug) {
+    const kanon = HUKUK_ALIAS[aktuellerLegalSlug] || aktuellerLegalSlug
+    if (kanon === 'hakkimizda') legalInhalt = <Hakkimizda />
+    else if (kanon === 'nasil-calisir') legalInhalt = <NasilCalisir onBack={legalZurueck} />
+    else if (HUKUK_SLUGS.includes(kanon)) legalInhalt = <HukukSayfasi slug={kanon} onBack={legalZurueck} />
   }
 
-  if (legalPages[hash]) {
+  if (legalInhalt) {
     const handleTabFromLegal = (tab: string) => {
       window.location.hash = ''
       setActiveTab(tab)
@@ -760,7 +752,7 @@ export default function App() {
       )
     }
     return (
-      <div className="min-h-screen bg-white flex flex-col">
+      <div className="min-h-screen bg-[#f8f9fa] flex flex-col">
         <StagingBanner />
         <Navbar
           activeTab={activeTab}
@@ -774,7 +766,7 @@ export default function App() {
           onProfileClick={handleProfileClickFromLegal}
           user={user}
         />
-        <main className="flex-grow">{legalPages[hash]}</main>
+        <main className="flex-grow">{legalInhalt}</main>
         <Footer />
       </div>
     )

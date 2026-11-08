@@ -2,6 +2,13 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.32.0 — 2026-11-08
+
+Rechtsseiten: 15 Texte (Entwurf) unter eigenen Routen, Footer-Gruppen, Künye aus SIRKET, ETBİS-Platzhalter, Registrierungslinks
+
+- test: m_durum_marka räumt Medien-Protokoll (medya_isleri) des Testinserats mit ab
+- docs: CLAUDE.md – Chronik 2026-11-08 Medien + Zurück (v1.27–v1.31: zwei Bildgrößen, Medya Motoru, Admin-Seite, Browser-Zurück Website/Admin), Messtabelle, Backlog
+
 ## 1.31.0 — 2026-11-08
 
 Browser-Zurück im Admin: Fenster und Handy-Schublade mit History-Eintrag, tote Einträge werden übersprungen (Auftragssammlung K)

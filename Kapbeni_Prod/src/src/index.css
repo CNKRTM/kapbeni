@@ -34,3 +34,28 @@ body {
 .prose p { @apply text-sm text-gray-700 leading-relaxed mb-4; }
 .prose ul { @apply list-disc pl-5 text-sm text-gray-700 space-y-1 mb-4; }
 .prose-sm { font-size: 0.875rem; }
+
+/* Rechtsseiten (pages/legal/HukukSayfasi.tsx) — nur vorhandene Tokens/Abstaende */
+.hukuk-metin { overflow-wrap: anywhere; }
+.hukuk-metin h1 { @apply text-2xl md:text-3xl font-extrabold text-gray-900 leading-tight mb-2; overflow-wrap: normal; }
+.hukuk-metin h1 + p { @apply text-xs text-gray-500 mb-5; }
+.hukuk-metin h1 + p strong { @apply font-semibold text-gray-500; }
+.hukuk-metin h2 { @apply text-lg font-bold text-gray-900 mt-10 mb-3 scroll-mt-24; }
+.hukuk-metin h3 { @apply text-base font-semibold text-gray-800 mt-6 mb-2 scroll-mt-24; }
+.hukuk-metin p { @apply text-sm text-gray-700 leading-relaxed mb-3; }
+.hukuk-metin ul { @apply list-disc pl-5 text-sm text-gray-700 leading-relaxed space-y-1.5 mb-4; }
+.hukuk-metin a { @apply text-primary font-medium hover:underline; }
+.hukuk-metin strong { @apply font-semibold text-gray-900; }
+.hukuk-metin code { @apply text-xs bg-gray-100 text-gray-800 rounded px-1 py-0.5; }
+.hukuk-metin .hukuk-tablo { @apply overflow-x-auto mb-5 rounded-xl border border-gray-100; }
+.hukuk-metin table { @apply w-full text-sm border-collapse; }
+.hukuk-metin th, .hukuk-metin td { @apply text-left align-top px-3 py-2 border-b border-gray-100 text-gray-700; overflow-wrap: normal; word-break: normal; }
+.hukuk-metin td { min-width: 8rem; }
+.hukuk-metin thead th { @apply bg-gray-50 font-semibold text-gray-800; }
+.hukuk-metin tbody th { @apply font-semibold text-gray-800 bg-gray-50; width: 34%; min-width: 8rem; }
+.hukuk-metin tr:last-child > th, .hukuk-metin tr:last-child > td { @apply border-b-0; }
+.hukuk-metin .hukuk-eksik { @apply text-gray-400 italic; }
+.hukuk-metin .hukuk-icindekiler { @apply bg-gray-50 border border-gray-100 rounded-2xl p-4 mb-8; }
+.hukuk-metin .hukuk-icindekiler p { @apply mb-2; }
+.hukuk-metin .hukuk-icindekiler ul { @apply list-none pl-0 mb-0 grid gap-1 sm:grid-cols-2 space-y-0; }
+.hukuk-metin .hukuk-icindekiler a { @apply text-gray-700 hover:text-primary; }
