@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.19.0 — 2026-11-08
+
+Admin: Şifremi unuttum (Einmal-Token gehasht, 30 min, neutral, Rate-Limit, audit_log), Seite Yeni şifre mit Mindestregeln; Mailer über Entegrasyonlar (Resend > SMTP > Protokoll)
+
 ## 1.18.0 — 2026-11-08
 
 Admin: Bildschirmsperre nach 15 min (Overlay, Uhr, Datum, KVKK, Admin-Karte), serverseitig in admin_oturumlar, 423 solange gesperrt, Entsperren mit Passwort, Fehlversuche begrenzt und protokolliert

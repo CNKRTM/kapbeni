@@ -255,7 +255,7 @@ function girisFormHtml(){
       <div><label for="login-pw">Şifre</label><input id="login-pw" type="password" autocomplete="current-password" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"/></div>
       <div id="ts-giris" class="ts-slot"></div>
       <button id="login-btn" onclick="doLogin()" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px">Giriş Yap</button>
-      <div id="sifre-unuttum-link" style="text-align:right"></div>
+      <div style="text-align:right"><a href="#/sifremi-unuttum" id="sifre-unuttum-link" style="font-size:12.5px;font-weight:600;color:#475569">Şifremi unuttum</a></div>
     </div>
     <div style="display:flex;align-items:center;gap:10px;margin:16px 0 12px"><div style="flex:1;height:1px;background:#e2e8f0"></div><span style="font-size:12px;color:#94a3b8">veya</span><div style="flex:1;height:1px;background:#e2e8f0"></div></div>
     <button id="google-btn" class="btn btn-secondary" style="width:100%;justify-content:center;padding:12px" ${g.aktif?`onclick="location.href=API+'/google/baslat'"`:'disabled title="Yakında"'}>
@@ -267,8 +267,83 @@ function girisFormHtml(){
 async function renderLogin(){ await girisCfgLaden(); girisRoute(); }
 function girisRoute(){
   if(TOKEN&&el('view')) return;
+  const {r,q}=aktuelleRoute();
+  if(r==='sifremi-unuttum') return unuttumSayfa();
+  if(r==='yeni-sifre') return yeniSifreSayfa(q.get('t')||'');
   girisSayfasi(girisFormHtml());
   setTimeout(()=>el('login-email')?.focus(),50);
+}
+// ── Şifremi unuttum ──
+const mailHinweis=()=>((GIRIS_CFG||{}).mail_kanali==='log')
+  ?`<div id="mail-log-hinweis" class="mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-800 rounded-xl" style="font-size:12.5px;line-height:1.6">E-posta gönderimi henüz yapılandırılmadı (Entegrasyonlar → SMTP / Resend). Bu sunucuda bağlantı <strong>gönderilmez</strong>, yalnızca sunucu günlüğüne yazılır.</div>`:'';
+function unuttumSayfa(){
+  girisSayfasi(`<div class="card"><div class="card-body" style="padding:24px">
+    <p style="font-weight:700;color:#1a2e4a;margin-bottom:6px">Şifremi unuttum</p>
+    <p style="font-size:12.5px;color:#64748b;margin-bottom:14px;line-height:1.6">Kayıtlı e-posta adresinizi girin. Hesap varsa 30 dakika geçerli, tek kullanımlık bir sıfırlama bağlantısı gönderilir.</p>
+    ${mailHinweis()}
+    <div id="login-err" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium"></div>
+    <div id="unuttum-ok" class="hidden mb-4 p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-sm font-medium"></div>
+    <div id="unuttum-form" class="space-y-3">
+      <div><label for="unuttum-email">E-posta</label><input id="unuttum-email" type="email" autocomplete="username" placeholder="ad@kapbeni.com" onkeydown="if(event.key==='Enter')unuttumGonder()"/></div>
+      <div id="ts-unuttum" class="ts-slot"></div>
+      <button id="unuttum-btn" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px" onclick="unuttumGonder()">Sıfırlama bağlantısı gönder</button>
+    </div>
+    <div style="text-align:center;margin-top:14px"><a href="#/giris" style="font-size:12.5px;font-weight:600;color:#475569">← Girişe dön</a></div>
+  </div></div>`);
+  const t=el('giris-baslik'); if(t) t.textContent='Şifre sıfırlama';
+  tsRender('ts-unuttum');
+  setTimeout(()=>el('unuttum-email')?.focus(),50);
+}
+async function unuttumGonder(){
+  const email=el('unuttum-email')?.value.trim();
+  if(!email||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)){ girisFehler('Geçerli bir e-posta girin'); return; }
+  const btn=el('unuttum-btn'); btn.disabled=true;
+  try{
+    const r=await fetch(API+'/sifre-unuttum',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,turnstile:tsToken('ts-unuttum')})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ girisFehler(d.hata||'İstek gönderilemedi'); tsReset('ts-unuttum'); return; }
+    el('login-err').classList.add('hidden');
+    const ok=el('unuttum-ok'); ok.textContent=d.mesaj+(d.mail_kanali==='log'?' (Staging: gönderim yapılmadı, bağlantı sunucu günlüğünde.)':''); ok.classList.remove('hidden');
+    el('unuttum-form').classList.add('hidden');
+  }catch{ girisFehler('Sunucuya bağlanılamadı'); }
+  finally{ btn.disabled=false; }
+}
+// ── Yeni şifre ──
+const SIFRE_KURALLAR=[['en az 10 karakter',p=>p.length>=10],['büyük harf',p=>/[A-ZÇĞİÖŞÜ]/.test(p)],['küçük harf',p=>/[a-zçğıöşü]/.test(p)],['rakam',p=>/\d/.test(p)]];
+async function yeniSifreSayfa(t){
+  girisSayfasi(`<div class="card"><div class="card-body" style="padding:24px" id="yeni-kutu"><p style="color:#94a3b8;font-size:13px">Bağlantı kontrol ediliyor…</p></div></div>`);
+  const b=el('giris-baslik'); if(b) b.textContent='Yeni şifre';
+  let gecerli=false; try{ gecerli=(await (await fetch(API+'/sifre-yenile/kontrol?t='+encodeURIComponent(t))).json()).gecerli; }catch{}
+  const k=el('yeni-kutu'); if(!k) return;
+  if(!gecerli){ k.innerHTML=`<div class="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium" id="yeni-gecersiz">Bağlantı geçersiz, kullanılmış veya süresi dolmuş.</div>
+    <div style="text-align:center;margin-top:14px"><a href="#/sifremi-unuttum" style="font-size:12.5px;font-weight:600;color:#475569">Yeni bağlantı iste</a></div>`; return; }
+  k.innerHTML=`<p style="font-weight:700;color:#1a2e4a;margin-bottom:12px">Yeni şifrenizi belirleyin</p>
+    <div id="login-err" class="hidden mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-sm font-medium"></div>
+    <div id="yeni-form" class="space-y-3">
+      <div><label for="yeni-pw">Yeni şifre</label><input id="yeni-pw" type="password" autocomplete="new-password" oninput="yeniKural()"/></div>
+      <div><label for="yeni-pw2">Yeni şifre (tekrar)</label><input id="yeni-pw2" type="password" autocomplete="new-password" oninput="yeniKural()" onkeydown="if(event.key==='Enter')yeniKaydet()"/></div>
+      <ul id="yeni-kurallar" style="font-size:12px;line-height:1.8;color:#64748b"></ul>
+      <button id="yeni-btn" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px" onclick="yeniKaydet()">Şifreyi kaydet</button>
+    </div>`;
+  k.dataset.t=t; yeniKural(); setTimeout(()=>el('yeni-pw')?.focus(),50);
+}
+function yeniKural(){
+  const p=el('yeni-pw')?.value||'', p2=el('yeni-pw2')?.value||'';
+  const liste=[...SIFRE_KURALLAR.map(([ad,f])=>[ad,f(p)]),['iki şifre aynı',!!p&&p===p2]];
+  const u=el('yeni-kurallar'); if(u) u.innerHTML=liste.map(([ad,ok])=>`<li style="color:${ok?'#15803d':'#94a3b8'}">${ok?'✓':'○'} ${ad}</li>`).join('');
+  return liste.every(([,ok])=>ok);
+}
+async function yeniKaydet(){
+  if(!yeniKural()){ girisFehler('Şifre kurallarını sağlayın'); return; }
+  const btn=el('yeni-btn'); btn.disabled=true;
+  try{
+    const r=await fetch(API+'/sifre-yenile',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:el('yeni-kutu').dataset.t,password:el('yeni-pw').value})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){ girisFehler(d.hata||'Şifre güncellenemedi'); return; }
+    el('yeni-kutu').innerHTML=`<div class="p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-sm font-medium" id="yeni-ok">${escH(d.mesaj)}</div>
+      <a href="#/giris" class="btn btn-primary" style="width:100%;justify-content:center;padding:13px;margin-top:14px">Girişe git</a>`;
+  }catch{ girisFehler('Sunucuya bağlanılamadı'); }
+  finally{ if(btn) btn.disabled=false; }
 }
 
 async function doLogin(){
@@ -289,6 +364,7 @@ async function doLogin(){
 // Turnstile kommt in v1.20 — bis dahin liefern die Helfer leere Werte.
 function tsToken(){ return null; }
 function tsReset(){}
+function tsRender(){}
 
 // ═══════════════════════════════════════════════
 // BILDSCHIRMSPERRE (Aufbau nach Compendus Medical „Ekran kilitli“)

@@ -175,6 +175,74 @@ app.post('/admin/api/kilit-ac', kilitLimiter, adminAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Şifremi unuttum (v1.19) ─────────────────────────────────────────────
+// Token: 32 Zufallsbytes (base64url), gespeichert nur als SHA-256, 30 min, einmal.
+// Antwort immer gleich („Eğer kayıtlıysa …“), egal ob es das Konto gibt.
+const SIFRE_KURAL_HATA = 'Şifre en az 10 karakter olmalı ve büyük harf, küçük harf ve rakam içermelidir.';
+const sifreGecerli = (p) => typeof p === 'string' && p.length >= 10 && p.length <= 200 && /[a-zçğıöşü]/.test(p) && /[A-ZÇĞİÖŞÜ]/.test(p) && /\d/.test(p);
+const tokenHash = (t) => require('crypto').createHash('sha256').update(String(t)).digest('hex');
+const ADMIN_URL = () => (process.env.ADMIN_PUBLIC_URL || 'https://kapbeni.com/kapbeniadmin/admin').replace(/\/$/, '');
+const unuttumLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 5, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: clientIp, message: { hata: 'Çok fazla istek. 15 dakika sonra tekrar deneyin.' } });
+const yenileLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 20, standardHeaders: true, legacyHeaders: false,
+  keyGenerator: clientIp, message: { hata: 'Çok fazla istek. 15 dakika sonra tekrar deneyin.' } });
+const NOTR = 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama bağlantısı gönderildi.';
+
+app.post('/admin/api/sifre-unuttum', unuttumLimiter, async (req, res) => {
+  const ip = clientIp(req).slice(0, 45);
+  try {
+    const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 200);
+    let kanal = (await entegrasyon.mailKanal().catch(() => ({ kanal: 'log' }))).kanal;
+    const { rows } = email ? await db.query('SELECT id, email, ad_soyad FROM admin_users WHERE lower(email)=$1 AND aktif=true', [email]) : { rows: [] };
+    if (rows[0]) {
+      const token = require('crypto').randomBytes(32).toString('base64url');
+      // Aeltere offene Tokens dieses Kontos verfallen sofort
+      await db.query('UPDATE admin_sifre_sifirlama SET expires_at=NOW() WHERE admin_id=$1 AND kullanildi_at IS NULL AND expires_at>NOW()', [rows[0].id]);
+      await db.query(`INSERT INTO admin_sifre_sifirlama(admin_id,token_hash,expires_at,ip) VALUES($1,$2,NOW()+interval '30 minutes',$3)`,
+        [rows[0].id, tokenHash(token), ip]);
+      const link = `${ADMIN_URL()}#/yeni-sifre?t=${token}`;
+      const { sendMail } = require('../api/src/utils/mailer');
+      const m = await sendMail({ to: rows[0].email, subject: 'Kap Beni Yönetim Paneli – Şifre sıfırlama',
+        html: `<p>Merhaba ${String(rows[0].ad_soyad || '').replace(/[<>&]/g, '')},</p><p>Yönetim paneli şifrenizi sıfırlamak için aşağıdaki bağlantıyı kullanın. Bağlantı <strong>30 dakika</strong> geçerlidir ve yalnızca bir kez kullanılabilir.</p><p><a href="${link}">${link}</a></p><p>Bu isteği siz yapmadıysanız bu e-postayı yok sayın.</p><p>Kap Beni</p>`,
+        logIcerik: 'Link: ' + link });
+      kanal = m.kanal;
+    }
+    await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.sifre_unuttum','admin',$1,$2,$3)`,
+      [rows[0]?.id || null, JSON.stringify({ bulundu: !!rows[0], kanal, email: email.slice(0, 120) }), ip]);
+  } catch (e) { console.error('[sifre-unuttum]', e.message); }
+  // Kanal sagt nur, ob ueberhaupt gesendet wird (Konfiguration), nichts ueber das Konto.
+  const mk = (await entegrasyon.mailKanal().catch(() => ({ kanal: 'log' }))).kanal;
+  res.json({ mesaj: NOTR, mail_kanali: mk });
+});
+
+async function sifirlamaBul(token) {
+  if (!token || String(token).length < 20) return null;
+  const { rows } = await db.query(
+    `SELECT s.*, a.email FROM admin_sifre_sifirlama s JOIN admin_users a ON a.id=s.admin_id
+     WHERE s.token_hash=$1 AND s.kullanildi_at IS NULL AND s.expires_at>NOW() AND a.aktif=true`, [tokenHash(token)]);
+  return rows[0] || null;
+}
+app.get('/admin/api/sifre-yenile/kontrol', yenileLimiter, async (req, res) => {
+  res.json({ gecerli: !!(await sifirlamaBul(req.query.t)) });
+});
+app.post('/admin/api/sifre-yenile', yenileLimiter, async (req, res) => {
+  const ip = clientIp(req).slice(0, 45);
+  try {
+    const { token, password } = req.body || {};
+    const s = await sifirlamaBul(token);
+    if (!s) return res.status(400).json({ hata: 'Bağlantı geçersiz, kullanılmış veya süresi dolmuş.' });
+    if (!sifreGecerli(password)) return res.status(400).json({ hata: SIFRE_KURAL_HATA });
+    if (String(password).toLowerCase().includes(String(s.email).split('@')[0].toLowerCase())) return res.status(400).json({ hata: 'Şifre e-posta adınızı içeremez.' });
+    // Einmal nutzbar: das UPDATE gewinnt nur einmal (auch bei Doppelklick)
+    const u = await db.query('UPDATE admin_sifre_sifirlama SET kullanildi_at=NOW() WHERE id=$1 AND kullanildi_at IS NULL', [s.id]);
+    if (!u.rowCount) return res.status(400).json({ hata: 'Bağlantı zaten kullanılmış.' });
+    await db.query('UPDATE admin_users SET password_hash=$1 WHERE id=$2', [await bcrypt.hash(password, 12), s.admin_id]);
+    await db.query('UPDATE admin_oturumlar SET kapandi_at=NOW() WHERE admin_id=$1 AND kapandi_at IS NULL', [s.admin_id]);
+    await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,ip_adresi) VALUES('admin.sifre_yenilendi','admin',$1,$2)`, [s.admin_id, ip]);
+    res.json({ ok: true, mesaj: 'Şifreniz güncellendi. Yeni şifrenizle giriş yapabilirsiniz.' });
+  } catch (e) { console.error('[sifre-yenile]', e.message); res.status(500).json({ hata: 'Şifre güncellenemedi' }); }
+});
+
 // Oeffentlich: was die Login-Seite braucht (keine Geheimnisse).
 app.get('/admin/api/giris-yapilandirma', async (req, res) => {
   let turnstile = { aktif: false }, google = { aktif: false }, mail = { kanal: 'log' };

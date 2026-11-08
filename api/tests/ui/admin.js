@@ -35,6 +35,40 @@ async function anmelden(page) {
 }
 
 const SZENARIEN = {
+  // Şifremi unuttum: Link, Formular, Hinweis „nur protokolliert“, neutrale Antwort;
+  // Yeni şifre: ungueltiger Link, Regeln live, Speichern (Test-Token, Passwort danach zurueck).
+  async sifre(page, b) {
+    const { q } = require('../_hilfe');
+    const crypto = require('crypto');
+    await page.goto(BASIS); await page.waitForSelector('#login-email');
+    await page.click('#sifre-unuttum-link'); await page.waitForSelector('#unuttum-email');
+    pruefe(page.url().endsWith('#/sifremi-unuttum'), `${b}: Adresse #/sifremi-unuttum`);
+    pruefe(await page.locator('#mail-log-hinweis').count() === 1, `${b}: Hinweis „nur protokolliert“ (kein Mailkanal)`);
+    await page.fill('#unuttum-email', 'niemand-' + Date.now() + '@test.kapbeni.com'); await page.click('#unuttum-btn');
+    await page.waitForSelector('#unuttum-ok:not(.hidden)', { timeout: 5000 });
+    pruefe(/Eğer bu e-posta kayıtlıysa/.test(await page.locator('#unuttum-ok').innerText()), `${b}: neutrale Antwort`);
+    await page.screenshot({ path: `${AUS}/admin-sifre-unuttum-${page.viewportSize().width}.png` });
+    await page.goBack(); await page.waitForTimeout(400);
+    pruefe(await page.locator('#login-email').count() === 1, `${b}: Zurück → Login`);
+    await page.goto(BASIS + '#/yeni-sifre?t=ungueltig-ungueltig-ungueltig'); await page.waitForTimeout(900);
+    pruefe(await page.locator('#yeni-gecersiz').count() === 1, `${b}: ungültiger Link erkannt`);
+    const admin = (await q("SELECT id, password_hash FROM admin_users WHERE email=$1 AND test_verisi=true", [TEST_EMAIL])).rows[0];
+    const token = crypto.randomBytes(32).toString('base64url');
+    await q("INSERT INTO admin_sifre_sifirlama(admin_id,token_hash,expires_at) VALUES($1,$2,NOW()+interval '30 minutes')", [admin.id, crypto.createHash('sha256').update(token).digest('hex')]);
+    try {
+      await page.goto(BASIS + '#/yeni-sifre?t=' + token); await page.reload(); await page.waitForSelector('#yeni-pw', { timeout: 5000 });
+      await page.fill('#yeni-pw', 'abc');
+      pruefe((await page.locator('#yeni-kurallar li').allInnerTexts()).filter((t) => t.startsWith('✓')).length === 1, `${b}: Regeln live (1/5 erfüllt)`);
+      const neu = 'Yeni' + crypto.randomBytes(5).toString('hex') + '7Z';
+      await page.fill('#yeni-pw', neu); await page.fill('#yeni-pw2', neu);
+      await page.screenshot({ path: `${AUS}/admin-yeni-sifre-${page.viewportSize().width}.png` });
+      await page.click('#yeni-btn'); await page.waitForSelector('#yeni-ok', { timeout: 5000 });
+      pruefe(/güncellendi/.test(await page.locator('#yeni-ok').innerText()), `${b}: neues Passwort gespeichert`);
+    } finally {
+      await q('UPDATE admin_users SET password_hash=$1 WHERE id=$2', [admin.password_hash, admin.id]);
+      await q('DELETE FROM admin_sifre_sifirlama WHERE admin_id=$1', [admin.id]);
+    }
+  },
   // Bildschirmsperre: Kilitle, Overlay mit Uhr/Datum/KVKK/Admin-Karte, Reload bleibt gesperrt,
   // falsches Passwort, Entsperren, Sperre durch Inaktivitaet (Server).
   async kilit(page, b) {
