@@ -7,6 +7,7 @@ import IlIlceAlanlari from '../components/IlIlceAlanlari'
 
 import TelefonInput from '../components/TelefonInput'
 import { telefonNormalize, TELEFON_HATA } from '../lib/dogrula'
+import { useGeriKapat } from '../lib/geriTusu'
 
 const CROP_SIZE = 280
 const OUTPUT_SIZE = 400
@@ -187,7 +188,9 @@ interface Props {
 const INPUT_CLS = 'w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary/25 focus:border-primary outline-none transition-all'
 const LABEL_CLS = 'block text-xs font-bold text-gray-700 mb-1.5'
 
-export default function EditProfileModal({ onClose, onOpenKyc, onOpenGsm }: Props) {
+export default function EditProfileModal({ onClose: onCloseProp, onOpenKyc, onOpenGsm }: Props) {
+  // Browser-Zurück schließt das Fenster; X/Escape gehen per history.back() (K, v1.30)
+  const onClose = useGeriKapat(true, onCloseProp, { escape: true })
   const { user, refreshUser } = useAuth()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [cropFile, setCropFile] = useState<File | null>(null)

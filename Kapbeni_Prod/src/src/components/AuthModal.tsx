@@ -7,6 +7,7 @@ import { ve } from '../api'
 import TelefonInput from './TelefonInput'
 import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
 import Turnstile, { useAuthYapilandirma } from './Turnstile'
+import { useGeriKapat } from '../lib/geriTusu'
 
 const SEKTORLER = [
   'Elektronik', 'Beyaz Eşya', 'Mobilya & Dekorasyon', 'Giyim & Tekstil', 'Araç & Vasıta',
@@ -36,7 +37,9 @@ const INPUT_PLAIN = 'w-full px-4 py-3 border border-gray-200 rounded-xl text-sm 
 const INPUT_PASS = 'w-full pl-10 pr-10 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all'
 const LABEL = 'block text-xs font-bold text-gray-600 mb-1'
 
-export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
+export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: Props) {
+  // Browser-Zurück schließt das Fenster; X/Escape gehen per history.back() (K, v1.30)
+  const onClose = useGeriKapat(isOpen, onCloseProp, { escape: true })
   const { login, register, loginWithToken, refreshUser } = useAuth()
   const [tab, setTab] = useState<Tab>(initialTab || 'giris')
   const [showPass, setShowPass] = useState(false)

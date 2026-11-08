@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { profileApi } from '../api'
+import { useGeriKapat } from '../lib/geriTusu'
 
 // GLOBAL ICON RULE: Tabler Icons webfont (ti-* classes) on white circles with shadow.
 // Never use Lucide for new menu icons.
@@ -30,7 +31,9 @@ interface Props {
   onNavigate: (tab: string) => void
 }
 
-export default function ProfileDrawer({ onClose, onNavigate }: Props) {
+export default function ProfileDrawer({ onClose: onCloseProp, onNavigate }: Props) {
+  // Browser-Zurück schließt das Fenster; X/Escape gehen per history.back() (K, v1.30)
+  const onClose = useGeriKapat(true, onCloseProp, { escape: true })
   const { user, logout, refreshUser } = useAuth()
   const fileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)

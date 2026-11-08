@@ -11,6 +11,7 @@
 //  Markenfarben — die wären ein neues Muster in dieser Oberfläche.
 // ════════════════════════════════════════════════════════════════════════════
 import { useEffect, useRef, useState } from 'react'
+import { useGeriKapat } from '../lib/geriTusu'
 
 interface Props {
   /** UUID des Inserats — daraus entsteht die geteilte Adresse. */
@@ -72,6 +73,8 @@ export default function PaylasMenu({ ilanId, baslik, fiyat }: Props) {
   const [kopiert, setKopiert] = useState(false)
   const [fehler, setFehler] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  // Eigener History-Eintrag (K, v1.30): Zurück schließt das Menü, Escape/außen per history.back()
+  const schliessen = useGeriKapat(offen, () => setOffen(false), { escape: true })
 
   // Die Adresse wird aufgebaut statt window.location.href zu nehmen: so wird
   // immer genau dieses Inserat geteilt, unabhängig davon, was gerade im Hash steht.
@@ -80,26 +83,24 @@ export default function PaylasMenu({ ilanId, baslik, fiyat }: Props) {
 
   useEffect(() => {
     if (!offen) return
-    const aussen = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOffen(false) }
-    const taste = (e: KeyboardEvent) => { if (e.key === 'Escape') setOffen(false) }
+    const aussen = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) schliessen() }
     document.addEventListener('mousedown', aussen)
-    document.addEventListener('keydown', taste)
-    return () => { document.removeEventListener('mousedown', aussen); document.removeEventListener('keydown', taste) }
-  }, [offen])
+    return () => { document.removeEventListener('mousedown', aussen) }
+  }, [offen, schliessen])
 
   const kopieren = async () => {
     const ok = await inZwischenablage(adresse)
     setKopiert(ok)
     setFehler(!ok)
     setTimeout(() => { setKopiert(false); setFehler(false) }, 2200)
-    if (ok) setOffen(false)
+    if (ok) schliessen()
   }
 
   // Die native Freigabe des Geräts gibt es nur im sicheren Kontext und
   // im Wesentlichen auf Telefonen — deshalb nur anbieten, wenn vorhanden.
   const nativVorhanden = typeof navigator !== 'undefined' && typeof (navigator as any).share === 'function'
   const nativTeilen = async () => {
-    try { await (navigator as any).share({ title: baslik, text, url: adresse }); setOffen(false) } catch { /* abgebrochen */ }
+    try { await (navigator as any).share({ title: baslik, text, url: adresse }); schliessen() } catch { /* abgebrochen */ }
   }
 
   const zeile = 'w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer text-left'
@@ -109,7 +110,7 @@ export default function PaylasMenu({ ilanId, baslik, fiyat }: Props) {
   return (
     <div className="relative" ref={box}>
       <button
-        onClick={() => setOffen((p) => !p)}
+        onClick={() => (offen ? schliessen() : setOffen(true))}
         aria-haspopup="menu"
         aria-expanded={offen}
         className="w-10 h-10 rounded-full border border-gray-200 bg-white flex items-center justify-center text-gray-500 hover:text-primary hover:border-primary transition-all shadow-xs cursor-pointer"
@@ -144,7 +145,7 @@ export default function PaylasMenu({ ilanId, baslik, fiyat }: Props) {
                 href={z.href(adresse, text)}
                 target={z.schluessel === 'eposta' ? undefined : '_blank'}
                 rel="noopener noreferrer"
-                onClick={() => setOffen(false)}
+                onClick={() => schliessen()}
                 className={zeile}
                 role="menuitem"
               >

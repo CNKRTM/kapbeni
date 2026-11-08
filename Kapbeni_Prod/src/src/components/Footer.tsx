@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, X, Gift, Bookmark, Sparkles, Building2, Zap, Crown } from 'lucide-react'
 import { SIRKET, tamAdres } from '../data/sirket'
+import { useGeriKapat } from '../lib/geriTusu'
 
 const LEGAL_LINKS = [
   { label: 'Kullanım Koşulları', href: '/#/kullanim-kosullari' },
@@ -58,7 +59,9 @@ const PAKETLER_KURUMSAL: Paket[] = [
   },
 ]
 
-function PaketModal({ paket, onClose }: { paket: Paket; onClose: () => void }) {
+function PaketModal({ paket, onClose: onCloseProp }: { paket: Paket; onClose: () => void }) {
+  // Eigener History-Eintrag (K, v1.30)
+  const onClose = useGeriKapat(true, onCloseProp, { escape: true })
   const bg = paket.gradient || paket.color
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center px-4">

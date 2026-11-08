@@ -5,12 +5,15 @@ import TelefonInput from '../components/TelefonInput'
 import { telefonNormalize, telefonGoster, TELEFON_HATA } from '../lib/dogrula'
 import { useAuth } from '../context/AuthContext'
 import { gsmApi } from '../api'
+import { useGeriKapat } from '../lib/geriTusu'
 
 interface Props {
   onClose: () => void
 }
 
-export default function GSMModal({ onClose }: Props) {
+export default function GSMModal({ onClose: onCloseProp }: Props) {
+  // Browser-Zurück schließt das Fenster; X/Escape gehen per history.back() (K, v1.30)
+  const onClose = useGeriKapat(true, onCloseProp, { escape: true })
   const { user, refreshUser } = useAuth()
   const [state, setState] = useState<'phone' | 'code' | 'done'>('phone')
   const [phone, setPhone] = useState(user?.phone || '')

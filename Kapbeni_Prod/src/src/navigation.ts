@@ -18,6 +18,9 @@ export interface NavState {
   panelTab?: string | null    // Unterreiter im Panel
   sohbetId?: string | null    // geöffnete Konversation
   q?: string | null           // abgeschickter Suchbegriff
+  // Vollbild-Overlays mit eigener Route (Auftragssammlung K, v1.30): liegen
+  // ueber der aktuellen Ansicht; Zurueck schliesst sie und laesst die Ansicht darunter stehen.
+  ek?: 'destek' | 'paketler' | null
 }
 
 // Hash-Adressen der Legal-Seiten. Diese verwaltet App.tsx weiterhin selbst;
@@ -38,6 +41,8 @@ const PFAD_ZU_TAB: Record<string, string> = Object.fromEntries(
 
 /** Sichtbarer Zustand → Hash. Reihenfolge = Spezifität: das Konkreteste gewinnt. */
 export function navZuHash(s: NavState): string {
+  if (s.ek === 'destek') return '#/destek'
+  if (s.ek === 'paketler') return '#/paketler'
   if (s.tab === 'details' && s.ilanId) return `#/ilan/${encodeURIComponent(s.ilanId)}`
   if (s.tab === 'satici' && s.saticiId) return `#/satici/${encodeURIComponent(s.saticiId)}`
   if (s.tab === 'messages' && s.sohbetId) return `#/mesajlar/${encodeURIComponent(s.sohbetId)}`
@@ -80,6 +85,9 @@ export function hashZuNav(hash: string): NavState | null {
     case 'arama':    return { tab: 'discover', q: sicherDecode(params.get('q') || '') }
     case 'mesajlar': return { tab: 'messages', sohbetId: rest }
     case 'panel':    return { tab: 'dashboard', panelTab: rest }
+    // Direkteinstieg/Reload: die Startseite liegt darunter
+    case 'destek':   return { tab: 'home', ek: 'destek' }
+    case 'paketler': return { tab: 'home', ek: 'paketler' }
     default: {
       const tab = PFAD_ZU_TAB['/' + kopf]
       return tab ? { tab } : null
@@ -89,4 +97,4 @@ export function hashZuNav(hash: string): NavState | null {
 
 /** Vergleichsschlüssel — verhindert doppelte History-Einträge für denselben Zustand. */
 export const navSchluessel = (s: NavState) =>
-  [s.tab, s.ilanId || '', s.kategori || '', s.saticiId || '', s.panelTab || '', s.sohbetId || '', s.q || ''].join('|')
+  [s.tab, s.ilanId || '', s.kategori || '', s.saticiId || '', s.panelTab || '', s.sohbetId || '', s.q || '', s.ek || ''].join('|')

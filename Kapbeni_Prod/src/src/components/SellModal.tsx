@@ -6,6 +6,7 @@ import { useKategoriAgac, mitAnzahl, dbIdVonSlug } from '../data/kategoriAgac'
 import Combobox from './Combobox'
 import IlIlceAlanlari from './IlIlceAlanlari'
 import { illerYukle, ilcelerYukle, tuerkischGleich } from '../data/iller'
+import { useGeriKapat } from '../lib/geriTusu'
 
 
 
@@ -116,7 +117,9 @@ interface Props {
 /** Alter Code aus der Zeit vor v1.12 -> neuer Code (die DB ist umgeschluesselt). */
 const DURUM_ALT: Record<string, string> = { ikinci_el: 'kullanilmis' }
 
-export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDelete }: Props) {
+export default function SellModal({ onClose: onCloseProp, onAddListing, vorgabe, onSave, onDelete }: Props) {
+  // Browser-Zurück schließt das Fenster; X/Escape gehen per history.back() (K, v1.30)
+  const onClose = useGeriKapat(true, onCloseProp, { escape: true })
   const bearbeiten = !!vorgabe
   const { kategoriler: ALL_CATEGORIES } = useKategoriAgac()
 

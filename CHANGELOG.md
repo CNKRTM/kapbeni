@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.30.0 — 2026-11-08
+
+Browser-Zurück Website: #/destek, #/paketler, History-Eintrag je Fenster, Scrollposition, Chat nur über API-ID, Rechtsseiten (Auftragssammlung K)
+
 ## 1.29.0 — 2026-11-08
 
 Admin SİSTEM → Medya Motoru: Kacheln, Jobliste mit Filter und Tekrar dene, Einstellungen in der DB (Auftragssammlung J)

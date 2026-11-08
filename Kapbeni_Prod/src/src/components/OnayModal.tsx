@@ -10,6 +10,7 @@
 //  gleich breite Knöpfe (grau abbrechen, farbig bestätigen) in rounded-xl.
 // ════════════════════════════════════════════════════════════════════════════
 import { useEffect, useRef } from 'react'
+import { useGeriKapat } from '../lib/geriTusu'
 
 interface Props {
   offen: boolean
@@ -32,24 +33,22 @@ export default function OnayModal({
   gefaehrlich = false, icon, laeuft = false, onBestaetigen, onAbbrechen,
 }: Props) {
   const bestaetigenRef = useRef<HTMLButtonElement>(null)
+  // Eigener History-Eintrag (K, v1.30): Zurück/Escape/Vazgeç = Abbrechen per history.back()
+  const abbrechenGeri = useGeriKapat(offen, onAbbrechen, { escape: true })
 
   useEffect(() => {
     if (!offen) return
-    // Escape schließt — dasselbe Verhalten, das der native Dialog hatte.
-    const taste = (e: KeyboardEvent) => { if (e.key === 'Escape') onAbbrechen() }
-    document.addEventListener('keydown', taste)
     // Fokus auf die bestätigende Aktion, damit der Dialog auch mit der
     // Tastatur bedienbar bleibt.
     bestaetigenRef.current?.focus()
-    return () => document.removeEventListener('keydown', taste)
-  }, [offen, onAbbrechen])
+  }, [offen])
 
   if (!offen) return null
 
   return (
     <div
       className="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-[90] p-4"
-      onClick={onAbbrechen}
+      onClick={abbrechenGeri}
       role="dialog"
       aria-modal="true"
     >
@@ -74,7 +73,7 @@ export default function OnayModal({
         <div className="flex gap-3">
           <button
             type="button"
-            onClick={onAbbrechen}
+            onClick={abbrechenGeri}
             disabled={laeuft}
             className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 py-2.5 rounded-xl font-semibold text-sm transition-colors cursor-pointer disabled:opacity-50"
           >

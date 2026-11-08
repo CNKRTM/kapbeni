@@ -2,13 +2,16 @@ import { useState, useRef } from 'react'
 import { X, Upload, Camera, ShieldCheck, ShieldAlert, Loader, Check } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { kycApi } from '../api'
+import { useGeriKapat } from '../lib/geriTusu'
 
 interface Props {
   isOpen: boolean
   onClose: () => void
 }
 
-export default function KYCModal({ isOpen, onClose }: Props) {
+export default function KYCModal({ isOpen, onClose: onCloseProp }: Props) {
+  // Browser-Zurück schließt das Fenster; X/Escape gehen per history.back() (K, v1.30)
+  const onClose = useGeriKapat(isOpen, onCloseProp, { escape: true })
   const { refreshUser } = useAuth()
   const [step, setStep] = useState(1)
   const [idFile, setIdFile] = useState<File | null>(null)

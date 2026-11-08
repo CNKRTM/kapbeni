@@ -58,6 +58,7 @@ import { useAuth } from './context/AuthContext'
 import { ilanlarApi, favorilerApi } from './api'
 import { useKategoriAgac, dbIdVonSlug, invalidateKategoriAgac } from './data/kategoriAgac'
 import { navZuHash, hashZuNav, navSchluessel, LEGAL_HASHES, type NavState } from './navigation'
+import { nachZurueck, popVonOverlay } from './lib/geriTusu'
 import type { Listing } from './api'
 import { MOCK_LISTINGS, MOCK_CHATS } from './data/mockData'
 import type { AppChat } from './data/mockData'
@@ -170,12 +171,16 @@ export default function App() {
   // (Dashboard) laden daraufhin neu.
   const [listenSignal, setListenSignal] = useState(0)
   const [showAuthModal, setShowAuthModal] = useState(false)
-  const [destekOpen, setDestekOpen] = useState(false)
+  // Destek Merkezi und Paketler haben seit v1.30 eine eigene Route (#/destek, #/paketler)
+  const [ekRoute, setEkRoute] = useState<'destek' | 'paketler' | null>(initialNav?.ek ?? null)
+  const destekOpen = ekRoute === 'destek'
+  const setDestekOpen = (an: boolean) => { if (an) setEkRoute('destek'); else zurueck(() => setEkRoute(null)) }
   const [destekTab, setDestekTab] = useState<'taleplerim' | 'yeni' | 'oneriler'>('taleplerim')
   const [showKYCModal, setShowKYCModal] = useState(false)
   const [showGSMModal, setShowGSMModal] = useState(false)
   const [showEditProfile, setShowEditProfile] = useState(false)
-  const [showPackages, setShowPackages] = useState(false)
+  const showPackages = ekRoute === 'paketler'
+  const setShowPackages = (an: boolean) => { if (an) setEkRoute('paketler'); else zurueck(() => setEkRoute(null)) }
   const { isLoggedIn, user } = useAuth()
   const openSell = () => (isLoggedIn ? setShowSellModal(true) : setShowAuthModal(true))
   const [selectedChatId, setSelectedChatId] = useState<string | null>(initialNav?.sohbetId ?? null)
@@ -235,8 +240,19 @@ export default function App() {
   }, [])
 
   const [hash, setHash] = useState(typeof window !== 'undefined' ? window.location.hash : '')
+  // Kam der Nutzer aus der App auf eine Rechtsseite? Dann fuehrt „Geri" per
+  // history.back() zurueck; bei Direkteinstieg ersetzt es die Seite durch die Startseite.
+  const legalAusApp = useRef(false)
+  const legalZurueck = useCallback(() => {
+    if (legalAusApp.current) window.history.back()
+    else window.location.replace(window.location.pathname + window.location.search + '#/')
+  }, [])
   useEffect(() => {
-    const onHashChange = () => setHash(window.location.hash)
+    const onHashChange = (e: HashChangeEvent) => {
+      const alt = '#' + (e.oldURL.split('#')[1] || '')
+      if (LEGAL_HASHES.includes(window.location.hash) && !LEGAL_HASHES.includes(alt)) legalAusApp.current = true
+      setHash(window.location.hash)
+    }
     window.addEventListener('hashchange', onHashChange)
     return () => window.removeEventListener('hashchange', onHashChange)
   }, [])
@@ -255,8 +271,18 @@ export default function App() {
     panelTab: activeTab === 'dashboard' ? (dashboardTab ?? null) : null,
     sohbetId: activeTab === 'messages' ? selectedChatId : null,
     q: activeTab === 'discover' && !selectedCategory ? (searchTerm || null) : null,
+    ek: ekRoute,
   }
   const vonPopstate = useRef(false)
+  // Scrollposition beim letzten Klick/Tastendruck (K, v1.30) — Grundlage fuer
+  // das Wiederherstellen beim Zurueckgehen.
+  const yVorKlick = useRef({ y: 0, t: 0 })
+  useEffect(() => {
+    const merken = () => { yVorKlick.current = { y: window.scrollY, t: Date.now() } }
+    window.addEventListener('pointerdown', merken, true)
+    window.addEventListener('keydown', merken, true)
+    return () => { window.removeEventListener('pointerdown', merken, true); window.removeEventListener('keydown', merken, true) }
+  }, [])
   const letzterSchluessel = useRef<string | null>(null)
   // Bei einer Detail-URL kann selectedListing nicht synchron gesetzt werden.
   // Bis der Initial-Restore es nachgeholt hat, darf der Push-Effect nichts
@@ -279,6 +305,7 @@ export default function App() {
     setDashboardTab(z.panelTab ?? undefined)
     setSelectedChatId(z.sohbetId ?? null)
     setSearchTerm(z.q ?? '')
+    setEkRoute(z.ek ?? null)
     if (z.tab === 'details' && z.ilanId) {
       const vorhanden = listingsRef.current.find((l) => l.id === z.ilanId)
       if (vorhanden) setSelectedListing(vorhanden)
@@ -362,17 +389,30 @@ export default function App() {
       vorher.split('|').slice(0, 6).join('|') === schluessel.split('|').slice(0, 6).join('|')
 
     const url = navZuHash(navAktuell)
-    if (vorher === null || nurSuchtext) {
-      window.history.replaceState({ nav: navAktuell, idx: navIdxRef.current }, '', url)
-    } else {
-      navIdxRef.current += 1
-      window.history.pushState({ nav: navAktuell, idx: navIdxRef.current }, '', url)
-    }
+    const nav = { ...navAktuell }
+    const ersetzen = vorher === null || nurSuchtext
+    if (!ersetzen) navIdxRef.current += 1
+    const idx = navIdxRef.current
+    // Erst ausfuehren, wenn kein Zurueck eines gerade geschlossenen Fensters
+    // mehr aussteht (sonst entfernte dieses Zurueck den neuen Eintrag wieder).
+    nachZurueck(() => {
+      if (ersetzen) {
+        window.history.replaceState({ ...(window.history.state || {}), nav, idx, ov: undefined }, '', url)
+      } else {
+        // Scrollposition der verlassenen Station in ihrem Eintrag merken (K)
+        // Position VOR dem Klick nehmen: viele Handler springen sofort nach
+        // oben (scrollTo top), bevor dieser Effect laeuft.
+        const alt = window.history.state
+        const y = Date.now() - yVorKlick.current.t < 3000 ? yVorKlick.current.y : window.scrollY
+        if (alt && alt.nav) window.history.replaceState({ ...alt, y }, '')
+        window.history.pushState({ nav, idx }, '', url)
+      }
+    })
     // pushState loest kein hashchange aus — den Hash-State selbst nachziehen,
     // sonst haelt App.tsx weiter einen veralteten Wert (Legal-Seiten-Weiche).
     setHash(url)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, selectedListing, selectedCategory, sellerProfileId, dashboardTab, selectedChatId, searchTerm, legalAktiv])
+  }, [activeTab, selectedListing, selectedCategory, sellerProfileId, dashboardTab, selectedChatId, searchTerm, ekRoute, legalAktiv])
 
   // Sicherheitsnetz: 'details' ohne Listing rendert einen leeren Inhaltsbereich
   // (App.tsx-Renderweiche verlangt beides). Kann z.B. entstehen, wenn ein
@@ -394,18 +434,27 @@ export default function App() {
       // sonst wirft jeder Ausstieg aus den AGB den Nutzer auf die Startseite,
       // statt ihn dorthin zurueckzubringen, wo er herkam.
       if (!e.state || !e.state.nav) { setHash(window.location.hash); return }
+      // Ein Fenster wurde geschlossen (X/Escape/Zurueck auf einem Fenster-
+      // Eintrag, v1.30): die Ansicht darunter bleibt, die Fenster schliessen
+      // sich ueber useGeriKapat selbst.
+      if (popVonOverlay()) return
       navIdxRef.current = typeof e.state.idx === 'number' ? e.state.idx : 0
       const ziel: NavState | null = e.state.nav
       if (!ziel) return   // Legal-Seite — darum kuemmert sich der hashchange-Handler
+      if (navSchluessel(ziel) === letzterSchluessel.current) { setHash(window.location.hash); return }
       vonPopstate.current = true
       letzterSchluessel.current = navSchluessel(ziel)
-      // Offene Overlays gehoeren zur verlassenen Ansicht — sonst bleiben sie
-      // ueber der neuen stehen. Modals haben bewusst keine eigene Route.
-      setShowSellModal(false); setShowAuthModal(false); setShowKYCModal(false)
-      setShowGSMModal(false); setShowEditProfile(false); setShowPackages(false)
-      setDestekOpen(false); setShowFilters(false)
+      setShowFilters(false)
       navAnwenden(ziel)
       setHash(window.location.hash)
+      // Scrollposition der Station wiederherstellen, sobald der Inhalt steht
+      const y = typeof e.state.y === 'number' ? e.state.y : 0
+      let versuche = 0
+      const scrollen = () => {
+        window.scrollTo(0, y)
+        if (Math.abs(window.scrollY - y) > 2 && ++versuche < 30) window.setTimeout(scrollen, 50)
+      }
+      window.requestAnimationFrame(scrollen)
     }
     window.addEventListener('popstate', onPop)
     return () => window.removeEventListener('popstate', onPop)
@@ -596,33 +645,21 @@ export default function App() {
     showToast(newFav ? 'Favorilere eklendi!' : 'Favorilerden çıkarıldı')
   }
 
-  const startChat = (listing: Listing) => {
-    const existing = chats.find((c) => c.listingId === listing.id)
-    if (existing) {
-      setSelectedChatId(existing.id)
-    } else {
-      const chatId = `chat_${Date.now()}`
-      const newChat: AppChat = {
-        id: chatId,
-        listingId: listing.id,
-        listingTitle: listing.title,
-        listingPrice: listing.price,
-        listingImage: listing.image,
-        sellerName: listing.sellerName,
-        messages: [
-          {
-            id: 'init_1',
-            sender: 'seller',
-            text: `Merhaba! ${listing.title} ilanımla ilgilendiğiniz için teşekkürler. Nasıl yardımcı olabilirim?`,
-            timestamp: 'Şimdi',
-          },
-        ],
-        unread: false,
+  // Chat nur noch ueber die echte Konversation der API (v1.30). Frueher legte
+  // diese Funktion lokale IDs chat_<Zeit> an — solche Links waren nach einem
+  // Reload leer und nicht teilbar (Backlog K).
+  const startChat = async (listing: Listing) => {
+    if (!isLoggedIn) { setShowAuthModal(true); return }
+    try {
+      const k = await ve.post<any>('/mesajlar/konusma', { ilan_uuid: listing.id })
+      if (k && k.id != null) {
+        setSelectedChatId(String(k.id))
+        setActiveTab('messages')
+        window.scrollTo({ top: 0, behavior: 'smooth' })
       }
-      setChats((prev) => [newChat, ...prev])
-      setSelectedChatId(chatId)
+    } catch {
+      showToast('Sohbet açılamadı. Lütfen tekrar deneyin.')
     }
-    setActiveTab('messages')
   }
 
   const selectProduct = (listing: Listing) => {
@@ -687,24 +724,18 @@ export default function App() {
     '#/cerez-politikasi': <CerezPolitikasi />,
     '#/iade-politikasi': (
       <IadePolitikasi
-        onBack={() => {
-          window.location.hash = ''
-        }}
+        onBack={legalZurueck}
       />
     ),
     '#/hakkimizda': <Hakkimizda />,
     '#/nasil-calisir': (
       <NasilCalisir
-        onBack={() => {
-          window.location.hash = ''
-        }}
+        onBack={legalZurueck}
       />
     ),
     '#/guvenli-alisveris': (
       <GuvenliAlisveris
-        onBack={() => {
-          window.location.hash = ''
-        }}
+        onBack={legalZurueck}
       />
     ),
   }

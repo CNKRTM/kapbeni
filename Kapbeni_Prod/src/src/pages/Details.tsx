@@ -10,6 +10,7 @@ import PaylasMenu from '../components/PaylasMenu'
 import OnayModal from '../components/OnayModal'
 import { UyelikChip, MusteriNo } from '../components/UyeRozeti'
 import IlanResim, { MedyaIsleniyor } from '../components/IlanResim'
+import { useGeriKapat } from '../lib/geriTusu'
 
 interface Props {
   listing: Listing
@@ -85,6 +86,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   const [medien, setMedien] = useState<{ fotos: string[]; video: string | null; poster?: string | null; isleniyor?: boolean; hata?: string | null }>({ fotos: [], video: null })
   const [aktiv, setAktiv] = useState(0)
   const [lightbox, setLightbox] = useState(false)
+  // Lightbox mit eigenem History-Eintrag (K, v1.30): Zurück schließt sie
+  const lightboxZu = useGeriKapat(lightbox, () => setLightbox(false))
 
   // Stationen der Galerie: erst die Fotos, dann das Video (es gibt hoechstens
   // eines). Solange die Detail-Antwort unterwegs ist, steht das Titelbild aus
@@ -122,7 +125,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   useEffect(() => {
     if (!lightbox) return
     const taste = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setLightbox(false)
+      if (e.key === 'Escape') lightboxZu()
       else if (e.key === 'ArrowLeft') springe(-1)
       else if (e.key === 'ArrowRight') springe(1)
     }
@@ -691,7 +694,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
           role="dialog"
           aria-modal="true"
           aria-label="Fotoğraflar"
-          onClick={() => setLightbox(false)}
+          onClick={lightboxZu}
         >
           {/* Kopfzeile: Zaehler links, Schliessen rechts */}
           <div className="flex items-center justify-between px-4 py-3 text-white/90 flex-shrink-0">
@@ -699,7 +702,7 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
               {stationen.length > 1 ? `${i + 1} / ${stationen.length}` : ''}
             </span>
             <button
-              onClick={() => setLightbox(false)}
+              onClick={lightboxZu}
               aria-label="Kapat"
               className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors cursor-pointer"
             >
