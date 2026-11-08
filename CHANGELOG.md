@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.33.1 — 2026-11-08
+
+E2E-Fix: Chat-Nachrichten von der Website liefen in 404 (falscher Pfad), Sendefehler sichtbar; E2E-Testskript
+
+- docs: CLAUDE.md – Chronik 2026-11-08 Rechtsseiten + Cookie-Banner (v1.32–v1.33), Backlog
+
 ## 1.33.0 — 2026-11-08
 
 Cookie-Banner: Tümünü kabul / Reddet / Tercihler, kapbeni_cookie_consent v1.0, Footer Çerez Tercihleri, UI-Test rechtsseiten.js

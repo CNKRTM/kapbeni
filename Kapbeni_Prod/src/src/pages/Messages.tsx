@@ -22,6 +22,7 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
   const [messages, setMessages] = useState<any[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(true)
+  const [sendeFehler, setSendeFehler] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Vorformulierten Text einmalig ins Eingabefeld uebernehmen, sobald die
@@ -81,12 +82,15 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
     if (!input.trim() || !activeChat) return
     const text = input
     setInput('')
+    setSendeFehler(null)
     try {
       await mesajlarApi.sendMessage(String(activeChat.id), text)
       loadMessages(activeChat.id)
       loadChats()
-    } catch {
+    } catch (err: any) {
+      // Text zurueck ins Feld UND sichtbar melden — vorher scheiterte das Senden still
       setInput(text)
+      setSendeFehler('Mesaj gönderilemedi' + (err?.message ? ': ' + err.message : '. Lütfen tekrar deneyin.'))
     }
   }
 
@@ -167,6 +171,9 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
               })}
               <div ref={bottomRef} />
             </div>
+            {sendeFehler && (
+              <p role="alert" className="px-4 pt-2 text-xs font-semibold text-[var(--color-primary)]">{sendeFehler}</p>
+            )}
             <div className="px-4 py-3 border-t flex gap-2">
               <input
                 className="flex-1 border rounded-xl px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)]"

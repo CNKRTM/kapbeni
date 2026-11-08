@@ -81,8 +81,10 @@ export const ilanlarApi = {
 export const mesajlarApi = {
   getChats: () => ve.get<any[]>('/mesajlar/konusmalar'),
   getChat: (id: string) => ve.get<any[]>(`/mesajlar/konusma/${id}`),
+  // Route der API: POST /mesajlar/konusma/:id/mesaj (seit v1.0 stand hier der Pfad ohne
+  // "/mesaj" — jede Nachricht von der Website lief in 404, E2E-Test v1.33.1)
   sendMessage: (id: string, text: string) =>
-    ve.post(`/mesajlar/konusma/${id}`, { metin: text }),
+    ve.post(`/mesajlar/konusma/${id}/mesaj`, { metin: text }),
 }
 
 // ---- Favoriler ----
