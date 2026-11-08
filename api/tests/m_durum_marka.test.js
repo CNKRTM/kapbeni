@@ -81,6 +81,7 @@ test('POST/PUT Inserat: Zustand geprueft, Merkmale gespeichert und angezeigt', a
       // Seit v1.23 archiviert das Loeschen (Auftragssammlung G) — Testrest samt Datei wegraeumen.
       const a = (await q('DELETE FROM ilan_arsiv WHERE ilan_uuid=$1 RETURNING musteri_no', [uuid])).rows[0];
       if (a && a.musteri_no) require('fs').rmSync(require('path').join(process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads', 'archiv', a.musteri_no, uuid), { recursive: true, force: true });
+      if (a && a.musteri_no) try { require('fs').rmdirSync(require('path').join(process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads', 'archiv', a.musteri_no)); } catch { /* nicht leer */ }
     }
   }
 });

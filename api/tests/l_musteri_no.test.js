@@ -10,7 +10,9 @@ test('Bestand: jede Zeile hat eine eindeutige Nummer im Muster, Reihenfolge nach
   const { rows } = await q('SELECT id, musteri_no, created_at FROM users ORDER BY created_at, id');
   assert.ok(rows.every((r) => MUSTER.test(r.musteri_no)), 'Muster verletzt');
   assert.strictEqual(new Set(rows.map((r) => r.musteri_no)).size, rows.length, 'doppelt');
-  const nr = rows.map((r) => Number(r.musteri_no.split('-')[2]));
+  // Reihenfolge gilt fuer echte Konten; die Demo-Testkunden (seed-testkunden.js) tragen
+  // ein zurueckdatiertes Registrierungsdatum, bekommen ihre Nummer aber beim Anlegen.
+  const nr = (await q('SELECT musteri_no FROM users WHERE NOT test_verisi ORDER BY created_at, id')).rows.map((r) => Number(r.musteri_no.split('-')[2]));
   assert.deepStrictEqual(nr, [...nr].sort((a, b) => a - b), 'nicht nach Registrierung sortiert');
   for (const r of rows) assert.strictEqual(r.musteri_no.slice(3, 7), String(new Date(r.created_at).getFullYear()));
 });
