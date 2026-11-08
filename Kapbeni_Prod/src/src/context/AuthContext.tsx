@@ -6,8 +6,8 @@ interface AuthContextType {
   token: string | null
   isLoggedIn: boolean
   /** Liefert einen Hinweistext, z. B. wenn die Anmeldung einen Loeschantrag widerrufen hat. */
-  login: (email: string, password: string) => Promise<string | null>
-  register: (ad: string, email: string, phone: string, password: string) => Promise<void>
+  login: (email: string, password: string, turnstile?: string | null) => Promise<string | null>
+  register: (ad: string, email: string, phone: string, password: string, turnstile?: string | null) => Promise<void>
   loginWithToken: (token: string, user: User) => void
   logout: () => void
   setUser: (user: User | null) => void
@@ -46,8 +46,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => { abgebrochen = true }
   }, [])
 
-  const login = async (email: string, password: string) => {
-    const data = await authApi.login(email, password)
+  const login = async (email: string, password: string, turnstile?: string | null) => {
+    const data = await authApi.login(email, password, turnstile)
     localStorage.setItem('sg_token', data.token)
     setToken(data.token)
     let id: string | undefined
@@ -63,8 +63,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return (data as any).bilgi || null
   }
 
-  const register = async (ad: string, email: string, phone: string, password: string) => {
-    const data = await authApi.register(ad, email, phone, password)
+  const register = async (ad: string, email: string, phone: string, password: string, turnstile?: string | null) => {
+    const data = await authApi.register(ad, email, phone, password, turnstile)
     localStorage.setItem('sg_token', data.token)
     setToken(data.token)
     let id: string | undefined

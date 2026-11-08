@@ -22,6 +22,24 @@ const fehler = [];
 const pruefe = (bed, text) => { if (!bed) fehler.push(text); console.log(`${bed ? 'OK  ' : 'FEHL'} ${text}`); };
 
 const SZENARIEN = {
+  // Turnstile (Testmodus) und Google „Yakında“ im AuthModal — ohne Anmeldung, eigener Kontext.
+  async turnstile(page, b) {
+    const ctx = await page.context().browser().newContext({ viewport: page.viewportSize(), locale: 'tr-TR' });
+    const p2 = await ctx.newPage();
+    try {
+      await p2.goto(`${BASIS}/#/`); await p2.waitForTimeout(1500);
+      await p2.locator('button[title="Sat"]:visible').or(p2.getByRole('button', { name: 'Sat', exact: true })).first().click();
+      await p2.waitForTimeout(600);
+      pruefe(await p2.getByRole('heading', { name: 'Giriş Yap' }).count() === 1, `${b}: AuthModal offen`);
+      await p2.waitForFunction(() => document.querySelector('[data-turnstile="test"] input[name="cf-turnstile-response"]')?.value, null, { timeout: 15000 }).catch(() => {});
+      pruefe(!!(await p2.locator('[data-turnstile="test"] input[name="cf-turnstile-response"]').inputValue().catch(() => '')), `${b}: Turnstile-Widget (Testmodus) im Login liefert Token`);
+      await p2.screenshot({ path: `${AUS}/turnstile-giris-${p2.viewportSize().width}.png` });
+      await p2.getByRole('button', { name: 'Kayıt Ol', exact: true }).first().click().catch(() => {});
+      await p2.waitForTimeout(800);
+      await p2.waitForFunction(() => document.querySelector('[data-turnstile="test"] input[name="cf-turnstile-response"]')?.value, null, { timeout: 15000 }).catch(() => {});
+      pruefe(!!(await p2.locator('[data-turnstile="test"] input[name="cf-turnstile-response"]').inputValue().catch(() => '')), `${b}: Turnstile-Widget in der Registrierung liefert Token`);
+    } finally { await ctx.close(); }
+  },
   // İl/İlçe-Combobox in den Einstellungen: aufklappen, tippen filtert, Aksaray vorhanden, İlçe laedt.
   async iller(page, b) {
     await page.goto(`${BASIS}/#/ayarlar`); await page.waitForTimeout(1500);

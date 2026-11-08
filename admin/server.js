@@ -115,6 +115,12 @@ app.post('/admin/api/giris', async (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
     const password = String(req.body?.password || '');
     const ip = clientIp(req).slice(0, 45);
+    const ts = await entegrasyon.turnstileDogrula(req.body?.turnstile, ip);
+    if (!ts.ok) {
+      await db.query(`INSERT INTO audit_log(olay,kaynak,detay,ip_adresi) VALUES('admin.giris_hata','admin',$1,$2)`,
+        [JSON.stringify({ email: email.slice(0, 120), sebep: 'turnstile' }), ip]);
+      return res.status(400).json({ hata: ts.hata || 'Güvenlik doğrulaması başarısız' });
+    }
     const { rows } = await db.query('SELECT * FROM admin_users WHERE lower(email)=$1 AND aktif=true', [email]);
     if (!rows[0] || !await bcrypt.compare(password, rows[0].password_hash)) {
       await db.query(`INSERT INTO audit_log(olay,kaynak,admin_id,detay,ip_adresi) VALUES('admin.giris_hata','admin',$1,$2,$3)`,
@@ -190,6 +196,8 @@ const NOTR = 'Eğer bu e-posta kayıtlıysa, şifre sıfırlama bağlantısı g�
 
 app.post('/admin/api/sifre-unuttum', unuttumLimiter, async (req, res) => {
   const ip = clientIp(req).slice(0, 45);
+  const ts = await entegrasyon.turnstileDogrula(req.body?.turnstile, ip).catch(() => ({ ok: false }));
+  if (!ts.ok) return res.status(400).json({ hata: ts.hata || 'Güvenlik doğrulaması başarısız' });
   try {
     const email = String(req.body?.email || '').trim().toLowerCase().slice(0, 200);
     let kanal = (await entegrasyon.mailKanal().catch(() => ({ kanal: 'log' }))).kanal;

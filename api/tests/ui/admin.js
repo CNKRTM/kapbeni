@@ -112,6 +112,8 @@ const SZENARIEN = {
     pruefe(/Kap Beni v\d+\.\d+\.\d+ · [0-9a-f]{7}/.test(await page.locator('#giris-version').innerText()), `${b}: Fuss Version · Commit`);
     pruefe(await page.locator('.giris-fuss img[alt="Compendus"]').count() === 1, `${b}: Compendus-Logo im Fuss`);
     pruefe(await page.locator('#google-btn').isDisabled() && /Yakında/.test(await page.locator('#google-btn').innerText()), `${b}: Google-Knopf deaktiviert „Yakında“`);
+    await page.waitForFunction(() => document.querySelector('#ts-giris input[name="cf-turnstile-response"]')?.value, null, { timeout: 15000 }).catch(() => {});
+    pruefe(!!(await page.locator('#ts-giris input[name="cf-turnstile-response"]').inputValue().catch(() => '')), `${b}: Turnstile (Testmodus) im Admin-Login liefert Token`);
     await page.fill('#login-email', TEST_EMAIL); await page.fill('#login-pw', 'falsch-xyz'); await page.click('#login-btn');
     await page.waitForTimeout(800);
     pruefe(/hatalı/i.test(await page.locator('#login-err').innerText()), `${b}: Fehlermeldung bei falschem Passwort`);
@@ -148,7 +150,8 @@ const SZENARIEN = {
     await page.screenshot({ path: `${AUS}/admin-entegrasyonlar-${page.viewportSize().width}-form.png`, fullPage: false });
     const ueber = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     pruefe(ueber <= 1, `${b}: kein waagerechter Ueberlauf (${ueber})`);
-    if (!vorher) await q("DELETE FROM entegrasyon_ayarlari WHERE provider='turnstile' AND credentials IS NULL AND config='{}'::jsonb AND guncelleyen IS NULL");
+    // Nur eine Zeile, die allein durch den Test entstand (keine Daten, nie gespeichert), wird entfernt.
+    void vorher; await q("DELETE FROM entegrasyon_ayarlari WHERE provider='turnstile' AND credentials IS NULL AND config='{}'::jsonb AND guncelleyen IS NULL");
   },
   // Sidebar: Kopf, Gruppen, Zaehler, YENİ, Hash-Routing, Zurueck, Einklappen, Hazırlanıyor, Fuss.
   async sidebar(page, b, mobil) {

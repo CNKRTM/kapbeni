@@ -6,6 +6,23 @@ const { query, auditLog } = require('../db/pool');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 const { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } = require('../lib/dogrula');
 const hesapSilme = require('../lib/hesapSilme');
+const entegrasyon = require('../lib/entegrasyon');
+
+// Turnstile (Admin → Entegrasyonlar): live = siteverify, test/disabled = keine Pruefung.
+async function turnstileKontrol(req, res) {
+  const r = await entegrasyon.turnstileDogrula(req.body?.turnstile, req.headers['x-real-ip'] || req.ip);
+  if (r.ok) return true;
+  res.status(400).json({ hata: r.hata || 'Güvenlik doğrulaması başarısız', alan: 'turnstile' });
+  return false;
+}
+
+// Oeffentlich: Turnstile-Site-Key und Google-Status fuer AuthModal (keine Geheimnisse).
+router.get('/yapilandirma', async (req, res) => {
+  let turnstile = { aktif: false, mod: 'disabled', siteKey: null }, google = { aktif: false };
+  try { turnstile = await entegrasyon.turnstileGenel(); } catch {}
+  try { google = { aktif: !!(await entegrasyon.googleAyar('musteri')) }; } catch {}
+  res.json({ turnstile, google });
+});
 
 const token = (user) => jwt.sign(
   { id: user.id, uuid: user.uuid, rol: user.rol, kaynak: 'api' },
@@ -40,7 +57,7 @@ async function kayitOlustur(req, res, ekstra = {}) {
 
 // Kayıt
 router.post('/kayit', async (req, res) => {
-  try { await kayitOlustur(req, res); }
+  try { if (!await turnstileKontrol(req, res)) return; await kayitOlustur(req, res); }
   catch(e) { console.error('[auth/kayit]', e.message); res.status(500).json({ hata: 'Kayıt olunamadı. Lütfen tekrar deneyin.' }); }
 });
 
@@ -48,6 +65,7 @@ router.post('/kayit', async (req, res) => {
 // VKN (10) oder TCKN (11, Şahıs şirketi) mit Pruefziffer.
 router.post('/kurumsal-kayit', async (req, res) => {
   try {
+    if (!await turnstileKontrol(req, res)) return;
     const b = req.body || {};
     const vkn = String(b.vkn || '').replace(/\D/g, '');
     if (!String(b.firma_adi || '').trim()) return res.status(400).json({ hata: 'Firma adı zorunludur.', alan: 'firma_adi' });
@@ -72,6 +90,7 @@ router.post('/kurumsal-kayit', async (req, res) => {
 // Giriş
 router.post('/giris', async (req, res) => {
   try {
+    if (!await turnstileKontrol(req, res)) return;
     const { email, password } = req.body;
     const { rows } = await query('SELECT * FROM users WHERE lower(email)=lower($1)', [String(email || '').trim()]);
     if (!rows[0] || rows[0].durum === 'silindi') return res.status(401).json({ hata: 'Kullanıcı bulunamadı' });

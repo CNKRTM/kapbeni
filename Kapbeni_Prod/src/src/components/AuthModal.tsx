@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext'
 import { ve } from '../api'
 import TelefonInput from './TelefonInput'
 import { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } from '../lib/dogrula'
+import Turnstile from './Turnstile'
 
 const SEKTORLER = [
   'Elektronik', 'Beyaz Eşya', 'Mobilya & Dekorasyon', 'Giyim & Tekstil', 'Araç & Vasıta',
@@ -42,6 +43,10 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  // Turnstile (Admin → Entegrasyonlar): Token je Ansicht, nach Fehlschlag neu holen
+  const [tsToken, setTsToken] = useState<string | null>(null)
+  const [tsSifirla, setTsSifirla] = useState(0)
+  const tsYenile = () => setTsSifirla((n) => n + 1)
 
   // Login
   const [loginEmail, setLoginEmail] = useState('')
@@ -68,20 +73,21 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
 
   if (!isOpen) return null
 
-  const switchTab = (t: Tab) => { setTab(t); setError(''); setNotice('') }
+  const switchTab = (t: Tab) => { setTab(t); setError(''); setNotice(''); setTsToken(null) }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setLoading(true)
     try {
-      const bilgi = await login(loginEmail, loginPassword)
+      const bilgi = await login(loginEmail, loginPassword, tsToken)
       // Anmeldung hat einen Loeschantrag widerrufen (Auftragssammlung H): Hinweis
       // sichtbar lassen, dann schliessen.
       if (bilgi) { setNotice(bilgi); setTimeout(onClose, 4000); return }
       onClose()
     } catch (err: any) {
       setError(err.message || 'Giriş yapılamadı. Bilgilerinizi kontrol edin.')
+      tsYenile()
     } finally { setLoading(false) }
   }
 
@@ -93,10 +99,11 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
     if (!normalized) { setError(TELEFON_HATA); return }
     setLoading(true)
     try {
-      await register(`${regAd.trim()} ${regSoyad.trim()}`, regEmail, normalized, regPassword)
+      await register(`${regAd.trim()} ${regSoyad.trim()}`, regEmail, normalized, regPassword, tsToken)
       onClose()
     } catch (err: any) {
       setError(err.message || 'Kayıt olunamadı. Lütfen tekrar deneyin.')
+      tsYenile()
     } finally { setLoading(false) }
   }
 
@@ -112,7 +119,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
       const d = await ve.post<{ token: string; user: any }>('/auth/kurumsal-kayit', {
         firma_adi: firmaAdi, vkn, vergi_dairesi: vergiDairesi, mersis_no: mersisNo, yetkili_kisi: yetkiliKisi,
         sektor, email: kEmail, phone: normalized, password: kPassword,
-        ticari_adres: ticariAdres, hesap_tipi: 'kurumsal',
+        ticari_adres: ticariAdres, hesap_tipi: 'kurumsal', turnstile: tsToken,
       })
       // Die Route liefert wie /kayit einen Token — direkt angemeldet weitermachen.
       if (d?.token) {
@@ -122,6 +129,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
       onClose()
     } catch (err: any) {
       setError(err.message || 'Kurumsal kayıt olunamadı. Lütfen tekrar deneyin.')
+      tsYenile()
     } finally { setLoading(false) }
   }
 
@@ -170,6 +178,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
                 <input type={showPass ? 'text' : 'password'} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="Şifreniz" required className={INPUT_PASS} />
                 <PassToggle />
               </div>
+              <Turnstile key={tab} onToken={setTsToken} sifirla={tsSifirla} />
               <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Giriş yapılıyor...' : 'Giriş Yap'}
               </button>
@@ -248,6 +257,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
                 <input type={showPass ? 'text' : 'password'} value={regPassword} onChange={(e) => setRegPassword(e.target.value)} placeholder="Şifre (min. 6 karakter)" required minLength={6} className={INPUT_PASS} />
                 <PassToggle />
               </div>
+              <Turnstile key={tab} onToken={setTsToken} sifirla={tsSifirla} />
               <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Kayıt olunuyor...' : 'Kayıt Ol'}
               </button>
@@ -356,6 +366,7 @@ export default function AuthModal({ isOpen, onClose, initialTab }: Props) {
                 <p>📋 <strong>Kurumsal Kural:</strong> Ticari ürün/hizmet ilanı verebilirsiniz. İkinci el bireysel satış için Bireysel Kayıt kullanın.</p>
                 <p>🔐 VKN / TCKN kontrol haneleriyle doğrulanır, kurumsal hesaplar ayrıca incelenir. Sahte bilgiler hesap iptaline neden olur.</p>
               </div>
+              <Turnstile key={tab} onToken={setTsToken} sifirla={tsSifirla} />
               <button type="submit" disabled={loading} className="w-full bg-primary text-white py-3 rounded-xl font-bold text-sm hover:bg-primary/90 active:scale-95 transition-all disabled:opacity-60">
                 {loading ? 'Kayıt gönderiliyor...' : '🏢 Kurumsal Hesap Oluştur'}
               </button>

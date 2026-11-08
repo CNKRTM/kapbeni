@@ -136,7 +136,8 @@ const maskeMi = (v) => typeof v === 'string' && v.startsWith(MASKE);
 const dolu = (v) => v != null && String(v).trim() !== '';
 
 // ── Lesen (mit kurzem Zwischenspeicher) ─────────────────────────────────────
-const _cache = new Map(); const CACHE_MS = 30_000;
+// 10 s: Aenderungen aus dem Admin-Prozess erreichen die API spaetestens nach 10 s.
+const _cache = new Map(); const CACHE_MS = 10_000;
 function cacheLeeren(key) { key ? _cache.delete(key) : _cache.clear(); }
 
 async function satirOku(key) {

@@ -129,6 +129,7 @@ tr:hover td{background:#fafafa}
 .giris-fuss{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px 16px;padding:14px 16px;font-size:11.5px;color:#94a3b8;border-top:1px solid #e2e8f0;text-align:center}
 .giris-mobil-logo{display:none;height:40px;width:auto;margin:0 auto 12px}
 .ts-slot:empty{display:none}
+.ts-slot{display:flex;flex-direction:column;align-items:center;min-height:65px}
 @media(max-width:900px){.giris-sol{display:none}.giris-mobil-logo{display:block}}
 .kilit{position:fixed;inset:0;z-index:300;display:flex;background:rgba(15,23,42,.55);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .kilit-sol{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:48px 6vw;color:#fff}
@@ -271,6 +272,7 @@ function girisRoute(){
   if(r==='sifremi-unuttum') return unuttumSayfa();
   if(r==='yeni-sifre') return yeniSifreSayfa(q.get('t')||'');
   girisSayfasi(girisFormHtml());
+  tsRender('ts-giris');
   setTimeout(()=>el('login-email')?.focus(),50);
 }
 // ── Şifremi unuttum ──
@@ -361,10 +363,27 @@ async function doLogin(){
   }catch(e){ girisFehler('Sunucuya bağlanılamadı'); }
   finally{ if(btn){btn.disabled=false;btn.textContent='Giriş Yap';} }
 }
-// Turnstile kommt in v1.20 — bis dahin liefern die Helfer leere Werte.
-function tsToken(){ return null; }
-function tsReset(){}
-function tsRender(){}
+// ── Cloudflare Turnstile (v1.20) — Einstellungen aus Entegrasyonlar ──
+// test: offizieller Testschluessel (besteht immer), live: Server prueft per siteverify.
+const TS={}, TS_W={};
+let _tsSkript=null;
+function tsSkript(){
+  if(window.turnstile) return Promise.resolve();
+  return _tsSkript||(_tsSkript=new Promise((ok,f)=>{ const s=document.createElement('script');
+    s.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'; s.async=true;
+    s.onload=()=>ok(); s.onerror=()=>{_tsSkript=null;f();}; document.head.appendChild(s); }));
+}
+function tsRender(id){
+  const c=(GIRIS_CFG||{}).turnstile; TS[id]=null;
+  if(!c||!c.aktif||!c.siteKey||!el(id)) return;
+  tsSkript().then(()=>{ const box=el(id); if(!box||!window.turnstile) return;
+    TS_W[id]=window.turnstile.render(box,{sitekey:c.siteKey,language:'tr',theme:'light',
+      callback:t=>{TS[id]=t;}, 'expired-callback':()=>{TS[id]=null;}, 'error-callback':()=>{TS[id]=null;}});
+    if(c.mod==='test') box.insertAdjacentHTML('beforeend','<p style="font-size:11px;color:#94a3b8;text-align:center;margin-top:4px">Turnstile test modu</p>');
+  }).catch(()=>{});
+}
+function tsToken(id){ return TS[id]||null; }
+function tsReset(id){ TS[id]=null; if(TS_W[id]!=null&&window.turnstile){ try{ window.turnstile.reset(TS_W[id]); }catch{} } }
 
 // ═══════════════════════════════════════════════
 // BILDSCHIRMSPERRE (Aufbau nach Compendus Medical „Ekran kilitli“)

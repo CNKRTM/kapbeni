@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.20.0 — 2026-11-08
+
+Turnstile: Admin-Login, Şifremi unuttum, Kunden-Login und -Registrierung (AuthModal); test = Cloudflare-Testschlüssel, live = siteverify, disabled = aus; GET /api/auth/yapilandirma
+
 ## 1.19.0 — 2026-11-08
 
 Admin: Şifremi unuttum (Einmal-Token gehasht, 30 min, neutral, Rate-Limit, audit_log), Seite Yeni şifre mit Mindestregeln; Mailer über Entegrasyonlar (Resend > SMTP > Protokoll)

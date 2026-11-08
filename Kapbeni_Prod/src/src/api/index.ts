@@ -50,10 +50,11 @@ export const ve = {
 
 // ---- Auth ----
 export const authApi = {
-  login: (email: string, password: string) =>
-    ve.post<{ token: string; user: User; bilgi?: string | null }>('/auth/giris', { email, password }),
-  register: (ad: string, email: string, phone: string, password: string) =>
-    ve.post<{ token: string; user: User }>('/auth/kayit', { ad, email, phone, password }),
+  // turnstile: Token aus components/Turnstile.tsx (null, wenn Turnstile aus ist)
+  login: (email: string, password: string, turnstile?: string | null) =>
+    ve.post<{ token: string; user: User; bilgi?: string | null }>('/auth/giris', { email, password, turnstile }),
+  register: (ad: string, email: string, phone: string, password: string, turnstile?: string | null) =>
+    ve.post<{ token: string; user: User }>('/auth/kayit', { ad, email, phone, password, turnstile }),
   me: () => ve.get<User>('/auth/ben'),
   logoutAll: () => ve.post('/auth/cikis-tumcihaz'),
 }
