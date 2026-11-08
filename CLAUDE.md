@@ -17,6 +17,7 @@ nginx. Backend: drei Node-Dienste unter PM2 plus Postgres, Redis und Meilisearch
 | API | 3001 | `/opt/kapbeni/api` | `kapbeni-api` |
 | Express-Admin | 3002 | `/opt/kapbeni/admin` | `kapbeni-admin` |
 | KYC (FastAPI) | 8001 | `/opt/kapbeni/kyc` | `kapbeni-kyc` |
+| Medya Motoru (seit v1.28) | 3901 (nur 127.0.0.1) | `/opt/kapbeni/api/src/medyaMotoru.js` | `kapbeni-media` |
 | Postgres | 5432 (nur localhost) | DB `sattigitti_db` | — |
 | Redis | 6379 (nur localhost) | — | — |
 | Meilisearch | 7700 (nur localhost) | `/opt/meilisearch` | — |
@@ -1358,6 +1359,143 @@ DB an (`test_verisi=true`) statt über `/auth/kayit` — das Registrierungslimit
 `suite.sh`-Muster: Exit-Code von `node --test` weitergeben, sonst rollt `&& deploy.sh` trotz
 Fehlern aus (ist hier einmal passiert, Fehler waren nur Testlimits).
 
+**Arbeitspaket Medien + Zurück (Auftragssammlung I, J, K) — v1.27 bis v1.31.** Migrationen
+`api/migrations/20261108_12_medya_motoru.sql` (Tabellen) und `…_13_video_motor.sql` (Spalten an
+`ilanlar`, setzt Bestand `video_durum='tamam'`), Freezes `kapbeni-freeze-20261108-015945` (vor dem
+`_sm`-Nachziehen) und `…-020855` (vor Migration 13).
+
+*Entscheidung Mischform (J):* **Bilder synchron in der API, Videos asynchron in der Engine.**
+Gründe: (1) Das Dekodieren durch sharp ist die Inhaltsprüfung — sie muss vor dem INSERT laufen,
+sonst entsteht bei einer kaputten Datei ein Geister-Inserat; dann kann man das Ergebnis auch gleich
+behalten. (2) KI-Moderation, Meili-Sync, Karten und Detailseite brauchen sofort ein Titelbild; ein
+Inserat ohne Bild in Suche/Liste wäre schlechter als 0,1–0,3 s Wartezeit je Bild. (3) Bilder kosten
+wenig (gemessen ≈160 ms für `_lg` aus 12 MP, ≈65 ms für `_sm`), Videos dagegen ~27 s CPU je Minute
+und bis 270 MB RAM — die gehören nicht in den API-Prozess (512-MB-Grenze, blockierte Anfrage).
+Synchron verarbeitete Bilder werden trotzdem als Job protokolliert (`medya_isleri.senkron=true`),
+damit Admin-Kennzahlen und Fehlerliste vollständig sind.
+
+*v1.27.0 — I: zwei Bildgrößen.* `api/src/lib/bild.js`: `bildVarianten()` rechnet `_lg` (1200 px,
+WebP q75) und `_sm` (480 px, q70) **beide aus dem Original** (nicht `_sm` aus `_lg`, sonst doppeltes
+Wasserzeichen), Wasserzeichen auf beiden (auf `_sm` kräftiger: 32 % Deckkraft, 80 % Breite — bei
+22 %/65 % war es bei 480 px kaum zu sehen), `withoutEnlargement`. **EXIF/GPS:** sharp übernimmt
+Metadaten nur mit `withMetadata()`/`keepMetadata()` — beides wird nirgends aufgerufen; Test
+`u_medya` prüft an einem Foto mit Kamera- und GPS-EXIF, dass `_lg` und `_sm` kein EXIF/XMP/IPTC
+tragen. **Namensregel statt Spalte:** neue Dateien `<uuid>_<n>_lg.webp` / `_sm.webp`, Bestand
+`<uuid>_<n>.webp` → `<uuid>_<n>_sm.webp`; `kleinUrl()` identisch in `bild.js`, `src/lib/medya.ts` und
+im Admin. `ilan_fotograflar.url` zeigt weiter auf die große Datei. POST: Bilder werden **vor** dem
+INSERT umgewandelt, Inserat + Merkmale + Fotozeilen in **einer Transaktion**, Dateien erst nach dem
+COMMIT (vorher lief die Bildschleife nach dem INSERT ohne Transaktion). `foto_url` ohne Datei nur noch
+als `https://…` oder `/uploads/ilanlar/…` (Backlog „Freitext als Bildpfad“). Löschen/Archiv nehmen
+`_sm` mit (`dateienEntfernen` prüft die Nutzung des Paares; `ilanArsiv.snapshotYaz` verschiebt `_sm`
+still mit). Seed-Testkunden schreiben beide Größen. Frontend: `components/IlanResim.tsx` (`srcset`
+480w/1200w + `sizes` aus `SIZES`, Rückfall auf `_lg`, dann „Medya işleniyor…“ statt kaputtem Bild)
+in ProductCard (Raster/Liste, damit auch Benzer İlanlar, Profil, Favoriten), Öne Çıkan, Discover,
+Boost-Streifen, Teklif-Kacheln; Detail/Lightbox nutzen `_lg`, Vorschaubilder der Galerie `_sm`.
+Admin: `imgKlein()` für Kundenakte (Zeitleiste, Kacheln, İlanlar) und İlan Onayı.
+Bestand: `node api/scripts/medya-sm-nachziehen.js` (Trockenlauf) / `--uygula` (tar-Sicherung
+`/opt/_archiv/kapbeni-uploads-ilanlar-20261108-020038.tar.gz`, legt nur neue Dateien an, nie
+überschreiben): 68/68 Bilder, `_lg` 1703 KB → `_sm` 443 KB.
+
+Messung (Skript wie `/tmp/messung.js`: SSIM blockweise 8×8 gegen verlustfrei skalierte Referenz,
+Schärfe = Laplace-Varianz; Testbilder selbst erzeugt bzw. vorhandene Uploads, keine fremden Fotos):
+
+| Testbild | Größe | q70 KB / SSIM | q75 KB / SSIM | q80 KB / SSIM |
+|---|---|---|---|---|
+| Mandelbrot + Korn, 4000×3000, 3,0 MB, mit EXIF/GPS | `_lg` 1200 | 39,2 / 0,9656 | 41,3 / 0,9660 | 48,8 / 0,9681 |
+| | `_sm` 480 | 9,9 / 0,9753 | 10,4 / 0,9765 | 12,1 / 0,9792 |
+| Testbild Schrift/Verläufe + Rauschen, 4000×3000, 3,2 MB | `_lg` | 24,2 / 0,9448 | 25,8 / 0,9448 | 31,0 / 0,9466 |
+| | `_sm` | 4,5 / 0,9174 | 4,9 / 0,9188 | 5,8 / 0,9210 |
+| vorhandener Upload, Produktfoto 1200×675 | `_lg` | 121,3 / 0,9851 | 127,3 / 0,9877 | 141,6 / 0,9940 |
+| | `_sm` | 25,8 / 0,9776 | 26,9 / 0,9792 | 31,1 / 0,9834 |
+| vorhandener Upload, stark verrauscht 1200×1200 | `_lg` | 237,1 / 0,576 | 240,0 / 0,577 | 253,1 / 0,580 |
+| | `_sm` | 78,4 / 0,592 | 79,2 / 0,593 | 82,8 / 0,596 |
+
+Schärfe `_lg` (Mandelbrot): Referenz 145, q70 125 / q75 127 / q80 128 — kein sichtbarer Unterschied.
+Ergebnis: **`_lg` q75** spart gegenüber q80 10–20 % bei ≤ 0,006 SSIM, **`_sm` q70** liegt nur
+0,001–0,005 unter q75. Die Uploads sind schon q80-WebP, deshalb dort kleinere Gewinne.
+
+*v1.28.0 — J: Medya Motoru.* Dienst **`api/src/medyaMotoru.js`**, PM2 **`kapbeni-media`**
+(`ecosystem.config.js`, Logs `/var/log/kapbeni/media-*.log`), nur `127.0.0.1:3901`, Token
+**`MEDYA_MOTORU_TOKEN`** (und `MEDYA_MOTORU_PORT`) in `/etc/kapbeni.env` per `openssl rand -hex 32`
+erzeugt (Sicherung `/etc/kapbeni.env.bak-20261108-medya`). HTTP: `GET /saglik` (ohne Token),
+`GET /durum`, `POST /uyandir`. Jobs: `medya_isleri` (tip `bild|bild_sm|video`, durum
+`bekliyor|isleniyor|tamam|hata`, senkron, ilan_id/uuid, user_id, kaynak, hedef, deneme, hata,
+hata_kullanici, boyut_once/sonra, sure_ms, detay), Abholung `FOR UPDATE SKIP LOCKED`, höchstens
+`paralel` (1–2) gleichzeitig, Polling 5 s + Wecken durch die API, Absturz-Rest → zurück auf
+`bekliyor`, max. 3 Versuche (nur Zeitgrenze/DB sind wiederholbar, kaputte Dateien sofort `hata`).
+Einstellungen `medya_ayarlari` über **`api/src/lib/medyaAyar.js`** (API, Engine, Admin; Grenzen
+erzwungen: Video 5–60 s, Parallelität 1–2; Cache 10 s). Ablauf Video (`lib/medyaIs.js`): ffprobe
+prüft Inhalt **und Länge vor dem INSERT** (> 60 s → 400 „Video en fazla 60 saniye olabilir“); in
+derselben Transaktion Job + `ilanlar.video_durum='isleniyor'`, `video_is_id`; nach dem COMMIT
+`rename` der Rohdatei nach `uploads/tmp/medya/`. Engine: immer umrechnen (720p `scale=-2:min(720,ih)`,
+H.264 veryfast CRF 28, `yuv420p`, AAC 96k, `+faststart`), Poster WebP aus Sekunde 1 (≤ 1280×720),
+Dateien `<uuid>_video_<job>.mp4` / `<uuid>_poster_<job>.webp`, Eintrag nur wenn `video_is_id` noch
+passt (ersetzte/entfernte Videos werden verworfen), altes Video/Poster erst nach dem COMMIT weg,
+Meili-Sync. Fehler: `video_durum='hata'`, `video_hata` (nur der Eigentümer sieht sie in
+`GET /ilanlar/:uuid`), Benachrichtigung `bildirimler` (tip `medya`). Bearbeiten: neues Video
+ersetzt das alte erst, wenn es fertig ist; „Video kaldır“ wirkt sofort. Rohdateien fehlgeschlagener
+Jobs bleiben 7 Tage (für „Tekrar dene“), Waisen 1 Tag. Neue Spalten `ilanlar.video_durum`,
+`video_poster_url`, `video_hata`, `video_is_id`. Frontend: SellModal prüft die Länge schon bei der
+Auswahl (HTML5 `duration`, türkische Meldung; unlesbar → Server entscheidet), Detail zeigt
+„Medya işleniyor…“ als Galerie-Station, Poster im Player und in den Vorschaubildern, roter Hinweis
+für den Eigentümer bei `hata`. `deploy.sh` lädt `kapbeni-media` mit und prüft `:3901/saglik`.
+Bestand: `medya-sm-nachziehen.js --video [--uygula]` gibt Videos ohne Poster an die Engine
+(Bestand behält seine Länge — die 60-s-Grenze gilt für neue Uploads, `detay.bestand`, keine
+Kundenmeldung). Inserat 14 (72 s) wurde so umgerechnet: 6,3 → 6,1 MB + Poster.
+**Vorfall:** Der erste Bestandslauf lehnte das 72-s-Video ab und schrieb dabei eine
+Benachrichtigung an den Eigentümer des Inserats — das ist **users.id=1**. Sofort gelöscht (eine
+Zeile `bildirimler`), Inserat auf `tamam` zurückgesetzt; seitdem melden Bestandsjobs nichts mehr an
+Kunden. Kein Token für id 1 erzeugt.
+
+*v1.29.0 — J: Admin SİSTEM → Medya Motoru* (`admin/medya.js`, ersetzt „Hazırlanıyor“). Reiter per
+Hash `#/medya` (Genel bakış), `#/medya/isler?durum=&tip=&ara=&sayfa=` (Filter in der Adresse,
+`replaceState`), `#/medya/ayarlar`. Kacheln: Kuyrukta, İşleniyor, Başarısız (anklickbar →
+gefilterte Liste), Tasarruf MB/% (Summe `boyut_once − boyut_sonra` erledigter Jobs), Ortalama süre
+(Video/Görsel, 30 Tage), Disk (`statfs` + Ordnergrößen ilanlar/archiv/tmp-medya); Motor-Status über
+`/durum`. Letzte Fehler, Jobliste mit Kundennummer-Link. **Tekrar dene** nur für Engine-Jobs
+(`bild_sm`; Videos nur, solange die Rohdatei noch da ist) — synchrone Bildfehler haben keine
+Datei (409 mit Erklärung). Einstellungen speichern nur `super_admin`, audit `medya.tekrar`,
+`medya.ayarlar`. API: `GET /admin/api/medya/ozet|isler|ayarlar`, `POST …/isler/:id/tekrar`,
+`POST …/ayarlar`.
+
+*v1.30.0 — K: Browser-Zurück auf der Website.* **`src/lib/geriTusu.ts`**: `useGeriKapat(offen,
+schliessen, {escape})` legt je Fenster einen History-Eintrag an (gleiche URL, Liste `ov` im State);
+Zurück schließt das oberste Fenster, X/Escape/Vazgeç gehen per `history.back()`, schließt die App
+ein Fenster selbst, wird sein Eintrag entfernt (mehrere auf einmal als ein `history.go(-n)`).
+Weil `back()` asynchron ist, laufen alle Pushes über `nachZurueck()` (warten auf das popstate) —
+sonst entfernte das Zurück eines gerade geschlossenen Fensters den neuen Eintrag. Escape wirkt nur
+auf das oberste Fenster. Reload bei offenem Fenster: `main.tsx` entfernt den toten Eintrag vor dem
+Start. Eingebaut in SellModal (Neu/Bearbeiten), AuthModal, KYC, GSM, EditProfile, ProfileDrawer,
+OnayModal, PaylasMenu, Lightbox (Details), Paket-Fenster im Footer. HızlıIlanModal behält seine
+eigene Lösung (v1.13). **Routen** `#/destek`, `#/paketler` (`NavState.ek`, liegt über der aktuellen
+Ansicht; Direkteinstieg → Startseite darunter). App-popstate ignoriert Fenster-Einträge
+(`popVonOverlay`, gleicher Schlüssel). **Scrollposition**: `scrollRestoration='manual'`, beim Push
+wird die Position vom letzten Klick/Tastendruck in den verlassenen Eintrag geschrieben (`y`), beim
+Zurück wiederhergestellt (bis 1,5 s nachgeladen). **Chat:** `startChat` legt keine `chat_<Zeit>`-IDs
+mehr an, sondern nutzt `POST /mesajlar/konusma` (Link `#/mesajlar/<id>` übersteht Reload).
+**Rechtsseiten:** „Geri“ geht per `history.back()`, bei Direkteinstieg `location.replace('#/')`
+(vorher legte `hash=''` einen neuen Eintrag an — Zurück führte wieder auf die Rechtsseite).
+Push-Effect hatte `ekRoute` zunächst nicht in den Abhängigkeiten (gefunden durch den UI-Test).
+
+*v1.31.0 — K: Browser-Zurück im Admin.* Seiten/Reiter liefen schon über den Hash (Kundenakte
+`#/musteri/<no>/<reiter>`, Kategoriler, Medya). Neu: Fenster (`body > .modal-backdrop`, ~10 Stellen)
+und die Handy-Schublade bekommen per MutationObserver einen History-Eintrag (`kpOv`): Zurück schließt
+das oberste (erst Escape-Ereignis, damit `sebepModal` sein Promise auflöst, dann entfernen), ✕/
+Vazgeç/Speichern nehmen den Eintrag per `history.go(-n)` zurück; tote Einträge (Fenster zu nach
+Seitenwechsel) werden übersprungen; Reload bei offenem Fenster entfernt den Eintrag.
+
+*Tests:* neu `api/tests/u_medya.test.js` (Namensregel; 1200/480 px ohne EXIF/GPS; Upload → beide
+Dateien, Job protokolliert, Archiv nimmt `_sm` mit; kaputtes Bild → 400 ohne Inserat + Fehler-Job;
+Video 65 s → 400; Video 1080p 3 s → Job → 720p H.264/yuv420p/AAC, `moov` vor `mdat`, WebP-Poster,
+Rohdatei weg; kaputte Datei → `hata`, Meldung nur für den Eigentümer, Benachrichtigung) und
+`v_medya_admin.test.js` (Kennzahlen, Liste, Tekrar dene, 409 für synchrone Fehler, Grenze 60 s).
+Suite 34 Tests grün. UI: `api/tests/ui/zurueck.js` (Szenarien seiten, destek, fenster, chat, legal;
+390/1280 px; 15 s Pause je Durchlauf wegen Rate-Limit; Chat-Konversationen Testkonto ↔ Seed-Kunde
+werden gelöscht), `admin.js` Szenarien `medya`, `zurueck`. Vor dem Ausrollen von v1.30 lief die
+UI-Prüfung gegen einen Testbuild (`vite build --outDir /tmp/kp-k-dist`, statischer Server
+`/root/kp-vorschau.js` auf 127.0.0.1:3905 mit /api-Weiterleitung) — so geht kein ungetesteter Build
+live. Hilfsskript `/root/kp-suite-deploy.sh "<Text>"`: Suite mit Exit-Code, nur bei 0 `deploy.sh minor`.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1399,12 +1537,12 @@ Fehlern aus (ist hier einmal passiert, Fehler waren nur Testlimits).
   neue Google-Konten bekommen den Platzhalter `g-<hash>`. Abfrage der Telefonnummer nach dem
   ersten Login fehlt; vor dem Freischalten entscheiden.
 - Admin-Rollen: Entegrasyonlar speichern/testen nur `super_admin`; ein Rechtebaum (Cankartım
-  08) fehlt noch; Kundenakte/Sperren/Belege darf jeder aktive Admin. Sidebar-Einträge Medya
-  Motoru, Yedekleme, Deploy Yönetimi, Test Sunucu sind „Hazırlanıyor“-Seiten.
+  08) fehlt noch; Kundenakte/Sperren/Belege darf jeder aktive Admin. Sidebar-Einträge Yedekleme,
+  Deploy Yönetimi, Test Sunucu sind „Hazırlanıyor“-Seiten (Medya Motoru seit v1.29 echt).
 - ~~Admin-Seite „Kategoriler“ zeigt unter :3002 „0 ana kategori“~~ — **erledigt v1.26**
   (`/admin/api/kategoriler`).
-- Admin-Zurück: Hash-Routing gilt für Seiten und Kundendetail; Reiter innerhalb von Seiten
-  und Modals haben noch keinen History-Eintrag.
+- ~~Admin-Zurück: Reiter und Modals ohne History-Eintrag~~ — **erledigt v1.31** (Fenster und
+  Handy-Schublade per MutationObserver; Reiter liefen schon über den Hash).
 - Die Fehlergrenze schützt bislang nur die Dashboard-Reiter. Detailseite, Keşfet, Profil
   und Einstellungen haben keine — dort nimmt ein Renderfehler weiterhin die Seite mit.
   Dasselbe Muster (`FehlerGrenze` + `Inhalt`) ließe sich dort anwenden.
@@ -1418,8 +1556,9 @@ Fehlern aus (ist hier einmal passiert, Fehler waren nur Testlimits).
   API-Routen** (nur `PATCH /ticket/:id` für Admins). Fehlende Backend-Routen, kein Tippfehler.
 - Mehrere AdminPanel-Reiter laufen ins Leere (404): `teklifler`, `boost`, `paketler`,
   `mesajlar`, `kategoriler`, `hero`, `slider`, `oneriler`, `destek`.
-- `startChat` (`App.tsx`) erzeugt lokale IDs `chat_${Date.now()}`; solche Chat-Links sind nicht
-  teilbar und nach einem Reload leer. Zwei parallele Chat-Systeme (App-State vs. API).
+- ~~`startChat` erzeugt lokale IDs `chat_…`~~ — **erledigt v1.30** (nur noch API-Konversation).
+  Offen: Der App-State `chats` (Mock-Startwert, `localStorage kapbeni_chats`) existiert weiter
+  neben der API und speist nur noch den Ungelesen-Zähler — aufräumen.
 - `api/src/routes/odeme.js:26` und `agim.js:23` verweisen hartkodiert auf die **entfernte**
   Domain `sattimgitti.transas24.com` (Zahlungs-Rückkehr-URL, Einladungslink).
 - Ein aktives Inserat (Asus Notebook, id=12) hat keine `kategori_id`.
@@ -1440,15 +1579,24 @@ Fehlern aus (ist hier einmal passiert, Fehler waren nur Testlimits).
   Werte, statt die API zu befragen; `categorySlug` fehlt dort, `category` enthält den Slug
   statt des Anzeigenamens. Saubere Lösung: bei einem Direktaufruf immer nachladen oder die
   Mock-Daten entfernen, sobald die API-Liste steht.
-- Destek Merkezi und Paketler sind Vollbild-Overlays ohne eigene Route — Zurück verlässt dort
-  die darunterliegende Ansicht.
-- Scrollposition wird beim Zurückgehen nicht wiederhergestellt.
+- ~~Destek Merkezi/Paketler ohne Route, Scrollposition, Modals ohne History~~ — **erledigt v1.30**.
+  Offen (K): Fenster innerhalb von Dashboard, Settings und Discover (Filter-Panel am Handy) und
+  `HizliIlanModal` (eigene Lösung aus v1.13) nutzen `useGeriKapat` noch nicht. Eine von Hand in die
+  Adresszeile getippte App-Adresse (`#/ilan/…`) wird erst nach einem Reload ausgewertet — App.tsx
+  reagiert nur auf eigene History-Einträge (Altbestand). Ein Link mit `href` innerhalb eines offenen
+  Fensters (z. B. KVKK-Link im AuthModal) lässt das Fenster über der Rechtsseite offen.
+- Medien (I/J), offen: Bestandsvideos über 60 s bleiben in voller Länge (Inserat 14, 72 s);
+  Option „automatisch auf 60 s kürzen statt ablehnen“ nicht gebaut. Geänderte Größen/Qualitäten im
+  Admin gelten nur für neue Uploads (kein Neuberechnen des Bestands — das Original wird nicht
+  aufbewahrt). AVIF nicht eingeführt. Off-Site-Speicher (R2) für Videos vorbereitet, aber nicht
+  angebunden. Ein Video-Job, dessen Rohdatei nach 7 Tagen gelöscht wurde, kann nicht mehr
+  wiederholt werden (Kunde lädt neu). „Medya işleniyor…“ wird auf der Detailseite nicht von selbst
+  aktualisiert (Reload nötig).
 
 **Daten/Inhalt**
 - Zwei Zeilen in `ilan_fotograflar` (ids 11 und 13) enthalten in der Spalte `url` keinen
-  Pfad, sondern den Freitext „i5 Ismelnci Asus". `POST /api/ilanlar` übernimmt das Feld
-  `foto_url` ungeprüft — deshalb konnte das überhaupt entstehen. Eine Prüfung auf eine
-  brauchbare URL fehlt dort weiterhin.
+  Pfad, sondern den Freitext „i5 Ismelnci Asus". Seit v1.27 prüft `POST /api/ilanlar` das Feld
+  `foto_url` (nur `https://…` oder `/uploads/ilanlar/…`); die beiden Altzeilen sind unverändert.
 - Vier der sieben WebP unter `/uploads/ilanlar` sind verwaist (keine Zeile verweist darauf).
 - Die meisten Inseratsbilder liegen gar nicht bei uns, sondern sind externe Unsplash- und
   Google-Usercontent-Adressen — sie bekommen folglich auch kein Wasserzeichen.
