@@ -128,7 +128,16 @@ const COOKIE = { v: '1.0', zorunlu: true, analitik: false, pazarlama: false, zam
         pruefe(g && g.w <= 172, `site ${w}: Verlassen klappt wieder zu (${g && g.w})`);
         await s.locator(karte).hover(); await s.waitForTimeout(1100);
       } else {
-        pruefe(g && g.w === w && g.h > 300, `site ${w}: am Handy offen als Bottom-Sheet (${g && g.w + '×' + g.h})`);
+        pruefe(g && g.w === 170 && g.h === 170, `site ${w}: am Handy startet die Karte klein (${g && g.w + '×' + g.h})`);
+        const unten = await s.evaluate((sel) => window.innerHeight - document.querySelector(sel).getBoundingClientRect().bottom, karte);
+        pruefe(unten >= 24, `site ${w}: Kachel sitzt über dem unteren Rand (${Math.round(unten)} px)`);
+        await s.screenshot({ path: `${AUS}/giris-site-zu-${w}.png` });
+        await s.locator(karte).tap(); await s.waitForTimeout(1200);
+        g = await groesse(s, karte);
+        const unten2 = await s.evaluate((sel) => window.innerHeight - document.querySelector(sel).getBoundingClientRect().bottom, karte);
+        pruefe(g && g.w === w && g.h > 300 && unten2 <= 1, `site ${w}: Tippen öffnet das Bottom-Sheet (${g && g.w + '×' + g.h}, unten ${Math.round(unten2)})`);
+        await s.waitForTimeout(800);
+        pruefe(g && (await groesse(s, karte)).w === w, `site ${w}: bleibt nach dem Tippen offen`);
       }
       const radiusS = await s.locator(karte).evaluate((e) => getComputedStyle(e).borderTopLeftRadius);
       pruefe(radiusS === "20px", `site ${w}: runde Ecken 20 px (${radiusS})`);

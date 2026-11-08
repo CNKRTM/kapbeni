@@ -78,8 +78,9 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
   const [ticariAdres, setTicariAdres] = useState('')
 
   // Login-Effekte nach Santral (v1.36): Glaskarte, Lichtstreifen auf dem Hintergrund, Schütteln bei Fehler.
-  // Einklappen (Raute + Kugel, Aufklappen bei Maus/Fokus) nur beim Login und nur mit Maus —
-  // am Handy ist das Fenster ein Bottom-Sheet, eine 170-px-Kachel wäre dort ein Rätsel.
+  // Einklappen (Raute + Kugel, Aufklappen bei Maus/Fokus/Tippen) beim Login — auch am Handy
+  // (Burak 08.11.); dort sitzt die Kachel unten mittig und wächst beim Tippen zum Bottom-Sheet.
+  // Die lange Registrierung startet offen.
   const flaecheRef = useRef<HTMLDivElement>(null)
   const hintergrundRef = useRef<HTMLDivElement>(null)
   const karteRef = useRef<HTMLDivElement>(null)
@@ -90,8 +91,7 @@ export default function AuthModal({ isOpen, onClose: onCloseProp, initialTab }: 
     if (!isOpen) return
     const streifenWeg = lichtstreifen(hintergrundRef.current, 9)
     const lichtWeg = lichtFolgt(flaecheRef.current, karteRef.current)
-    const maus = window.matchMedia?.('(hover: hover) and (pointer: fine)').matches
-    const k = tab === 'giris' && maus ? einklappen(karteRef.current, () => !!fehlerRef.current) : null
+    const k = tab === 'giris' ? einklappen(karteRef.current, () => !!fehlerRef.current) : null
     klappRef.current = k ?? { auf: () => {} }
     return () => { streifenWeg(); lichtWeg(); k?.aufraeumen() }
   }, [isOpen, tab])

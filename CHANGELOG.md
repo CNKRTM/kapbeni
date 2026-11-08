@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.36.1 — 2026-11-08
+
+Kunden-Login klappt auch am Handy ein (Kachel unten mittig, Tippen öffnet das Bottom-Sheet)
+
+- docs: CLAUDE.md – Chronik v1.36.0 Login-Effekte nach Santral
+
 ## 1.36.0 — 2026-11-08
 
 Login-Effekte nach Santral: Glaskarte, Ein-/Aufklappen, fallende Lichtstreifen in Kap-Beni-Rot (Admin-Login, Sperrbildschirm, Kunden-Login)

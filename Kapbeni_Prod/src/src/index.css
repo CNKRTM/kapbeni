@@ -87,6 +87,11 @@ body {
 @keyframes kpKugel { 50% { box-shadow: 0 0 26px 10px #e5393588, 0 0 70px 24px #8a101940; } }
 @keyframes kpRaute { from { transform: rotate(-135deg) scale(.4); opacity: 0; } to { transform: rotate(45deg) scale(1); opacity: 1; } }
 .kp-glas.intro { cursor: pointer; }
+/* Handy: eingeklappte Kachel rundum rund und etwas über dem unteren Rand; aufgeklappt wieder Bottom-Sheet */
+@media (max-width: 639px) {
+  .kp-glas { transition: width .75s cubic-bezier(.7,0,.2,1), height .75s cubic-bezier(.7,0,.2,1), margin-bottom .75s cubic-bezier(.7,0,.2,1), border-radius .75s; }
+  .kp-glas.intro { border-radius: 20px; margin-bottom: 32px; }
+}
 .kp-glas.intro .kp-intro { opacity: 1; }
 .kp-glas.intro > .kp-inhalt { opacity: 0; }
 .kp-glas.reveal .kp-inhalt > *, .kp-glas.reveal .kp-inhalt form > * { animation: kpHoch .55s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--i,0) * 70ms + 80ms); }
