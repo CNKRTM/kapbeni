@@ -20,6 +20,7 @@ const app = express();
 const entegrasyon = require('../api/src/lib/entegrasyon');
 const ilanArsiv = require('../api/src/lib/ilanArsiv');
 const olayLib = require('../api/src/lib/olay');
+const bildirimLib = require('../api/src/lib/bildirim');   // v1.35 Benachrichtigungen
 const db = new Pool({ connectionString: process.env.DATABASE_URL });
 
 app.use(express.json());
@@ -368,11 +369,13 @@ app.get('/admin/api/ilanlar', adminAuth, async (req, res) => {
 });
 
 app.post('/admin/api/ilanlar/:id/onayla', adminAuth, async (req, res) => {
-  const { rows } = await db.query("UPDATE ilanlar SET ilan_durum='aktif' WHERE id=$1 RETURNING uuid", [req.params.id]);
+  const { rows } = await db.query("UPDATE ilanlar SET ilan_durum='aktif' WHERE id=$1 RETURNING uuid, user_id, baslik", [req.params.id]);
   await auditAdmin('ilan.onayla', req.admin.id, { hedefTip:'ilan', hedefId:+req.params.id });
   // Suchindex sofort nachziehen — vorher erschien ein freigegebenes Inserat erst nach dem
   // naechsten Neuaufbau in Suche/Kategorie-Suche (Backlog, E2E-Test v1.33.3). syncListing wirft nie.
   if (rows[0]) await require('../api/src/lib/meiliSync').syncListing(String(rows[0].uuid));
+  if (rows[0]) await bildirimLib.gonder({ userId: rows[0].user_id, tip: 'ilan_onay', kaynakTip: 'ilan', kaynakId: +req.params.id,
+    baslik: 'İlanınız yayında', icerik: `"${bildirimLib.kisalt(rows[0].baslik, 80)}" incelendi ve yayına alındı.`, link: `/#/ilan/${rows[0].uuid}` });
   res.json({ mesaj: 'İlan onaylandı' });
 });
 
@@ -380,7 +383,9 @@ app.post('/admin/api/ilanlar/:id/onayla', adminAuth, async (req, res) => {
 // Snapshot + KOPIE der Bilder ins Archiv (Auftragssammlung G, v1.23).
 app.post('/admin/api/ilanlar/:id/reddet', adminAuth, async (req, res) => {
   const { sebep } = req.body;
-  const red = await db.query("UPDATE ilanlar SET ilan_durum='reddedildi', ai_not=$1 WHERE id=$2 RETURNING uuid", [sebep, req.params.id]);
+  const red = await db.query("UPDATE ilanlar SET ilan_durum='reddedildi', ai_not=$1 WHERE id=$2 RETURNING uuid, user_id, baslik", [sebep, req.params.id]);
+  if (red.rows[0]) await bildirimLib.gonder({ userId: red.rows[0].user_id, tip: 'ilan_red', kaynakTip: 'ilan', kaynakId: +req.params.id,
+    baslik: 'İlanınız yayına alınmadı', icerik: `"${bildirimLib.kisalt(red.rows[0].baslik, 80)}"` + (sebep ? ` — Sebep: ${sebep}` : ''), link: '/#/panel/ilanlarim' });
   // Abgelehnt = nicht mehr suchbar (falls es vorher aktiv im Index stand)
   if (red.rows[0]) await require('../api/src/lib/meiliSync').deleteListing(String(red.rows[0].uuid));
   await auditAdmin('ilan.reddet', req.admin.id, { hedefTip:'ilan', hedefId:+req.params.id, detay:{sebep} });

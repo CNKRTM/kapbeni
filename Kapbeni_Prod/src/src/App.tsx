@@ -56,6 +56,7 @@ import { useAuth } from './context/AuthContext'
 import { ilanlarApi, favorilerApi } from './api'
 import { useKategoriAgac, dbIdVonSlug, invalidateKategoriAgac } from './data/kategoriAgac'
 import { navZuHash, hashZuNav, navSchluessel, legalSlug, type NavState } from './navigation'
+import { useBildirimOzet } from './lib/bildirimOzet'
 import { nachZurueck, popVonOverlay } from './lib/geriTusu'
 import type { Listing } from './api'
 import { MOCK_LISTINGS, MOCK_CHATS } from './data/mockData'
@@ -697,7 +698,16 @@ export default function App() {
     }
   }
 
-  const unreadCount = useMemo(() => chats.filter((c) => c.unread).length, [chats])
+  // Mesajlar-Abzeichen = echte ungelesene Chat-Nachrichten (v1.35; vorher Mock-Daten aus `chats`)
+  const bildirimOzet = useBildirimOzet(!!isLoggedIn)
+  const unreadCount = bildirimOzet.mesaj
+  // Klick auf eine Benachrichtigung: Link ('/#/mesajlar/14') in einen Ansichtszustand uebersetzen
+  const bildirimGit = (link: string) => {
+    const ziel = hashZuNav(link.replace(/^\/+/, ''))
+    if (!ziel) { window.location.hash = link.replace(/^\/?#?/, ''); return }
+    navAnwenden(ziel)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
 
   const filteredListings = useMemo(() => {
     let result = [...listings]
@@ -769,6 +779,9 @@ export default function App() {
           showFilters={false}
           onProfileClick={handleProfileClickFromLegal}
           user={user}
+          bildirimSayisi={bildirimOzet.bildirim}
+          onBildirimDegisti={bildirimOzet.yenile}
+          onBildirimGit={(l) => { window.location.hash = ''; bildirimGit(l) }}
         />
         <main className="flex-grow">{legalInhalt}</main>
         <Footer />
@@ -826,6 +839,9 @@ export default function App() {
         showFilters={showFilters}
         onProfileClick={handleProfileClick}
         user={user}
+        bildirimSayisi={bildirimOzet.bildirim}
+        onBildirimDegisti={bildirimOzet.yenile}
+        onBildirimGit={bildirimGit}
       />
 
       {/* Category Navigation Bar — sticky below navbar */}

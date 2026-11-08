@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { mesajlarApi } from '../api'
 import { useAuth } from '../context/AuthContext'
+import { bildirimYenile } from '../lib/bildirimOzet'
 
 interface MessagesProps {
   /** Konversation, die beim Eintritt geoeffnet werden soll (aus der URL). */
@@ -59,7 +60,12 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
   const loadMessages = async (chatId: string | number) => {
     try {
       const data = await mesajlarApi.getChat(String(chatId))
-      setMessages(Array.isArray(data) ? data : [])
+      const neu = Array.isArray(data) ? data : []
+      // Beim Laden markiert die API eingehende Nachrichten als gelesen → Zaehler nachziehen
+      setMessages((alt) => {
+        if (neu.length !== alt.length || alt.length === 0) bildirimYenile()
+        return neu
+      })
     } catch {}
   }
 
@@ -70,6 +76,8 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
   useEffect(() => {
     if (!activeChat) return
     loadMessages(activeChat.id)
+    // In der Liste sofort als gelesen zeigen
+    setChats((cs) => cs.map((c) => (c.id === activeChat.id ? { ...c, okunmamis: 0 } : c)))
     pollRef.current = setInterval(() => loadMessages(activeChat.id), 5000)
     return () => { if (pollRef.current) clearInterval(pollRef.current) }
   }, [activeChat])
@@ -126,7 +134,12 @@ export default function Messages({ initialChatId, onChatChange, onCloseChat, ini
                   {getName(chat)[0].toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <span className="font-medium text-sm truncate block">{getName(chat)}</span>
+                  <span className="flex items-center gap-2">
+                    <span className={`text-sm truncate block flex-1 ${chat.okunmamis > 0 ? 'font-bold text-gray-900' : 'font-medium'}`}>{getName(chat)}</span>
+                    {chat.okunmamis > 0 && (
+                      <span className="bg-[var(--color-primary)] text-white text-[10px] font-bold min-w-4 h-4 px-1 rounded-full flex items-center justify-center">{chat.okunmamis}</span>
+                    )}
+                  </span>
                   <p className="text-xs text-gray-500 truncate">{chat.baslik}</p>
                   <p className="text-xs text-gray-400 truncate">{chat.son_mesaj || '–'}</p>
                 </div>

@@ -63,11 +63,16 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
       alert('Geri bildirim gönderilemedi. Lütfen tekrar deneyin.')
     }
   }
-  const [tab, setTab] = useState<Tab>((initialTab as Tab) || 'ilanlarim')
+  // 'gelen-teklifler' (Link aus Benachrichtigung „Yeni teklif“, v1.35) = Tekliflerim, Rolle Satıcı
+  const tabAus = (t?: string) => (t === 'gelen-teklifler' ? 'tekliflerim' : t) as Tab | undefined
+  const [tab, setTab] = useState<Tab>(tabAus(initialTab) || 'ilanlarim')
   // Auch undefined uebernehmen: beim Zuruecknavigieren auf '#/panel' (ohne
   // Unterreiter) muss der Standardreiter wieder greifen, sonst bleibt die
   // Ansicht auf dem alten Reiter stehen, waehrend die URL etwas anderes sagt.
-  useEffect(() => { setTab((initialTab as Tab) || 'ilanlarim') }, [initialTab])
+  useEffect(() => {
+    setTab(tabAus(initialTab) || 'ilanlarim')
+    if (initialTab === 'gelen-teklifler') setTeklifRol('satici')
+  }, [initialTab])
   const [ilanlar, setIlanlar] = useState<Listing[]>([])
   // „Satıldı olarak işaretle“ (v1.34.0): Ziel der Bestaetigung + Fehlermeldung
   const [satildiZiel, setSatildiZiel] = useState<string | null>(null)
@@ -78,7 +83,7 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
   const [degStats, setDegStats] = useState<{ ortalama: number; sayi: number } | null>(null)
   const [sikayetler, setSikayetler] = useState<any[]>([])
   const [teklifler, setTeklifler] = useState<any[]>([])
-  const [teklifRol, setTeklifRol] = useState<'alici' | 'satici'>('alici')
+  const [teklifRol, setTeklifRol] = useState<'alici' | 'satici'>(initialTab === 'gelen-teklifler' ? 'satici' : 'alici')
   const [kazanc, setKazanc] = useState<{ bakiye: number; hareketler: any[] } | null>(null)
   const [aramalar, setAramalar] = useState<any[]>([])
   const [loading, setLoading] = useState(false)

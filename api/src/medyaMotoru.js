@@ -193,8 +193,8 @@ async function videoFehlerMelden(job, kunde) {
     const { rows } = await query(`UPDATE ilanlar SET video_durum='hata', video_hata=$2 WHERE id=$1 AND video_is_id=$3 RETURNING uuid, baslik, user_id`,
       [job.ilan_id, kunde, job.id]);
     if (!rows[0]) return;
-    await query(`INSERT INTO bildirimler(user_id, tip, baslik, icerik, link) VALUES($1,'medya',$2,$3,$4)`,
-      [rows[0].user_id, 'Video işlenemedi', `"${String(rows[0].baslik).slice(0, 80)}" ilanınızın videosu işlenemedi. ${kunde}`, `/#/ilan/${rows[0].uuid}`]);
+    await require('./lib/bildirim').gonder({ userId: rows[0].user_id, tip: 'medya', kaynakTip: 'ilan', kaynakId: job.ilan_id,
+      baslik: 'Video işlenemedi', icerik: `"${String(rows[0].baslik).slice(0, 80)}" ilanınızın videosu işlenemedi. ${kunde}`, link: `/#/ilan/${rows[0].uuid}` });
   } catch (e) { console.error('[medya] Meldung fehlgeschlagen:', e.message); }
 }
 

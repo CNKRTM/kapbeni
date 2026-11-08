@@ -87,6 +87,24 @@ export const mesajlarApi = {
     ve.post(`/mesajlar/konusma/${id}/mesaj`, { metin: text }),
 }
 
+// ---- Bildirimler (v1.35) ----
+export interface Bildirim {
+  id: number
+  tip: string
+  baslik: string
+  icerik: string | null
+  link: string | null
+  okundu: boolean
+  olusturma_tarihi: string
+}
+export interface BildirimOzet { bildirim: number; mesaj: number }
+export const bildirimlerApi = {
+  liste: () => ve.get<{ bildirimler: Bildirim[]; okunmamis: number; mesaj_okunmamis: number }>('/bildirimler'),
+  ozet: () => ve.get<BildirimOzet>('/bildirimler/ozet'),
+  oku: (id: number) => ve.put(`/bildirimler/${id}/oku`, {}),
+  tumunuOku: () => ve.put('/bildirimler/tumu-oku', {}),
+}
+
 // ---- Favoriler ----
 export const favorilerApi = {
   /**

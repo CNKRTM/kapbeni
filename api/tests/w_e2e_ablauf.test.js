@@ -26,6 +26,7 @@ test('v1.33.1 Chat: Website-Pfad = API-Route, Nachricht wird gespeichert', async
   const il = await fremdesTestinserat(KAEUFER);
   const t = await tokenFuer(KAEUFER);
   const vorher = (await q('SELECT id FROM konusmalar WHERE ilan_id=$1 AND alici_id=$2', [il.id, KAEUFER])).rows[0];
+  const maxB = (await q('SELECT coalesce(max(id),0)::int m FROM bildirimler')).rows[0].m;   // v1.35: Meldung an den Verkaeufer
   const k = await api('POST', '/mesajlar/konusma', { token: t, body: { ilan_uuid: il.uuid } });
   assert.strictEqual(k.status, 200);
   let mesajId = null;
@@ -46,6 +47,7 @@ test('v1.33.1 Chat: Website-Pfad = API-Route, Nachricht wird gespeichert', async
       await q("DELETE FROM musteri_olaylari WHERE user_id=$1 AND olay='mesaj' AND hedef_id=$2", [KAEUFER, String(mesajId)]);
       await q("DELETE FROM audit_log WHERE olay='mesaj.tehlikeli' AND hedef_id::text=$1::text", [mesajId]).catch(() => {});
     }
+    await q("DELETE FROM bildirimler WHERE id>$1 AND user_id=$2 AND kaynak_tip='konusma' AND kaynak_id=$3", [maxB, il.user_id, k.body.id]);
     if (!vorher) await q('DELETE FROM konusmalar WHERE id=$1', [k.body.id]);
   }
 });
@@ -82,6 +84,7 @@ test('v1.33.3 İlan Onayı: Freigabe nimmt das Inserat sofort in den Suchindex',
     await adminApi('POST', '/cikis', { token: t });
   } finally {
     await require('../src/lib/meiliSync').deleteListing(il.uuid);
+    await q("DELETE FROM bildirimler WHERE user_id=$1 AND kaynak_tip='ilan' AND kaynak_id=$2", [sahip, il.id]);   // v1.35
     await q('DELETE FROM ilanlar WHERE id=$1 AND user_id=$2', [il.id, sahip]);
   }
 });

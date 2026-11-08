@@ -3,6 +3,7 @@ import { AnimatePresence } from 'framer-motion'
 import { Search, Home, Compass, MessageCircle, Plus, User, X, Menu, SlidersHorizontal } from 'lucide-react'
 import type { User as UserType } from '../api'
 import ProfileDrawer from './ProfileDrawer'
+import BildirimZili from './BildirimZili'
 
 interface Props {
   activeTab: string
@@ -15,12 +16,17 @@ interface Props {
   onToggleFilters: () => void
   onProfileClick: (action?: string) => void
   user: UserType | null
+  /** Ungelesene Benachrichtigungen (v1.35, lib/bildirimOzet.ts) */
+  bildirimSayisi?: number
+  onBildirimDegisti?: () => void
+  onBildirimGit?: (link: string) => void
 }
 
 export default function Navbar({
   activeTab, setActiveTab, searchTerm, setSearchTerm,
   onOpenSellModal, unreadCount, showFilters, onToggleFilters,
   onProfileClick, user,
+  bildirimSayisi = 0, onBildirimDegisti = () => {}, onBildirimGit = () => {},
 }: Props) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -110,6 +116,9 @@ export default function Navbar({
             >
               <Plus className="h-4.5 w-4.5" /> Sat
             </button>
+            {user && (
+              <BildirimZili gorunum="masaustu" sayi={bildirimSayisi} onDegisti={onBildirimDegisti} onGit={onBildirimGit} />
+            )}
             {user ? (
               <button
                 onClick={() => setDrawerOpen(true)}
@@ -141,10 +150,14 @@ export default function Navbar({
             </button>
             <button
               onClick={() => setMobileMenuOpen((v) => !v)}
-              className="w-10 h-10 rounded-full border border-gray-200 text-gray-600 flex items-center justify-center"
+              className="relative w-10 h-10 rounded-full border border-gray-200 text-gray-600 flex items-center justify-center"
               title="Menü"
             >
               {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              {/* Ungelesene Benachrichtigungen: Punkt am Menue-Knopf, die Liste steckt im Menue */}
+              {user && bildirimSayisi > 0 && !mobileMenuOpen && (
+                <span data-testid="bildirim-punkt" className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-primary ring-2 ring-white" />
+              )}
             </button>
           </div>
         </div>
@@ -179,6 +192,9 @@ export default function Navbar({
                 )}
               </button>
             ))}
+            {user && (
+              <BildirimZili gorunum="menu" sayi={bildirimSayisi} onDegisti={onBildirimDegisti} onGit={(l) => { setMobileMenuOpen(false); onBildirimGit(l) }} />
+            )}
           </nav>
         )}
       </div>

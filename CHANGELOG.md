@@ -2,6 +2,13 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.35.0 — 2026-11-08
+
+Benachrichtigungen: Glocke mit Liste, Ausloeser Nachricht/Angebot/Annahme/Ablehnung/Freigabe, echte Mesajlar-Zaehler
+
+- docs: CLAUDE.md – Chronik 2026-11-08 E2E-Test Staging (v1.33.1–v1.34.1), Backlog
+- test: E2E-Skript (Satıldı-Karte per Titel, Panel-Schritt), Chat-Test löscht nur eigene Nachricht
+
 ## 1.34.1 — 2026-11-08
 
 E2E-Fix: Değerlendirmelerim zeigte die neuesten Bewertungen der ganzen Plattform statt der eigenen

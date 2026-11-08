@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { query, auditLog } = require('../db/pool');
 const { authMiddleware } = require('../middleware/auth');
 const ai = require('../services/ai.service');
+const bildirim = require('../lib/bildirim');
 
 // Konuşma başlat / getir
 router.post('/konusma', authMiddleware, async (req, res) => {
@@ -32,7 +33,8 @@ router.get('/konusmalar', authMiddleware, async (req, res) => {
               (SELECT url FROM ilan_fotograflar WHERE ilan_id=i.id AND ana_foto=true LIMIT 1) as ilan_foto,
               ua.ad as alici_ad, us.ad as satici_ad,
               (SELECT metin FROM mesajlar WHERE konusma_id=k.id ORDER BY id DESC LIMIT 1) as son_mesaj,
-              (SELECT created_at FROM mesajlar WHERE konusma_id=k.id ORDER BY id DESC LIMIT 1) as son_mesaj_zaman
+              (SELECT created_at FROM mesajlar WHERE konusma_id=k.id ORDER BY id DESC LIMIT 1) as son_mesaj_zaman,
+              (SELECT count(*)::int FROM mesajlar WHERE konusma_id=k.id AND gonderen_id<>$1 AND okundu=false) as okunmamis
        FROM konusmalar k
        JOIN ilanlar i ON i.id=k.ilan_id
        JOIN users ua ON ua.id=k.alici_id
@@ -51,6 +53,7 @@ router.get('/konusma/:id', authMiddleware, async (req, res) => {
     if (!k[0] || (k[0].alici_id !== req.user.id && k[0].satici_id !== req.user.id))
       return res.status(403).json({ hata: 'Yetkisiz' });
     await query('UPDATE mesajlar SET okundu=true WHERE konusma_id=$1 AND gonderen_id!=$2', [req.params.id, req.user.id]);
+    await bildirim.okunduYap(req.user.id, 'konusma', Number(req.params.id));
     const { rows } = await query('SELECT * FROM mesajlar WHERE konusma_id=$1 ORDER BY id', [req.params.id]);
     res.json(rows);
   } catch(e) { res.status(500).json({ hata: e.message }); }
@@ -74,6 +77,15 @@ router.post('/konusma/:id/mesaj', authMiddleware, async (req, res) => {
     if (kontrol.tehlikeli) {
       await auditLog('mesaj.tehlikeli', 'api', { userId: req.user.id, hedefTip:'mesaj', hedefId: rows[0].id, detay: kontrol });
     }
+    // Empfaenger benachrichtigen (je Konversation eine ungelesene Meldung, lib/bildirim.js)
+    const alan = k[0].alici_id === req.user.id ? k[0].satici_id : k[0].alici_id;
+    const { rows: bilgi } = await query(
+      'SELECT u.ad, i.baslik FROM users u, ilanlar i WHERE u.id=$1 AND i.id=$2', [req.user.id, k[0].ilan_id]);
+    const kimden = (bilgi[0] && bilgi[0].ad) || 'Bir kullanıcı';
+    await bildirim.gonder({ userId: alan, tip: 'mesaj', kaynakTip: 'konusma', kaynakId: k[0].id,
+      baslik: `${kimden} size mesaj gönderdi`,
+      icerik: (bilgi[0] ? `${bildirim.kisalt(bilgi[0].baslik, 60)}: ` : '') + (kontrol.tehlikeli ? 'Yeni mesaj (dikkat: şüpheli içerik)' : String(metin || '')),
+      link: `/#/mesajlar/${k[0].id}` });
     res.json({ mesaj: rows[0], uyari: kontrol.tehlikeli ? { var: true, tur: kontrol.tur } : null });
   } catch(e) { res.status(500).json({ hata: e.message }); }
 });
