@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react'
 import FehlerGrenze, { Inhalt } from '../components/FehlerGrenze'
 import { useAuth } from '../context/AuthContext'
-import { ilanlarApi, favorilerApi, degerlendirmeApi, ve, Listing } from '../api'
+import { ilanlarApi, favorilerApi, ve, Listing } from '../api'
 import ProductCard from '../components/ProductCard'
 import { UyelikChip } from '../components/UyeRozeti'
 import HizliIlanModal from '../components/HizliIlanModal'
@@ -132,7 +132,9 @@ export default function Dashboard({ onSelectProduct, onOpenKyc, onOpenGsm, onNav
         .finally(done)
     } else if (tab === 'degerlendirmeler') {
       Promise.all([
-        degerlendirmeApi.getLast(20).catch(() => []),
+        // Eigene erhaltene Bewertungen — vorher stand hier getLast(20), also die neuesten
+        // Bewertungen der GANZEN Plattform unter „Değerlendirmelerim“ (E2E-Test v1.34.1)
+        (u?.id != null ? ve.get<any[]>(`/degerlendirme/kullanici/${u.id}`) : Promise.resolve([])).catch(() => []),
         ve.get<any>('/dashboard/stats').catch(() => null),
       ]).then(([list, stats]: [any, any]) => {
         setDegerlendirmeler((list?.degerlendirmeler || list || []) as any[])

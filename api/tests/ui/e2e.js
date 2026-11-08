@@ -239,6 +239,23 @@ const SCHRITTE = {
     notiz(`medyayenile: Aufrufe ${vorher} → ${db.goruntulenme} (Nachfragen mit ?medya=1 zählen nach dem Ausrollen nicht)`);
     await ctx.close();
   },
+  // Panel-Reiter beider Kunden: laden, kein Überlauf (Konsole wird global geprüft)
+  async panel() {
+    for (const [wer, vp] of [['A', MOBIL], ['B', DESKTOP]]) {
+      const { ctx, page } = await seite(wer, vp);
+      for (const tab of ['ilanlarim', 'tekliflerim', 'favorilerim', 'degerlendirmeler', 'aramalar']) {
+        await page.goto(`${BASIS}/#/panel/${tab}`); await page.reload(); await warte(page, 1800);
+        const txt = await page.locator('body').innerText();
+        pruefe(txt.length > 200 && await ueberlauf(page) <= 0 && !/Bu bölüm yüklenemedi/.test(txt), `panel/${wer}/${vp.width}: ${tab} lädt, kein Überlauf`);
+        if (tab === 'degerlendirmeler') {
+          await foto(page, `panel-degerlendirme-${wer}`);
+          const fremd = (await q("SELECT count(*)::int n FROM degerlendirmeler WHERE durum='onaylandi' AND degerlendirilen<>$1", [wer === 'A' ? 78 : 71])).rows[0].n;
+          notiz(`panel: fremde freigegebene Bewertungen in der DB: ${fremd} (dürfen hier nicht erscheinen)`);
+        }
+      }
+      await ctx.close();
+    }
+  },
   // 1d) Inserate in İlan Onayı → mit dem Test-Admin freigeben; danach Suchindex prüfen.
   async moderasyon() {
     // Drittes Inserat (über die API als A) mit Kapora/IBAN-Hinweis — soll in die Warteschlange.

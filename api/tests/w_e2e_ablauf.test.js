@@ -124,4 +124,14 @@ test('v1.34.0 Satıldı: per uuid, nur Eigentümer, nur aktiv, raus aus dem Inde
   }
 });
 
+test('v1.34.1 Değerlendirmelerim: nur eigene erhaltene Bewertungen', async () => {
+  const d = fs.readFileSync(`${FRONT}/pages/Dashboard.tsx`, 'utf8');
+  assert.match(d, /\/degerlendirme\/kullanici\/\$\{u\.id\}/);
+  assert.doesNotMatch(d, /degerlendirmeApi\.getLast/);
+  // API-Seite: liefert nur Bewertungen ueber genau diesen Nutzer (onaylandi)
+  const r = await api('GET', `/degerlendirme/kullanici/${KAEUFER}`);
+  assert.strictEqual(r.status, 200);
+  assert.ok(Array.isArray(r.body) && r.body.every((x) => x.degerlendirilen === KAEUFER && x.durum === 'onaylandi'));
+});
+
 module.exports = { fremdesTestinserat, KAEUFER, FRONT };

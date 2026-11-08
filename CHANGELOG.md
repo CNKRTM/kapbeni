@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.34.1 — 2026-11-08
+
+E2E-Fix: Değerlendirmelerim zeigte die neuesten Bewertungen der ganzen Plattform statt der eigenen
+
 ## 1.34.0 — 2026-11-08
 
 İlanlarım: Durum-Abzeichen (İncelemede/Satıldı/Reddedildi) und „Satıldı olarak işaretle“ (uuid, nur aktiv, Suchindex, Kundenakte)
