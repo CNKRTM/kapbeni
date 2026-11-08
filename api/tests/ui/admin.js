@@ -35,6 +35,31 @@ async function anmelden(page) {
 }
 
 const SZENARIEN = {
+  // Entegrasyonlar: Karten, Zustands-Badges, Balken, Yapılandır mit Maske, Bağlantı Testi.
+  async entegrasyonlar(page, b) {
+    const { q } = require('../_hilfe');
+    const vorher = (await q("SELECT 1 FROM entegrasyon_ayarlari WHERE provider='turnstile'")).rows.length;
+    await anmelden(page);
+    await page.goto(BASIS + '#/entegrasyonlar'); await page.waitForSelector('.ent-karte', { timeout: 8000 });
+    pruefe(await page.locator('.ent-karte').count() === 11, `${b}: 11 Entegrasyon-Karten`);
+    pruefe(await page.getByText('Entegrasyon Operasyonları').count() === 1, `${b}: Kopf „Entegrasyon Operasyonları“`);
+    const meili = page.locator('#ent-meilisearch');
+    pruefe(/Hazır|Doğrulanmış/.test(await meili.innerText()), `${b}: Meilisearch Hazır/Doğrulanmış`);
+    pruefe(/Devre Dışı/.test(await page.locator('#ent-google_admin').innerText()), `${b}: Google Admin Devre Dışı`);
+    await meili.getByText('Yapılandır').click(); await page.waitForTimeout(300);
+    const ph = await page.locator('#ent-meilisearch-apiKey').getAttribute('placeholder');
+    const val = await page.locator('#ent-meilisearch-apiKey').inputValue();
+    pruefe(ph.startsWith('••••') && val === '', `${b}: Geheimfeld maskiert, Feld leer`);
+    await page.locator('#ent-turnstile').getByText('Yapılandır').click(); await page.waitForTimeout(300);
+    await page.locator('#ent-turnstile').getByText('Bağlantı Testi').click();
+    await page.waitForFunction(() => /Son Test/.test(document.querySelector('#ent-turnstile')?.innerText || ''), null, { timeout: 15000 }).catch(() => {});
+    pruefe(/PASS/.test(await page.locator('#ent-turnstile').innerText()), `${b}: Turnstile-Test PASS (Testmodus)`);
+    await page.locator('#ent-turnstile').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `${AUS}/admin-entegrasyonlar-${page.viewportSize().width}-form.png`, fullPage: false });
+    const ueber = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    pruefe(ueber <= 1, `${b}: kein waagerechter Ueberlauf (${ueber})`);
+    if (!vorher) await q("DELETE FROM entegrasyon_ayarlari WHERE provider='turnstile' AND credentials IS NULL AND config='{}'::jsonb AND guncelleyen IS NULL");
+  },
   // Sidebar: Kopf, Gruppen, Zaehler, YENİ, Hash-Routing, Zurueck, Einklappen, Hazırlanıyor, Fuss.
   async sidebar(page, b, mobil) {
     await anmelden(page);
@@ -100,6 +125,7 @@ const SZENARIEN = {
     }
   }
   await browser.close();
+  await require('../_hilfe').pool.end().catch(() => {});
   console.log(fehler.length ? `\n${fehler.length} FEHLER` : '\nALLES OK');
   process.exit(fehler.length ? 1 : 0);
 })();

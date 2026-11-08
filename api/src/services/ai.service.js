@@ -26,6 +26,13 @@ const guvenli = async (fn, fallback) => {
 //   Ablehnung), kommt `hata: true` zurueck -> das Inserat geht auf
 //   'moderasyonda' und wartet auf Freigabe im Admin. Nie automatisch aktiv.
 const MOD_MODEL = process.env.KAPBENI_MOD_MODEL || 'claude-haiku-5-5';
+// Modell aus Admin → Entegrasyonlar → Claude (DB -> .env -> Standard), 30 s zwischengespeichert.
+// Mod 'disabled' schaltet die KI ab: dann gilt der Ausfallpfad (Warteschlange).
+const entegrasyon = require('../lib/entegrasyon');
+const claudeAyar = async () => {
+  try { const a = await entegrasyon.ayar('claude'); return { model: a.degerler.model || MOD_MODEL, aktif: a.mod !== 'disabled' }; }
+  catch { return { model: MOD_MODEL, aktif: true }; }
+};
 const anthropicKey = process.env.ANTHROPIC_API_KEY || '';
 const MOD_AKTIF = /^sk-ant-/.test(anthropicKey);
 const anthropic = MOD_AKTIF
@@ -68,9 +75,11 @@ const modFehler = (grund) => ({
 exports.MOD_MODEL = MOD_MODEL;
 exports.moderasyonYap = async (baslik, aciklama, fiyat) => {
   if (!MOD_AKTIF) return modFehler('anahtar yok');
+  const ca = await claudeAyar();
+  if (!ca.aktif) return modFehler('Entegrasyonlar: Claude devre dışı');
   try {
     const msg = await anthropic.messages.create({
-      model: MOD_MODEL,
+      model: ca.model,
       max_tokens: 1024,
       output_config: { effort: 'low', format: { type: 'json_schema', schema: MOD_SCHEMA } },
       system: MOD_SYSTEM,
@@ -104,8 +113,10 @@ exports.moderasyonYap = async (baslik, aciklama, fiyat) => {
 // Ein Aufruf mit erzwungenem JSON-Schema; wirft bei jedem Fehler (guvenli faengt).
 const claudeJSON = async (system, user, schema, { timeout = 8_000, maxTokens = 512 } = {}) => {
   if (!MOD_AKTIF) throw new Error('ANTHROPIC_API_KEY fehlt');
+  const ca = await claudeAyar();
+  if (!ca.aktif) throw new Error('Claude devre dışı');
   const msg = await anthropic.messages.create({
-    model: MOD_MODEL,
+    model: ca.model,
     max_tokens: maxTokens,
     output_config: { effort: 'low', format: { type: 'json_schema', schema } },
     system,

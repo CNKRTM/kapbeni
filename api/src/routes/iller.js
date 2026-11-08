@@ -38,6 +38,12 @@ const speicher = new Map();
 const SPEICHER_MAX = 500;
 const SPEICHER_MS = 24 * 60 * 60 * 1000;
 
+// User-Agent aus Admin → Entegrasyonlar → Nominatim (Standard wie bisher).
+async function nominatimUA() {
+  try { const a = await require('../lib/entegrasyon').ayar('nominatim'); if (a.mod === 'disabled') throw Object.assign(new Error('Konum servisi devre dışı'), { devreDisi: true }); return a.degerler.userAgent; }
+  catch (e) { if (e.devreDisi) throw e; return 'KapBeni/1.0 (+https://kapbeni.com; destek@kapbeni.com)'; }
+}
+
 // Nominatim erlaubt hoechstens eine Anfrage je Sekunde.
 let letzteAnfrage = 0;
 async function nominatim(lat, lon) {
@@ -50,7 +56,7 @@ async function nominatim(lat, lon) {
   try {
     const r = await fetch(url, {
       signal: abbruch.signal,
-      headers: { 'User-Agent': 'KapBeni/1.0 (+https://kapbeni.com; destek@kapbeni.com)' },
+      headers: { 'User-Agent': await nominatimUA() },
     });
     if (!r.ok) throw new Error(`Nominatim ${r.status}`);
     return await r.json();

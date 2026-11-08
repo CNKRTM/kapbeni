@@ -115,6 +115,10 @@ tr:hover td{background:#fafafa}
   .topbar{padding:12px 14px}
   .view-wrap{padding:14px}
 }
+.ent-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:16px;align-items:start}
+@media(max-width:900px){.ent-grid{grid-template-columns:1fr}}
+.ent-link{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;font-size:12.5px;font-weight:600;color:#475569;padding:0;margin:10px 0}
+.ent-link:hover{color:#1a2e4a}
 .star-filled{color:#f59e0b}
 .star-empty{color:#e2e8f0}
 </style>
@@ -1292,36 +1296,137 @@ async function waSave(){
 }
 
 // ═══════════════════════════════════════════════
-// API BAĞLANTILARI
+// ENTEGRASYONLAR (Aufbau 1:1 nach Cankartım 04-sistem integrations/page.tsx)
+// Karte je Anbieter: Modus, Zustand (Hazır/Doğrulanmış/Eksik/Devre Dışı),
+// Pflichtfeld-Balken n/n, Detaylar, Yapılandır (Geheimfelder maskiert),
+// Kaydet, Bağlantı Testi, Son Test. Masken werden nie zurueckgeschrieben.
 // ═══════════════════════════════════════════════
-// Uebergang bis v1.16: Entegrasyonlar zeigt die alte Seite
-function vEntegrasyonlar(){ return vApi(); }
-async function vApi(){
+let _ent={liste:[],offen:{},detay:{},duzenle:false,mail:'log',ortam:'staging',sifreleme:true};
+const ENT_MOD={disabled:['Devre Dışı','gray'],fake:['Simülasyon','amber'],test:['Test','blue'],live:['Canlı','green']};
+const ENT_HAZIR={disabled:['Devre Dışı','gray'],missing:['Eksik','red'],ready:['Hazır','blue'],verified:['Doğrulanmış','green']};
+const ENT_KAYNAK={db:'DB',env:'.env',default:'Standart'};
+
+async function vEntegrasyonlar(){
   Vloading();
-  const d=await api('/api-durum').catch(()=>[]);
-  V(`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px">
-    ${(d||[]).length? (d||[]).map(a=>{
-      const c={bagli:'green',hata:'red',test:'amber'}[a.durum]||'gray';
-      const label={bagli:'✅ Bağlı',hata:'❌ Hata',test:'🟡 Test'}[a.durum]||'— Bilinmiyor';
-      return `<div class="card"><div class="card-body">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px">
-          <div>
-            <p style="font-weight:700;color:#1a2e4a">${a.ad||'—'}</p>
-            <p style="font-size:12.5px;color:#94a3b8;margin-top:2px">${a.aciklama||''}</p>
-          </div>
-          <span class="badge ${c}">${label}</span>
-        </div>
-        ${a.url?`<code style="font-size:11.5px;color:#64748b;background:#f8fafc;padding:4px 8px;border-radius:6px;display:block;word-break:break-all">${a.url}</code>`:''}
-        ${a.test_mode?'<span class="badge amber" style="margin-top:10px">Test Modu</span>':''}
-        <button class="btn btn-secondary btn-sm" style="margin-top:12px" onclick="apiTest('${a.ad}')">🔄 Bağlantıyı Test Et</button>
-      </div></div>`;
-    }).join('')
-    :`<div class="card" style="grid-column:1/-1"><div class="card-body" style="text-align:center;color:#94a3b8;padding:48px">API durum verisi alınamadı</div></div>`}
-  </div>`);
+  const d=await api('/entegrasyonlar').catch(()=>null);
+  if(!d||!d.entegrasyonlar){ V(`<div class="card"><div class="card-body" style="text-align:center;color:#94a3b8;padding:48px">Entegrasyon verisi alınamadı</div></div>`); return; }
+  _ent={..._ent,liste:d.entegrasyonlar,duzenle:d.duzenleyebilir,mail:d.mail_kanali,ortam:d.ortam,sifreleme:d.sifreleme};
+  entRender();
 }
-async function apiTest(ad){
-  const d=await api('/api-test?servis='+encodeURIComponent(ad)).catch(()=>({ok:false,hata:'Bağlantı hatası'}));
-  showToast(ad+': '+(d.ok?'✅ Bağlantı başarılı':'❌ '+d.hata), d.ok?'ok':'err');
+function entRender(){
+  const L=_ent.liste;
+  const uyari=L.filter(x=>x.readiness.durum==='missing'||x.son_test_sonuc==='hata');
+  V(`
+  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:14px">
+      <div style="width:46px;height:46px;border-radius:50%;background:#dbeafe;display:flex;align-items:center;justify-content:center;font-size:20px">🔌</div>
+      <div><p style="font-size:20px;font-weight:800;color:#1a2e4a;line-height:1.2">Entegrasyon Operasyonları</p>
+      <p style="font-size:13px;color:#64748b">Harici servis bağlantıları, yapılandırma ve test</p></div>
+    </div>
+    <button class="btn btn-secondary" onclick="vEntegrasyonlar()">⟳ Yenile</button>
+  </div>
+  ${!_ent.sifreleme?`<div class="card" style="border-color:#fecaca;background:#fef2f2;margin-bottom:14px"><div class="card-body" style="color:#b91c1c;font-size:13px;font-weight:600">INTEGRATION_ENCRYPTION_KEY eksik — gizli alanlar kaydedilemez.</div></div>`:''}
+  <div class="card" style="margin-bottom:16px;${uyari.length?'border-color:#fde68a;background:#fffbeb':'border-color:#bbf7d0;background:#f0fdf4'}"><div class="card-body" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px">
+    <div><p style="font-weight:700;color:${uyari.length?'#b45309':'#15803d'}">${uyari.length?'Uyarılar Mevcut':'Tüm entegrasyonlar sorunsuz'}</p>
+    <p style="font-size:12.5px;color:#64748b;margin-top:2px">${uyari.length?uyari.length+' entegrasyon: '+uyari.map(x=>escH(x.ad)).join(', '):L.length+' entegrasyon'}
+     · E-posta kanalı: <strong>${{resend:'Resend',smtp:'SMTP',log:'yalnız günlük (gönderim yok)'}[_ent.mail]||_ent.mail}</strong></p></div>
+    <span class="badge ${uyari.length?'amber':'green'}">${uyari.length?'⚠ Uyarı':'✓ OK'}</span>
+  </div></div>
+  ${!_ent.duzenle?`<p style="font-size:12.5px;color:#64748b;margin-bottom:12px">Yalnız görüntüleme: kaydetme ve test süper admin yetkisi ister.</p>`:''}
+  <div class="ent-grid">${L.map(entKarte).join('')}</div>`);
+  L.forEach(x=>{ if(_ent.offen[x.key]) entModelleriLaden(x); });
+}
+function entKarte(x){
+  const [mAd,mRenk]=ENT_MOD[x.mod]||[x.mod,'gray'];
+  const [hAd,hRenk]=ENT_HAZIR[x.readiness.durum]||[x.readiness.durum,'gray'];
+  const r=x.readiness; const pct=r.toplam?Math.round(r.mevcut/r.toplam*100):100;
+  const barRenk=pct===100?'#22c55e':pct>50?'#eab308':pct>0?'#f97316':'#ef4444';
+  const testBadge=x.son_test_sonuc==='ok'?'<span class="badge green">✓ OK</span>':x.son_test_sonuc==='hata'?'<span class="badge red">✕ Hata</span>':'';
+  const kopfFarbe={verified:'#f0fdf4',ready:'#eff6ff',missing:'#fef2f2',disabled:'#f8fafc'}[r.durum];
+  return `<div class="card ent-karte" id="ent-${x.key}">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:14px 16px;background:${kopfFarbe}">
+      <div style="display:flex;gap:12px;min-width:0">
+        <div style="width:38px;height:38px;border-radius:10px;background:#fff;border:1px solid #e2e8f0;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">${x.ikon}</div>
+        <div style="min-width:0"><p style="font-weight:700;color:#1a2e4a">${escH(x.ad)}${x.hazirlik?' <span class="badge gray" style="font-size:10px">hazırlanıyor</span>':''}</p>
+        <p style="font-size:12px;color:#64748b">${escH(x.aciklama)}</p></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end"><span class="badge ${mRenk}">${mAd}</span>${testBadge}</div>
+    </div>
+    <div style="padding:12px 16px 4px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><span class="badge ${hRenk}"><span class="dot ${hRenk}"></span>${hAd}</span><code style="font-size:11.5px;color:#94a3b8">${x.mod}</code></div>
+      <p style="font-size:13.5px;color:#334155;margin:8px 0">${escH(r.ozet)}</p>
+      <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:6px;background:#e2e8f0;border-radius:99px;overflow:hidden"><div style="width:${pct}%;height:100%;background:${barRenk}"></div></div><code style="font-size:11.5px;color:#64748b">${r.mevcut}/${r.toplam}</code></div>
+      ${r.eksik.length?`<p style="font-size:12px;color:#b91c1c;font-weight:600;margin-top:8px">✕ Eksik Alanlar</p><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${r.eksik.map(e=>`<code style="font-size:11px;background:#fef2f2;color:#b91c1c;padding:2px 6px;border-radius:5px">${escH(e)}</code>`).join('')}</div>`
+        :`<p style="font-size:12px;color:#15803d;margin-top:8px">✓ Eksik alan yok</p>`}
+      <button class="ent-link" onclick="entDetay('${x.key}')">${_ent.detay[x.key]?'▾':'▸'} Detaylar</button>
+      ${_ent.detay[x.key]?`<div style="font-size:12px;color:#475569;background:#f8fafc;border-radius:9px;padding:10px 12px;margin-bottom:8px;line-height:1.8">
+        ${x.alanlar.map(a=>`<div style="display:flex;justify-content:space-between;gap:8px"><span>${escH(a.label)}${a.zorunlu?' *':''}</span><span>${a.dolu?'✓':'—'} <code style="color:#94a3b8">${a.kaynak?ENT_KAYNAK[a.kaynak]:'yok'}</code></span></div>`).join('')}
+        <div style="display:flex;justify-content:space-between"><span>Mod kaynağı</span><code style="color:#94a3b8">${x.modKaynak==='db'?'DB':'Standart'}</code></div>
+        ${x.guncellendi_at?`<div style="display:flex;justify-content:space-between"><span>Son değişiklik</span><span>${fmtDateTime(x.guncellendi_at)}${x.guncelleyen?' · '+escH(x.guncelleyen):''}</span></div>`:''}
+        ${x.turnstileTest?'<div style="color:#1d4ed8">Test modu: Cloudflare’in resmi test anahtarları kullanılır (her zaman geçer).</div>':''}
+      </div>`:''}
+    </div>
+    <div style="border-top:1px solid #f1f5f9">
+      <button class="ent-link" style="width:100%;justify-content:space-between;padding:10px 16px;margin:0" onclick="entAc('${x.key}')"><span>⚙ Yapılandır</span><span>${_ent.offen[x.key]?'▴':'▾'}</span></button>
+      ${_ent.offen[x.key]?entForm(x):''}
+    </div>
+  </div>`;
+}
+function entForm(x){
+  const dis=_ent.duzenle?'':'disabled';
+  const kaynaklar=[...new Set(x.alanlar.filter(a=>a.kaynak).map(a=>ENT_KAYNAK[a.kaynak]))];
+  return `<div style="padding:4px 16px 16px">
+    <p style="font-size:12px;color:#64748b;margin-bottom:12px">ⓘ Gizli alanlar maskelenmiştir · Kaynak: ${kaynaklar.length?'('+kaynaklar.join(', ')+')':'—'}</p>
+    <label>Çalışma Modu</label>
+    <select id="ent-${x.key}-mod" ${dis} style="margin-bottom:12px">${x.modlar.map(m=>`<option value="${m}" ${m===x.mod?'selected':''}>${(ENT_MOD[m]||[m])[0]}</option>`).join('')}</select>
+    ${x.alanlar.map(a=>{
+      const id=`ent-${x.key}-${a.key}`;
+      let feld;
+      if(a.envSadece) feld=`<input id="${id}" value="${escH(a.dolu?a.deger:'')}" placeholder="tanımlı değil" disabled/><p style="font-size:11.5px;color:#94a3b8;margin-top:3px">Anahtar /etc/kapbeni.env içinde kalır${a.env?' ('+a.env+')':''}; buradan değiştirilemez.</p>`;
+      else if(a.tip==='textarea') feld=`<textarea id="${id}" rows="3" ${dis} placeholder="${escH(a.placeholder)}">${escH(a.deger||'')}</textarea>`;
+      else if(a.tip==='select') feld=`<select id="${id}" ${dis}>${[...new Set([a.deger,...(a.secenekler||[])].filter(Boolean))].map(v=>`<option value="${escH(v)}" ${v===a.deger?'selected':''}>${escH(v)}</option>`).join('')}</select>`;
+      else if(a.secret) feld=`<input id="${id}" type="password" autocomplete="new-password" ${dis} value="" placeholder="${escH(a.dolu?a.deger+' (değiştirmek için yazın)':'tanımlı değil')}"/>`;
+      else feld=`<input id="${id}" ${dis} value="${escH(a.kaynak==='db'?a.deger:'')}" placeholder="${escH(a.kaynak&&a.kaynak!=='db'?a.deger+' ('+ENT_KAYNAK[a.kaynak]+')':a.placeholder)}"/>`;
+      return `<div style="margin-bottom:12px"><label>${escH(a.label)}${a.zorunlu?' <span style="color:#e53935">*</span>':''} <span style="font-weight:500;color:#94a3b8">${a.kaynak?'· '+ENT_KAYNAK[a.kaynak]:''}</span></label>${feld}</div>`;
+    }).join('')}
+    ${x.son_test_at?`<div style="font-size:12px;border-radius:9px;padding:9px 12px;margin-bottom:12px;background:${x.son_test_sonuc==='ok'?'#f0fdf4;color:#15803d':'#fef2f2;color:#b91c1c'}">🕒 <strong>Son Test:</strong> ${x.son_test_sonuc==='ok'?'PASS':'FAIL'} — ${escH(x.son_test_mesaj||'')} <span style="color:#94a3b8">(${fmtDateTime(x.son_test_at)})</span></div>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-blue" ${dis} onclick="entKaydet('${x.key}')">💾 Kaydet</button>
+      <button class="btn btn-secondary" ${dis} onclick="entTest('${x.key}',this)">⚡ Bağlantı Testi</button>
+    </div>
+  </div>`;
+}
+function entDetay(k){ _ent.detay[k]=!_ent.detay[k]; entRender(); }
+function entAc(k){ _ent.offen[k]=!_ent.offen[k]; entRender(); }
+const _entModeller={};
+async function entModelleriLaden(x){
+  const a=x.alanlar.find(f=>f.dinamik==='claude-modeller'); if(!a) return;
+  if(!_entModeller.claude){ try{ _entModeller.claude=await api('/entegrasyonlar/claude/modeller'); }catch{ _entModeller.claude=[]; } }
+  const sel=el(`ent-${x.key}-${a.key}`); if(!sel||!Array.isArray(_entModeller.claude)) return;
+  const ids=[...new Set([a.deger,..._entModeller.claude.map(m=>m.id)].filter(Boolean))];
+  sel.innerHTML=ids.map(v=>`<option value="${escH(v)}" ${v===a.deger?'selected':''}>${escH(v)}</option>`).join('');
+}
+async function entKaydet(k){
+  const x=_ent.liste.find(i=>i.key===k); if(!x) return;
+  const degerler={};
+  x.alanlar.forEach(a=>{ if(a.envSadece) return; const f=el(`ent-${k}-${a.key}`); if(!f) return;
+    const v=f.value.trim();
+    // Geheimfeld leer = unveraendert; Maskenwerte werden nie zurueckgeschrieben.
+    if(a.secret){ if(v&&!v.startsWith('••••')) degerler[a.key]=v; }
+    else degerler[a.key]=v; });
+  const mod=el(`ent-${k}-mod`)?.value;
+  const r=await fetch(API+'/entegrasyonlar/'+k,{method:'POST',headers:H(),body:JSON.stringify({mod,degerler})});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){ showToast(d.hata||'Kaydedilemedi','err'); return; }
+  const i=_ent.liste.findIndex(e=>e.key===k); if(i>=0&&d.entegrasyon) _ent.liste[i]=d.entegrasyon;
+  showToast(x.ad+' kaydedildi ✓'); entRender();
+}
+async function entTest(k,btn){
+  if(btn){btn.disabled=true;btn.textContent='Test ediliyor…';}
+  const r=await fetch(API+'/entegrasyonlar/'+k+'/test',{method:'POST',headers:H()});
+  const d=await r.json().catch(()=>({}));
+  showToast((d.ok?'✓ ':'✕ ')+(d.mesaj||d.hata||'Test başarısız'),d.ok?'ok':'err');
+  await vEntegrasyonlar(); _ent.offen[k]=true; entRender();
 }
 
 // ═══════════════════════════════════════════════

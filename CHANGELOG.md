@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.16.0 — 2026-11-08
+
+Admin: Entegrasyonlar (Karten, Modus, Zustand, Pflichtfeld-Balken, Yapılandır maskiert, Bağlantı Testi; AES-256-GCM in entegrasyon_ayarlari), Meili-Schlüssel aus .env, Claude-Modell wählbar
+
 ## 1.15.0 — 2026-11-08
 
 Admin: Sidebar nach Cankartım-Muster (Gruppen, Zähler, YENİ, 72 px, Ziehen, Version·Commit), Hash-Routing, Hazırlanıyor-Seiten

@@ -395,31 +395,44 @@ app.get('/admin/api/vitaminler', adminAuth, async (req,res)=>{ res.json((await d
 
 
 
-// AUFGABE 13: API Bağlantılar
-app.get('/admin/api/api-durum', adminAuth, (req,res)=>{
-  const has=(v,bad)=> v && !(bad&&new RegExp(bad,'i').test(v));
-  res.json([
-    { ad:'Param', aciklama:'Ödeme altyapısı', env_key:'PARAM_TEST_MODE', test_mode:process.env.PARAM_TEST_MODE==='true', url:process.env.PARAM_API_BASE, durum: has(process.env.PARAM_CLIENT_CODE,'TEST_CLIENT')?'bagli':'test' },
-    { ad:'KolayBi', aciklama:'e-Fatura', env_key:'KOLAYBI_TEST_MODE', test_mode:process.env.KOLAYBI_TEST_MODE==='true', url:'efatura.kolaybi.com', durum: has(process.env.KOLAYBI_API_KEY)?'bagli':'hata' },
-    { ad:'Google', aciklama:'OAuth Giriş', env_key:'GOOGLE_AUTH', test_mode:false, url:'accounts.google.com', durum: has(process.env.GOOGLE_CLIENT_ID)?'bagli':'hata' },
-    { ad:'Claude', aciklama:'AI Moderasyon + Mesaj Kontrolü', env_key:'ANTHROPIC_API_KEY', test_mode:false, url:'api.anthropic.com', durum: /^sk-ant-/.test(process.env.ANTHROPIC_API_KEY||'')?'bagli':'hata' },
-    { ad:'e-Devlet', aciklama:'Kimlik Doğrulama', env_key:'EDEVLET', test_mode:true, url:'giris.turkiye.gov.tr', durum:'test' },
-  ]);
+// ── ENTEGRASYONLAR (ersetzt „API Bağlantılar“, v1.16) ─────────────────
+// Konfiguration und Tests liegen in api/src/lib/entegrasyon.js (gemeinsam mit der API).
+const entegrasyon = require('../api/src/lib/entegrasyon');
+const nurSuperAdmin = (req, res, next) => req.admin?.rol === 'super_admin' ? next()
+  : res.status(403).json({ hata: 'Bu işlem yalnız süper admin içindir' });
+
+// Alte Endpunkte leiten weiter bzw. sind ersetzt.
+app.get('/admin/api/api-durum', (req, res) => res.redirect(308, 'entegrasyonlar'));
+app.get('/admin/api/api-test', (req, res) => res.status(410).json({ hata: 'Ersetzt durch POST /admin/api/entegrasyonlar/:provider/test' }));
+
+app.get('/admin/api/entegrasyonlar', adminAuth, async (req, res) => {
+  try {
+    const [liste, mail] = await Promise.all([entegrasyon.listeMaskeli(), entegrasyon.mailKanal()]);
+    res.json({ ortam: entegrasyon.ORTAM, mail_kanali: mail.kanal, sifreleme: /^[0-9a-f]{64}$/i.test(process.env.INTEGRATION_ENCRYPTION_KEY || ''),
+      duzenleyebilir: req.admin.rol === 'super_admin', entegrasyonlar: liste });
+  } catch (e) { console.error('[entegrasyonlar]', e.message); res.status(500).json({ hata: 'Entegrasyonlar okunamadı' }); }
 });
-app.get('/admin/api/api-test', adminAuth, async (req,res)=>{
-  const { servis } = req.query;
-  try{
-    if(String(servis).toLowerCase()==='claude'){
-      // Seit v1.8.0 statt NVIDIA. Das SDK liegt im Nachbarpaket api/ (keine
-      // eigene admin-Abhaengigkeit), Pfad relativ zu __dirname (= admin/).
-      // models.list kostet keine Tokens.
-      const Anthropic=require('../api/node_modules/@anthropic-ai/sdk');
-      const client=new Anthropic({apiKey:process.env.ANTHROPIC_API_KEY, timeout:10000, maxRetries:0});
-      await client.models.retrieve(process.env.KAPBENI_MOD_MODEL||'claude-haiku-5-5');
-      return res.json({ok:true});
-    }
-    res.json({ok:false, hata:`${servis} testi için gerçek credentials gerekli`});
-  }catch(e){ res.json({ok:false, hata:e.message}); }
+app.get('/admin/api/entegrasyonlar/claude/modeller', adminAuth, async (req, res) => {
+  try { res.json(await entegrasyon.claudeModeller()); }
+  catch (e) { res.status(502).json({ hata: 'Model listesi alınamadı: ' + String(e.message).slice(0, 120) }); }
+});
+app.post('/admin/api/entegrasyonlar/:provider', adminAuth, nurSuperAdmin, async (req, res) => {
+  try {
+    const { mod, degerler } = req.body || {};
+    await entegrasyon.kaydet(req.params.provider, { mod, degerler: degerler || {} }, req.admin.id);
+    // Im audit_log nur Feldnamen, nie Werte.
+    const geaendert = Object.entries(degerler || {}).filter(([, v]) => v != null && String(v) !== '' && !String(v).startsWith('••••')).map(([k]) => k);
+    await auditAdmin('entegrasyon.kaydet', req.admin.id, { hedefTip: 'entegrasyon', detay: { provider: req.params.provider, mod, alanlar: geaendert, ip: clientIp(req) } });
+    const liste = await entegrasyon.listeMaskeli();
+    res.json({ ok: true, entegrasyon: liste.find((x) => x.key === req.params.provider) });
+  } catch (e) { res.status(e.status || 500).json({ hata: e.status ? e.message : 'Kaydedilemedi' }); if (!e.status) console.error('[entegrasyon.kaydet]', e.message); }
+});
+app.post('/admin/api/entegrasyonlar/:provider/test', adminAuth, nurSuperAdmin, async (req, res) => {
+  try {
+    const r = await entegrasyon.test(req.params.provider, req.admin.id);
+    await auditAdmin('entegrasyon.test', req.admin.id, { hedefTip: 'entegrasyon', detay: { provider: req.params.provider, sonuc: r.sonuc } });
+    res.json(r);
+  } catch (e) { res.status(e.status || 500).json({ hata: e.status ? e.message : 'Test çalıştırılamadı' }); if (!e.status) console.error('[entegrasyon.test]', e.message); }
 });
 
 
