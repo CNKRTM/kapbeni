@@ -1558,6 +1558,71 @@ neuer Tab, Fenster bleibt); dazu Konsolenfehler je Lauf. `masken.js` und `zuruec
 Cookie-Entscheidung im Init-Script vor (sonst fängt das Banner Klicks ab). Beide Stufen vorher gegen
 Testbuild `/tmp/kp-k-dist` + `/root/kp-vorschau.js` (:3905) geprüft.
 
+**E2E-Test Staging (zwei Kunden) — v1.33.1 bis v1.34.1.** Kunde A = Elif Koç (E2E-Konto, users.id=78,
+Verkäuferin), Kunde B = Ayşe Yılmaz (id=71, Käuferin), Admin nur Test-Admin id=3 (vorher aktiv, danach
+wieder `aktif=false`). Skript **`api/tests/ui/e2e.js`** (Playwright, 390/1280 px, Fotos
+`/tmp/kp-ui/e2e-*.png`), Schritte `giris ilan hizli escape toast medyayenile panel moderasyon medya suche
+chat abwicklung admin seiten`, Abräumen mit `aufraeumen` (`BEHALTEN=<id>` = Zwischenaufräumen). Anmeldung
+über die echte Login-Maske mit den Passwörtern aus `/root/kp-e2e-testkunde.txt` / `kp-testkunden.txt`
+(werden nie ausgegeben), Sitzungen in `/tmp/kp-e2e-{A,B}.json` (0600, gelten per Kopie auch für den
+Testbuild-Origin), Zustand `/tmp/kp-e2e-state.json`, Testmedien per ffmpeg (`testsrc2`/`mandelbrot`, Video
+8 s und 55 s 1080p). Node-Tests je Fix: **`api/tests/w_e2e_ablauf.test.js`** (Suite jetzt 41).
+
+*Gefunden und behoben:*
+- **v1.33.1 — Chat von der Website ging nie.** `mesajlarApi.sendMessage` postete seit v1.0 an
+  `/mesajlar/konusma/:id`, die Route heißt `/konusma/:id/mesaj` → jede Nachricht 404, `Messages.tsx` legte
+  den Text still zurück ins Feld. Pfad korrigiert, Sendefehler erscheint jetzt als Meldung (`role=alert`).
+- **v1.33.2 — Escape in einer offenen Combobox schloss die ganze Verkaufsmaske** (Eingaben weg): der
+  `document`-Keydown von `useGeriKapat` bekam die Taste mit. `Combobox` verbraucht Escape bei offener
+  Liste (`preventDefault` + `nativeEvent.stopPropagation`), `geriTusu` ignoriert `defaultPrevented`.
+- **v1.33.3 — İlan Onayı → Suchindex** (Backlog): `onayla` ruft `syncListing`, `reddet` `deleteListing`.
+- **v1.33.4 — Meldung nach dem Anlegen** stand immer auf „yayınlandı“, auch bei `moderasyonda`; jetzt
+  „İlanınız incelemeye alındı. Onaylandığında yayına girecek.“
+- **v1.33.5 — „Medya işleniyor…“ aktualisiert sich selbst** (Backlog): Detailseite fragt alle 5 s (max.
+  3 min) `GET /ilanlar/:uuid?medya=1` nach; `?medya=1` zählt keinen Aufruf (`goruntulenme`).
+- **v1.34.0 — İlanlarım: Status-Abzeichen + „Satıldı“.** Abzeichen İncelemede/Satıldı/Reddedildi/Yayında
+  değil/İşlemde (Styleguide-Farben), Knopf „Satıldı“ nur bei aktiven Inseraten mit `OnayModal`.
+  `PUT /ilanlar/:id/satildi` nimmt jetzt id **oder** uuid, nur `aktif`, entfernt aus Meili, audit
+  `ilan.satildi`, Ereignis `ilan_satildi` („Satıldı olarak işaretledi“ in der Kundenakte). Vorher gab es
+  keine Oberfläche dafür, und der Verkäufer sah nicht, dass ein Inserat in İlan Onayı wartet.
+- **v1.34.1 — „Değerlendirmelerim“** zeigte die neuesten Bewertungen der ganzen Plattform
+  (`/degerlendirme/son`), jetzt `/degerlendirme/kullanici/:id`.
+
+*Ablauf heute (Stand v1.34.1), alles grün:* Login beider Kunden; Inserat über die Maske und über Hızlı İlan
+(je 2 Fotos + 8-s-Video, Marke, Zustand) → KI 88/92 → aktiv, sofort in Meili; verdächtiges Inserat
+(Kapora/IBAN) → KI 3 → İlan Onayı → Freigabe durch Test-Admin → sofort im Index; Video-Jobs `tamam` mit
+Poster; Suche, Kategorie, Favorit, Detail, Mesaj Gönder, Chat in beide Richtungen, Pazarlık als Text,
+zwei Teklifs (Ablehnen/Annehmen im Panel), riskante Nachricht → `pesin_odeme`, Warnung beim Empfänger,
+Eintrag in Riskli Mesajlar und rot in der Akte; Satıldı; Zeitleisten A/B; Medya Motoru; Cookie-Banner,
+Rechtsseiten, Browser-Zurück (Hash-Ebene), keine Konsolenfehler, kein Überlauf.
+*Wo der Ablauf endet:* Nach „Kabul“ passiert nichts weiter — keine Benachrichtigung (es gibt im Frontend
+gar keine Bildirim-Anzeige, `bildirimler` wird für Teklif/Mesaj nicht geschrieben), kein Übergang in
+Treffen/Versand/Zahlung. „Hemen Al“ füllt nur den Chat vor. `islemler` (Treuhand) hat API-Routen
+(satin-al/kargo/onayla/itiraz), aber **keine Oberfläche** und keine Zahlung (iyzico nicht eingetragen);
+der Menüpunkt „Aldıklarım & Sattıklarım“ landet im Profil. Bewertung schreiben: nur API
+(`POST /degerlendirme`, Status `beklemede`), keine Oberfläche, keine Kopplung an einen Kauf.
+Teslimat-Abzeichen der Detailseite sind tot: Details liest `teslimat_elden/teslimat_kargo`, die API liefert
+`elden_teslim/kargo_var` — und die Maske fragt beides nicht ab (Standard true), deshalb nicht „repariert“.
+
+*Lehren für Agenten:* (1) `kp-suite-deploy.sh` deaktiviert den Test-Admin am Ende — vor UI-Admin-Schritten
+wieder aktivieren. (2) Mehrere Suite-Läufe in 15 min sprengen die Limits `/api/auth` (20) und Admin-Login
+(20): Admin-Limit setzt `pm2 reload kapbeni-admin` zurück, das API-Limit nur Warten. (3) API-Änderungen
+vor dem Ausrollen testen, ohne live zu schalten: zweite API-Instanz aus dem Arbeitsbaum
+`API_PORT=3911 node src/index.js` + Suite mit `TEST_API=http://127.0.0.1:3911/api`, Testbuild-Vorschau
+mit Proxy auf 3911 (Kopie von `kp-vorschau.js` auf :3906); beides danach per PID beenden. (4) Tests, die
+eine **bestehende** Konversation wiederverwenden, dürfen nur ihre eigenen Nachrichten löschen (siehe
+Vorfall unten). (5) Tabler-Icons stehen im Accessible Name — `getByRole(...,{name, exact:true})` trifft
+Knöpfe mit Icon nicht, `locator('button',{hasText})` nehmen; Karten vom Titel aus per
+`ancestor::div[.//button…][1]` ansteuern, nie den ersten Knopf im Raster.
+
+*Vorfälle:* (a) Beim Formatcheck der Zugangsdatei stand das Passwort des E2E-Kontos im Werkzeug-Protokoll
+des Agenten (Maskierung griff wegen Tab nicht) — **Passwort sofort rotiert** (bcrypt, beide Dateien
+aktualisiert), nirgends sonst verwendet. (b) Der erste Node-Test zu v1.33.1 löschte beim Aufräumen alle
+Nachrichten von Ayşe in der Seed-Konversation 14 — darunter die Seed-Nachricht „Tablet için 2.800 olur
+mu?“ samt Ereignis. Wiederhergestellt (gleicher Text, Zeit 2026-09-14 10:05 UTC, IP/Gerät aus dem
+Seed-Profil; neue Zeilen-id 58), Test korrigiert. (c) Vor v1.33.3 lief `pm2 reload kapbeni-admin`
+schon mit dem neuen Admin-Code (für den Gegentest), wenige Minuten vor dem Ausrollen.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1630,8 +1695,8 @@ Testbuild `/tmp/kp-k-dist` + `/root/kp-vorschau.js` (:3905) geprüft.
   (Betrugserkennung in Chats), `aciklamaOner`, `fiyatOner` in `services/ai.service.js`. Sie
   scheitern still über `guvenli()` — `mesajKontrol` meldet dadurch jede Nachricht als `temiz`.
   Umstellung auf Claude nach demselben Muster wie `moderasyonYap`.
-- Freigabe über „İlan Onayı" (`/admin/api/ilanlar/:id/onayla`) ruft `meiliSync` nicht auf —
-  ein freigegebenes Inserat erscheint erst nach dem nächtlichen Lauf in der Suche.
+- ~~Freigabe über „İlan Onayı" (`/admin/api/ilanlar/:id/onayla`) ruft `meiliSync` nicht auf~~ —
+  **erledigt v1.33.3** (Freigabe `syncListing`, Ablehnen `deleteListing`).
 - Der Claude-Schlüssel ist mit dem Konto des Betreibers verknüpft (`sk-ant-usr-…`). Falls bei
   der Erstellung eine Laufzeit gesetzt wurde, endet die Moderation an dem Tag still — danach
   geht jedes Inserat in die Warteschlange. Ablaufdatum in der Claude Console prüfen.
@@ -1660,8 +1725,22 @@ Testbuild `/tmp/kp-k-dist` + `/root/kp-vorschau.js` (:3905) geprüft.
   Admin gelten nur für neue Uploads (kein Neuberechnen des Bestands — das Original wird nicht
   aufbewahrt). AVIF nicht eingeführt. Off-Site-Speicher (R2) für Videos vorbereitet, aber nicht
   angebunden. Ein Video-Job, dessen Rohdatei nach 7 Tagen gelöscht wurde, kann nicht mehr
-  wiederholt werden (Kunde lädt neu). „Medya işleniyor…“ wird auf der Detailseite nicht von selbst
-  aktualisiert (Reload nötig).
+  wiederholt werden (Kunde lädt neu). ~~„Medya işleniyor…“ wird auf der Detailseite nicht von selbst
+  aktualisiert~~ — **erledigt v1.33.5** (Nachfrage alle 5 s, `?medya=1`).
+- **E2E-Test 08.11., offen (Abwicklung nach der Einigung):** Nach „Kabul“ eines Teklif geht es nicht
+  weiter — keine Benachrichtigung an Käufer/Verkäufer (Frontend hat **keine** Bildirim-Anzeige;
+  `bildirimler` wird für Mesaj/Teklif nicht geschrieben; Ungelesen-Zähler „Mesajlar“ kommt aus dem
+  Mock-State `chats`), kein Gegenangebot, kein „Teklif Yap“ im Chat (nur auf der Detailseite), kein
+  Treffen/Versand-Schritt. Treuhand `islemler` nur API (satin-al/kargo/onayla/itiraz), keine Oberfläche,
+  keine Zahlung (iyzico fehlt); „Aldıklarım & Sattıklarım“ führt ins Profil. Bewertung schreiben nur per
+  API (`beklemede`, Admin gibt frei), keine Oberfläche, nicht an einen Kauf/„Satıldı“ gekoppelt;
+  „Satıldı“ (v1.34) fragt nicht, an wen verkauft wurde. Lieferart (`elden_teslim`, `kargo_var`,
+  `kargo_ucreti`) fehlt in der Maske, die Detailseite liest falsche Feldnamen (`teslimat_*`).
+  „İkinci El“-Abzeichen in İlanlarım ist hartkodiert (`condition: 'İkinci El'` in `Dashboard.tsx`),
+  Herz auf eigenen Inseraten. Herz-Knopf der Detailseite ohne `aria-label`. Kein Melden/Blockieren
+  eines Nutzers im Chat, keine Alarme für gespeicherte Suchen (`kayitli_aramalar` ohne Job).
+  Feature-Vergleich mit letgo/sahibinden/dolap/Kleinanzeigen: Nachtbericht 08.11., Abschnitt
+  „E2E-Test (zwei Kunden)“.
 
 **Daten/Inhalt**
 - Zwei Zeilen in `ilan_fotograflar` (ids 11 und 13) enthalten in der Spalte `url` keinen
