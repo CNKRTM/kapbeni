@@ -396,6 +396,10 @@ function kpEinklappen(karte,fehlerSichtbar=()=>false){
   karte.addEventListener('focusin',auf);
   karte.addEventListener('focusout',spaeter);
   karte.addEventListener('click',auf);
+  // Santral Fill & Passwortmanager setzen Werte per Skript (input/change ohne Fokus): dann auch aufklappen.
+  // Die Felder bleiben eingeklappt im DOM (nur opacity 0), damit das Fuellen ueberhaupt greift.
+  karte.addEventListener('input',auf);
+  karte.addEventListener('change',auf);
   karte._aufklappen=auf;
   zu(true);
   if(fehlerSichtbar()) setTimeout(auf,300);

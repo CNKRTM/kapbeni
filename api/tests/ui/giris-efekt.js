@@ -20,6 +20,14 @@ const pruefe = (bed, text) => { if (!bed) fehler.push(text); console.log(`${bed 
 const groesse = (page, sel) => page.evaluate((s) => { const e = document.querySelector(s); if (!e) return null; const r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height), x: r.x, y: r.y }; }, sel);
 const COOKIE = { v: '1.0', zorunlu: true, analitik: false, pazarlama: false, zaman: new Date().toISOString() };
 
+// Wert setzen wie eine Erweiterung: nativer Setter (React merkt es), dann input + change; kein Fokus, keine Maus
+const SKRIPT_FUELLEN = (sel) => {
+  const f = document.querySelector(sel);
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(f, 'fill@test.kapbeni.com');
+  f.dispatchEvent(new Event('input', { bubbles: true }));
+  f.dispatchEvent(new Event('change', { bubbles: true }));
+};
+
 (async () => {
   fs.mkdirSync(AUS, { recursive: true });
   const browser = await chromium.launch({ executablePath: CHROME });
@@ -74,6 +82,16 @@ const COOKIE = { v: '1.0', zorunlu: true, analitik: false, pazarlama: false, zam
       await page.mouse.move(2, vp.height - 2); await page.waitForTimeout(1600);
       g = await groesse(page, '#login-card');
       pruefe(g && g.w > 300, `admin ${w}: mit Fehler im Link startet die Karte offen`);
+      // Skript-Füllen wie „Santral Fill“: eingeklappt bleiben die Felder im DOM, input klappt auf
+      await page.goto(ADMIN + '#/giris', { waitUntil: 'domcontentloaded' }); await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.mouse.move(2, vp.height - 2); await page.waitForTimeout(1500);
+      g = await groesse(page, '#login-card');
+      const imDom = await page.evaluate(() => { const f = document.getElementById('login-email'); return !!f && getComputedStyle(f).display !== 'none' && f.offsetParent !== null; });
+      pruefe(g && g.w === 170 && imDom, `admin ${w}: eingeklappt bleiben die Felder im DOM (${g && g.w}, ${imDom})`);
+      await page.evaluate(SKRIPT_FUELLEN, '#login-email');
+      await page.waitForTimeout(1100);
+      g = await groesse(page, '#login-card');
+      pruefe(g && g.w > 300 && await page.evaluate(() => !document.getElementById('login-card').contains(document.activeElement)), `admin ${w}: Skript-Füllen ohne Fokus klappt auf (${g && g.w})`);
       // Şifremi unuttum: Glaskarte ohne Einklappen
       await page.goto(ADMIN + '#/sifremi-unuttum', { waitUntil: 'domcontentloaded' }); await page.waitForTimeout(800);
       g = await groesse(page, '#login-card');
@@ -164,6 +182,18 @@ const COOKIE = { v: '1.0', zorunlu: true, analitik: false, pazarlama: false, zam
       pruefe(g && g.w > 300, `site ${w}: Registrierung startet offen`);
       await s.keyboard.press('Escape'); await s.waitForTimeout(600);
       pruefe(await s.locator('.kp-streifen').count() === 0, `site ${w}: Schließen räumt die Streifen ab`);
+      // Skript-Füllen wie „Santral Fill“ (neu laden, sonst merkt sich das Modal den Reiter „Kayıt Ol“)
+      await s.reload({ waitUntil: 'domcontentloaded' }); await s.waitForTimeout(2500);
+      giris =s.locator('button:visible', { hasText: /Giriş/ });
+      if (!(await giris.count())) { await s.locator('button[title="Menü"]').click(); await s.waitForTimeout(400); giris = s.locator('button:visible', { hasText: /^Profil$/ }); }
+      await giris.first().click(); await s.waitForTimeout(1200);
+      await s.mouse.move(2, vp.height - 2); await s.waitForTimeout(300);
+      g = await groesse(s, karte);
+      pruefe(g && g.w === 170 && await s.locator(`${karte} input[type="email"]`).count() === 1, `site ${w}: eingeklappt bleiben die Felder im DOM (${g && g.w})`);
+      await s.evaluate(SKRIPT_FUELLEN, `${karte} input[type="email"]`);
+      await s.waitForTimeout(1100);
+      g = await groesse(s, karte);
+      pruefe(g && g.w > 300, `site ${w}: Skript-Füllen ohne Fokus klappt auf (${g && g.w})`);
       await k.close();
     }
     pruefe(seitenfehler.length === 0, 'keine Seitenfehler' + (seitenfehler.length ? ': ' + seitenfehler.join(' | ').slice(0, 400) : ''));

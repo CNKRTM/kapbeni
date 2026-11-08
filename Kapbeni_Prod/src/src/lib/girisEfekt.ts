@@ -116,6 +116,10 @@ export function einklappen(karte: HTMLElement | null, fehler: () => boolean = ()
   karte.addEventListener('focusin', auf)
   karte.addEventListener('focusout', spaeter)
   karte.addEventListener('click', auf)
+  // Santral Fill und Passwortmanager setzen Werte per Skript (input/change ohne Fokus/Maus) — dann
+  // ebenfalls aufklappen. Die Felder bleiben eingeklappt im DOM (nur opacity 0), sonst greift das Füllen nicht.
+  karte.addEventListener('input', auf)
+  karte.addEventListener('change', auf)
   zu(true)
   if (fehler()) window.setTimeout(auf, 300)
   return {
@@ -128,6 +132,8 @@ export function einklappen(karte: HTMLElement | null, fehler: () => boolean = ()
       karte.removeEventListener('focusin', auf)
       karte.removeEventListener('focusout', spaeter)
       karte.removeEventListener('click', auf)
+      karte.removeEventListener('input', auf)
+      karte.removeEventListener('change', auf)
       karte.classList.remove('intro', 'reveal')
       karte.style.width = ''; karte.style.height = ''
     },

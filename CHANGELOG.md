@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.36.2 — 2026-11-08
+
+Login-Karte klappt auch bei Skript-Füllen (input/change, z. B. Santral Fill) auf
+
+- docs: CLAUDE.md – v1.36.1 Kunden-Login klappt auch am Handy ein
+
 ## 1.36.1 — 2026-11-08
 
 Kunden-Login klappt auch am Handy ein (Kachel unten mittig, Tippen öffnet das Bottom-Sheet)
