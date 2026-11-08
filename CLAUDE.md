@@ -1496,6 +1496,68 @@ UI-Prüfung gegen einen Testbuild (`vite build --outDir /tmp/kp-k-dist`, statisc
 `/root/kp-vorschau.js` auf 127.0.0.1:3905 mit /api-Weiterleitung) — so geht kein ungetesteter Build
 live. Hilfsskript `/root/kp-suite-deploy.sh "<Text>"`: Suite mit Exit-Code, nur bei 0 `deploy.sh minor`.
 
+**Arbeitspaket Rechtsseiten + Cookie-Banner (Auftragssammlung D, E) — v1.32 und v1.33.** Keine
+Migration, keine DB-Änderung (deshalb kein Freeze; `deploy.sh` sichert `dist`).
+
+*v1.32.0 — Rechtsseiten, Footer, Künye.* Die 15 Entwurfstexte (`kapbeni/legal-entwurf`, v1.0,
+**juristisch ungeprüft**) liegen als HTML-Fragmente unter `src/pages/legal/metinler/<slug>.html`,
+aufbereitet per Skript: interne Prüfmarken (`[HUKUKİ KONTROL …]`, `[TEKNİK KONTROL …]`,
+`[ÜRÜN KONTROLÜ …]`, `[POLİTİKA KARARI]`, `[… TEYİT EDİLECEK]`) **entfernt** — sie stehen nur noch im
+Original-Ordner und im Bericht; zwei, die eine Tabellenzelle allein füllten (yasakli-urunler:
+Havalı tüfekler, Ticari plakalar), durch „yayımlanmaz“ ersetzt. Firmendaten und Platzhalter sind
+`{{token}}` und werden zur Laufzeit **nur aus `data/sirket.ts`** gefüllt (`hukukMetinleri.ts`,
+`metniHazirla()`); leere SIRKET-Felder (vkn, vergiDairesi, mersis, kep, ticaretSicilNo, neu
+**`odaAdi`**, **`etbisKayitNo`**) erscheinen grau als „(eklenecek)“, Yürürlük ebenso (Konstante
+`YURURLUK_TARIHI`). Ein Text = eigener Chunk (`import.meta.glob(..., {query:'?raw'})`), Hauptbundle
+unverändert groß. Gemeinsame Komponente **`pages/legal/HukukSayfasi.tsx`**: „Geri Dön“ (v1.30-Logik
+`legalZurueck`), Hinweis „Taslak – hukuki inceleme bekleniyor“ solange `__KAPBENI_ORTAM__ !== 'prod'`,
+Karte nach §2, Typografie `.hukuk-metin` in `index.css` (Tabellen in `.hukuk-tablo` scrollen in der
+Karte, Inhaltsverzeichnis als Block `.hukuk-icindekiler`). **Anker:** Klicks auf `#abschnitt`
+werden abgefangen → `scrollIntoView`, Adresse per `replaceState` auf `#/<slug>?b=<id>` (kein
+neuer History-Eintrag; Direktlink/Reload springt zum Abschnitt). Routing: `navigation.ts`
+`legalSlug(hash)` ersetzt `LEGAL_HASHES` (15 Slugs + hakkimizda + nasil-calisir + Aliase,
+`?b=` gehört zur Seite); Aliase (`HUKUK_ALIAS`, z. B. `#/mesafeli-satis-sozlesmesi`,
+`#/on-bilgilendirme-formu`, `#/impressum`) leitet App.tsx per `location.replace` um. Alte
+Einzelseiten Kullanım/Gizlilik/Mesafeli/Çerez/İade/Güvenli Alışveriş **gelöscht** (gleiche Routen,
+neue Texte); Hakkımızda und Nasıl Çalışır bleiben. Rechtsseiten-Hintergrund jetzt `#f8f9fa` wie
+die übrige Seite. **Footer:** Spalten Kurumsal (Hakkımızda, Künye, Kurumsal Satıcı Sözleşmesi,
+Hak İhlali) / Yasal (9 Texte) / Paketler / Yardım (Nasıl Çalışır, Güvenli Alışveriş, İlan Verme
+Kuralları, Yasaklı Ürünler, ab v1.33 „Çerez Tercihleri“) / İletişim; Logo und Compendus-Block
+unverändert. ETBİS: „ETBİS'e Kayıtlıdır“ mit Logo erscheint erst, wenn `SIRKET.etbisKayitNo`
+gesetzt ist — bis dahin Platzhalter „ETBİS kaydı yapılıyor“ (Link auf Künye), kein QR. Fußzeile
+KVKK → `#/kvkk`, neu „Künye“. **Registrierung (AuthModal):** Links Üyelik Sözleşmesi, Kullanım
+Koşulları, KVKK, Açık Rıza (Kurumsal zusätzlich Kurumsal Satıcı Sözleşmesi), alle
+`target="_blank"` — das Fenster samt Eingaben bleibt im Ursprungstab, über einer Rechtsseite
+liegt nie ein Fenster (Backlog-Punkt K erledigt). Açık rıza nur verlinkt („İsteğe bağlı izinler“),
+nicht als mitangenommen formuliert. **Navbar:** Suchfeld `min-w-0` — vorher 4 px waagerechter
+Überlauf auf 390 px (bestand schon vor diesem Paket).
+
+*v1.33.0 — Cookie-Banner.* `lib/cerezOnay.ts` (Texte aus `cookie-banner-texte.json`, Knöpfe
+„Tümünü kabul et“ / „Reddet“ / „Tercihler“), `components/CerezBanner.tsx`, eingehängt in `main.tsx`
+neben `<App/>` (erscheint überall, auch auf Rechtsseiten). Speicher
+**`localStorage['kapbeni_cookie_consent']` = `{v:'1.0', zorunlu:true, analitik, pazarlama, zaman}`**;
+andere Version oder älter als 12 Monate → neu fragen (`CEREZ_SURUM` erhöhen, wenn ein Werkzeug
+dazukommt; Abfrage `analitikIzinli()`/`pazarlamaIzinli()`). Reddet und Kabul gleich groß und gleich
+gestaltet; am Handy sitzt die Karte über der BottomNav (`bottom-[72px]`), kein Overlay.
+Tercihler-Fenster mit Schaltern je Kategorie, eigener History-Eintrag (`useGeriKapat`), Footer
+„Çerez Tercihleri“ öffnet es (`cerezTercihleriniAc()`, Window-Event). Çerez Politikası korrigiert:
+Consent-Key genannt, `kapbeni_listings`/`kapbeni_chats` richtig beschrieben (Listen-/Chat-Zustand,
+werden beim Abmelden **nicht** gelöscht), Zeile Cloudflare Turnstile ergänzt, Knopfnamen angepasst.
+Zustimmung wird **nicht** serverseitig protokolliert (offen, s. Backlog).
+Tatsächliche Browser-Speicher der Website: `sg_token`, `kapbeni_cookie_consent`, `kapbeni_listings`,
+`kapbeni_chats` — keine Cookies, kein sessionStorage (Admin: `kp_sb_*`, `kp_akte_gorunum`).
+
+*Tests:* Suite 34/34 grün vor jedem Ausrollen. Neu **`api/tests/ui/rechtsseiten.js`** (ohne
+Anmeldung, kein Token, schreibt nichts; 390/1280 px): `routen` (15 Routen laden, keine `[`/`{{` im
+sichtbaren Text, Taslak-Hinweis, kein waagerechter Überlauf, Künye/Footer ETBİS-Platzhalter, kein
+QR, Alias), `toc` (Klick scrollt, `?b=`, kein History-Eintrag, Reload springt), `zurueck` (Footer →
+KVKK → Künye → Zurück → Zurück → Startseite; Direkteinstieg → Geri Dön), `banner` (erscheint,
+gleich große Knöpfe, verdeckt BottomNav nicht, Reddet/Kabul/Tercihler speichern das Format, Reload
+ohne Banner, Footer öffnet, Zurück schließt Tercihler, Versionswechsel fragt neu), `kayit` (4 Links,
+neuer Tab, Fenster bleibt); dazu Konsolenfehler je Lauf. `masken.js` und `zurueck.js` belegen die
+Cookie-Entscheidung im Init-Script vor (sonst fängt das Banner Klicks ab). Beide Stufen vorher gegen
+Testbuild `/tmp/kp-k-dist` + `/root/kp-vorschau.js` (:3905) geprüft.
+
 ---
 
 ## 4. Offene Punkte / Backlog
@@ -1583,8 +1645,16 @@ live. Hilfsskript `/root/kp-suite-deploy.sh "<Text>"`: Suite mit Exit-Code, nur 
   Offen (K): Fenster innerhalb von Dashboard, Settings und Discover (Filter-Panel am Handy) und
   `HizliIlanModal` (eigene Lösung aus v1.13) nutzen `useGeriKapat` noch nicht. Eine von Hand in die
   Adresszeile getippte App-Adresse (`#/ilan/…`) wird erst nach einem Reload ausgewertet — App.tsx
-  reagiert nur auf eigene History-Einträge (Altbestand). Ein Link mit `href` innerhalb eines offenen
-  Fensters (z. B. KVKK-Link im AuthModal) lässt das Fenster über der Rechtsseite offen.
+  reagiert nur auf eigene History-Einträge (Altbestand). ~~Ein Link mit `href` innerhalb eines offenen
+  Fensters (z. B. KVKK-Link im AuthModal) lässt das Fenster über der Rechtsseite offen~~ — **erledigt
+  v1.32** (Rechtslinks im AuthModal öffnen im neuen Tab).
+- Rechtsseiten/Cookie (D/E), offen: Texte sind **Entwurf** — juristische Prüfung (TR-Anwalt: KVKK,
+  6563, 6502) vor Prod; offene Prüfmarken siehe `kapbeni/legal-entwurf` (Original) bzw. Bericht
+  08.11. Fehlend in SIRKET: VKN, Vergi Dairesi, MERSİS, KEP, Ticaret sicil, Oda, ETBİS-Kayıt;
+  Yürürlük-Datum (`YURURLUK_TARIHI` in `hukukMetinleri.ts`). Zustimmungen (Cookie, KVKK, Açık
+  rıza) werden nicht serverseitig versioniert gespeichert; die Registrierung hat keine eigenen
+  Açık-rıza-Kästchen (İYS, KI-Auslandsübermittlung, Konum, KYC-Biometrie) — die Texte beschreiben
+  sie aber. Turnstile lädt Cloudflare (Ausland) — im Text als zwingend/Sicherheit geführt, prüfen.
 - Medien (I/J), offen: Bestandsvideos über 60 s bleiben in voller Länge (Inserat 14, 72 s);
   Option „automatisch auf 60 s kürzen statt ablehnen“ nicht gebaut. Geänderte Größen/Qualitäten im
   Admin gelten nur für neue Uploads (kein Neuberechnen des Bestands — das Original wird nicht
