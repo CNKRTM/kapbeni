@@ -13,6 +13,7 @@ router.post('/', authenticateToken, async (req, res) => {
     if (dup.rows.length > 0) return res.json({ ok: true, mesaj: 'Zaten şikayet edilmiş.' });
     await pool.query('INSERT INTO sikayet (ilan_uuid,sikayet_eden,sikayet_tipi,aciklama) VALUES ($1,$2,$3,$4)',
       [ilan_uuid, req.user.id, sikayet_tipi, aciklama]);
+    require('../lib/olay').kaydet(req, { userId: req.user.id, olay: 'sikayet', hedefTip: 'ilan', hedefId: ilan_uuid, detay: { sikayet_tipi } });
     const result = await pool.query(
       'UPDATE ilanlar SET sikayet_sayisi=COALESCE(sikayet_sayisi,0)+1 WHERE uuid=$1 RETURNING sikayet_sayisi, user_id, baslik',
       [ilan_uuid]);

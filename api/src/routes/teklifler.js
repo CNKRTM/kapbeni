@@ -23,6 +23,7 @@ router.post('/', authMiddleware, async (req,res)=>{
   const {rows}=await query(`INSERT INTO teklifler(ilan_id,alici_id,satici_id,teklif_fiyat,mesaj)
     VALUES($1,$2,$3,$4,$5) RETURNING *`,[il[0].id,req.user.id,il[0].user_id,teklif_fiyat,mesaj||null]);
   await auditLog('teklif.olustur','api',{userId:req.user.id,detay:{ilan:ilan_uuid,fiyat:teklif_fiyat}});
+  require('../lib/olay').kaydet(req,{userId:req.user.id,olay:'teklif',hedefTip:'teklif',hedefId:rows[0].id,detay:{ilan:ilan_uuid,fiyat:teklif_fiyat}});
   res.status(201).json(rows[0]);
 });
 router.put('/:id', authMiddleware, async (req,res)=>{

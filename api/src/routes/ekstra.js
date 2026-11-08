@@ -48,6 +48,7 @@ const hesapSilme = require('../lib/hesapSilme');
 async function hesapSilRoute(req, res) {
   try {
     const { silinecek_tarih } = await hesapSilme.silmeTalebi(req.user.id, { ip: req.ip });
+    require('../lib/olay').kaydet(req, { userId: req.user.id, olay: 'hesap_silme_talebi', hedefTip: 'user', hedefId: req.user.id, detay: { silinecek_tarih } });
     res.json({ ok: true, silinecek_tarih,
       mesaj: `Hesabınız ${new Date(silinecek_tarih).toLocaleDateString('tr-TR')} tarihinde silinecek. Bu tarihe kadar giriş yaparak iptal edebilirsiniz.` });
   } catch (e) {

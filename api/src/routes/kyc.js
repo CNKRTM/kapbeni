@@ -57,6 +57,7 @@ router.post('/submit', authMiddleware,
       // users tablosunu senkron tut (early-reject webhook göndermeyebilir)
       await durumYaz(req.user.id, data.durum, data.sebep);
       await auditLog('kyc.submit', 'api', { userId: req.user.id, detay: { durum: data.durum } });
+      require('../lib/olay').kaydet(req, { userId: req.user.id, olay: 'belge', hedefTip: 'kyc', detay: { tur: 'kimlik_selfie', durum: data.durum } });
       res.json(data);
     } catch (e) {
       res.status(502).json({ hata: 'KYC servisine ulaşılamadı: ' + e.message });

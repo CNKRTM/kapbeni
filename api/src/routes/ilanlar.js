@@ -12,6 +12,7 @@ const meiliSync = require('../lib/meiliSync');
 const ozellik = require('../lib/ozellik');
 const videoLib = require('../lib/video');
 const bildLib = require('../lib/bild');
+const olay = require('../lib/olay');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 
 // Bilder und Video kommen im selben Formular, brauchen aber verschiedene
@@ -450,6 +451,8 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
       ilan.video_url = v.url; ilan.has_video = true;
     }
     await auditLog('ilan.olustur', 'api', { userId: req.user.id, hedefTip:'ilan', hedefId: ilan.id, detay: { ai_sonuc } });
+    olay.kaydet(req, { userId: req.user.id, olay: 'ilan_olustur', hedefTip: 'ilan', hedefId: ilan.uuid,
+      detay: { baslik: ilan.baslik, fiyat: ilan.fiyat, ilan_durum, ai_skor: ai_sonuc.skor ?? null } });
     // Suchindex sofort nachziehen (samt Marke/Zustand), nicht erst beim naechsten Neustart.
     if (ilan_durum === 'aktif') await meiliSync.syncListing(ilan.uuid);
     res.status(201).json({ ilan, ai_sonuc, mesaj: ilan_durum==='aktif' ? 'İlanınız yayında!' : 'İlanınız incelemeye alındı' });
@@ -656,6 +659,7 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
 
     await meiliSync.syncListing(ilan.uuid);
     await auditLog('ilan.guncelle', 'api', { userId: req.user.id, hedefTip: 'ilan', hedefId: ilan.id });
+    olay.kaydet(req, { userId: req.user.id, olay: 'ilan_duzenle', hedefTip: 'ilan', hedefId: ilan.uuid, detay: { baslik: ilan.baslik } });
     const { rows: neu } = await query('SELECT * FROM ilanlar WHERE id=$1', [ilan.id]);
     const { rows: fotoNeu } = await query('SELECT * FROM ilan_fotograflar WHERE ilan_id=$1 ORDER BY sira', [ilan.id]);
     res.json({ ilan: { ...neu[0], fotograflar: fotoNeu }, mesaj: 'İlan güncellendi' });

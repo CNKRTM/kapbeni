@@ -2,6 +2,12 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.22.0 — 2026-11-08
+
+A: IP- und Ereignisprotokoll musteri_olaylari (GeoIP offline, User-Agent, 5651-Cron)
+
+- docs: CLAUDE.md – Chronik 2026-11-08 Admin-Paket (v1.15–v1.21: Sidebar, Entegrasyonlar, Login, Sperre, Şifremi unuttum, Turnstile, Google), Backlog
+
 ## 1.21.0 — 2026-11-08
 
 Google-Login vorbereitet (Admin + Kunde): Knöpfe sichtbar mit „Yakında“, OAuth-Start/Callback nur bei aktiver Integration, Admin nur für izinliler + vorhandenes Konto

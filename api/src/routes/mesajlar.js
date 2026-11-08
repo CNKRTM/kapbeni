@@ -69,6 +69,8 @@ router.post('/konusma/:id/mesaj', authMiddleware, async (req, res) => {
       'INSERT INTO mesajlar(konusma_id,gonderen_id,metin,tehlikeli,tehlike_turu) VALUES($1,$2,$3,$4,$5) RETURNING *',
       [req.params.id, req.user.id, metin, kontrol.tehlikeli, kontrol.tur]
     );
+    require('../lib/olay').kaydet(req, { userId: req.user.id, olay: 'mesaj', hedefTip: 'mesaj', hedefId: rows[0].id,
+      detay: { konusma_id: Number(req.params.id), tehlikeli: !!kontrol.tehlikeli, tur: kontrol.tur || null } });
     if (kontrol.tehlikeli) {
       await auditLog('mesaj.tehlikeli', 'api', { userId: req.user.id, hedefTip:'mesaj', hedefId: rows[0].id, detay: kontrol });
     }

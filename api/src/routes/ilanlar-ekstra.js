@@ -76,6 +76,8 @@ router.patch('/:id/fiyat', authMiddleware, async (req, res) => {
     const yeniFiyat = parseFloat(fiyat);
     if (!(yeniFiyat > 0)) return res.status(400).json({ error: 'Geçersiz fiyat' });
     await pool.query(`UPDATE ilanlar SET fiyat=$1 WHERE id=$2`, [yeniFiyat, ilan_id]);
+    require('../lib/olay').kaydet(req, { userId: user_id, olay: 'ilan_duzenle', hedefTip: 'ilan', hedefId: ilan_id,
+      detay: { baslik: ilan.baslik, fiyat_eski: eskiFiyat, fiyat_yeni: yeniFiyat } });
     if (yeniFiyat < eskiFiyat) {
       const { rows: takipciler } = await pool.query(`
         SELECT u.email, (u.ad || ' ' || COALESCE(u.soyad,'')) AS ad_soyad

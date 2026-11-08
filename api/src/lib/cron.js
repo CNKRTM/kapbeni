@@ -105,5 +105,16 @@ cron.schedule('30 3 * * *', async () => {
   }
 }, { timezone: 'Europe/Istanbul' });
 
+// Täglich 04:00: Aufbewahrungsfristen (5651 / Auftragssammlung A, G) — Ereignisprotokoll
+// musteri_olaylari nach 2 Jahren loeschen (lib/olay.js).
+cron.schedule('0 4 * * *', async () => {
+  try {
+    const n = await require('./olay').eskileriSil();
+    console.log(`[CRON] musteri_olaylari: ${n} Einträge älter als 2 Jahre gelöscht`);
+  } catch (err) {
+    console.error('[CRON] Olay-Aufbewahrung hatası:', err.message);
+  }
+}, { timezone: 'Europe/Istanbul' });
+
 console.log('[CRON] Scheduler başlatıldı (timezone: Europe/Istanbul)');
 module.exports = {};

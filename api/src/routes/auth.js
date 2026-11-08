@@ -7,6 +7,7 @@ require('dotenv').config({ path: '/etc/kapbeni.env' });
 const { telefonNormalize, vergiNoGecerli, TELEFON_HATA, VKN_HATA } = require('../lib/dogrula');
 const hesapSilme = require('../lib/hesapSilme');
 const entegrasyon = require('../lib/entegrasyon');
+const olay = require('../lib/olay');
 
 // Turnstile (Admin → Entegrasyonlar): live = siteverify, test/disabled = keine Pruefung.
 async function turnstileKontrol(req, res) {
@@ -50,7 +51,7 @@ async function kayitOlustur(req, res, ekstra = {}) {
   // musteri_no (KP-JJJJ-NNNNNNN) vergibt der DB-Trigger trg_musteri_no beim INSERT.
   await auditLog('user.kayit', 'api', { userId: rows[0].id, ip: req.ip, detay: ekstra.hesap_tipi ? { hesap_tipi: ekstra.hesap_tipi } : undefined });
   await query("UPDATE users SET kullanici_no='SG-'||LPAD(id::TEXT,8,'0') WHERE id=$1",[rows[0].id]);
-  girisKaydet(query, rows[0].id, req, true);
+  girisKaydet(query, rows[0].id, req, true, 'kayit');
   res.status(201).json({ token: token(rows[0]),
     user: { id: rows[0].id, email: mail, ad, soyad, musteri_no: rows[0].musteri_no || null } });
 }
@@ -94,11 +95,17 @@ router.post('/giris', async (req, res) => {
     const { email, password } = req.body;
     const { rows } = await query('SELECT * FROM users WHERE lower(email)=lower($1)', [String(email || '').trim()]);
     if (!rows[0] || rows[0].durum === 'silindi') return res.status(401).json({ hata: 'Kullanıcı bulunamadı' });
+    // Fehlversuche ins Ereignisprotokoll (nur bei bekanntem Konto, sonst ohne Bezug)
+    const fehlversuch = (sebep) => olay.kaydet(req, { userId: rows[0].id, olay: 'giris_basarisiz', detay: { sebep } });
     // silme_bekliyor darf sich anmelden — die Anmeldung widerruft den Antrag (s. u.).
-    if (!['aktif', 'silme_bekliyor'].includes(rows[0].durum))
+    if (!['aktif', 'silme_bekliyor'].includes(rows[0].durum)) {
+      fehlversuch('hesap_' + rows[0].durum);
       return res.status(403).json({ hata: 'Hesabınız askıya alındı', sebep: rows[0].ban_sebebi });
-    if (!await bcrypt.compare(password, rows[0].password_hash))
+    }
+    if (!await bcrypt.compare(password, rows[0].password_hash)) {
+      fehlversuch('sifre');
       return res.status(401).json({ hata: 'Şifre hatalı' });
+    }
     // Auftragssammlung H: Anmeldung innerhalb der 30 Tage hebt die Loeschung auf.
     let bilgi = null;
     if (rows[0].durum === 'silme_bekliyor' && await hesapSilme.silmeIptal(rows[0].id, { ip: req.ip })) {
