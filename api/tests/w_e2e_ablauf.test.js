@@ -43,4 +43,12 @@ test('v1.33.1 Chat: Website-Pfad = API-Route, Nachricht wird gespeichert', async
   }
 });
 
+test('v1.33.2 Combobox: Escape bei offener Liste wird nicht an das Fenster weitergereicht', () => {
+  const cb = fs.readFileSync(`${FRONT}/components/Combobox.tsx`, 'utf8');
+  assert.match(cb, /if \(offen\) \{ e\.preventDefault\(\); e\.nativeEvent\.stopPropagation\(\) \}/);
+  const gt = fs.readFileSync(`${FRONT}/lib/geriTusu.ts`, 'utf8');
+  assert.match(gt, /if \(e\.defaultPrevented\) return/);
+  // Verhalten im Browser: api/tests/ui/e2e.js Schritt „escape“ (390/1280 px)
+});
+
 module.exports = { fremdesTestinserat, KAEUFER, FRONT };

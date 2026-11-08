@@ -176,6 +176,25 @@ const SCHRITTE = {
     pruefe(await ueberlauf(page) <= 0, 'hizli: kein waagerechter Überlauf (390 px)');
     await ctx.close();
   },
+  // v1.33.2: Escape in einer offenen Combobox schließt nur die Liste, nicht die Verkaufsmaske.
+  async escape() {
+    for (const vp of [MOBIL, DESKTOP]) {
+      const { ctx, page } = await seite('A', vp);
+      await page.goto(`${BASIS}/#/`); await warte(page, 1500);
+      await satKnopf(page).click(); await warte(page, 900);
+      await page.getByPlaceholder(/Tertemiz Çiziksiz/).fill('Escape-Test');
+      const il = page.getByRole('combobox', { name: 'Şehir' }).first();
+      await il.click(); await il.fill('İst'); await warte(page, 300);
+      const listeVorher = await page.getByRole('listbox').count();
+      await page.keyboard.press('Escape'); await warte(page, 500);
+      const maske = await page.getByText('Hemen İlan Verin').count() > 0;
+      pruefe(listeVorher > 0 && maske && await page.getByRole('listbox').count() === 0, `escape/${vp.width}: 1. Escape schließt nur die Liste, Maske bleibt`);
+      pruefe(await page.getByPlaceholder(/Tertemiz Çiziksiz/).inputValue() === 'Escape-Test', `escape/${vp.width}: Eingaben bleiben erhalten`);
+      await page.keyboard.press('Escape'); await warte(page, 700);
+      pruefe(await page.getByText('Hemen İlan Verin').count() === 0, `escape/${vp.width}: 2. Escape schließt die Maske`);
+      await ctx.close();
+    }
+  },
   // 1d) Inserate in İlan Onayı → mit dem Test-Admin freigeben; danach Suchindex prüfen.
   async moderasyon() {
     // Drittes Inserat (über die API als A) mit Kapora/IBAN-Hinweis — soll in die Warteschlange.

@@ -94,6 +94,8 @@ export function useGeriKapat(acik: boolean, kapat: () => void, { escape = false 
     // Escape schliesst nur das OBERSTE Fenster (z. B. die Bestaetigung ueber der Verkaufsmaske)
     const taste = (e: KeyboardEvent) => {
       if (!escape || e.key !== 'Escape' || schluessel.current !== k) return
+      // Ein inneres Element (z. B. offene Combobox-Liste) hat Escape schon verbraucht
+      if (e.defaultPrevented) return
       const ov = offeneOverlays()
       if (ov.length && ov[ov.length - 1] !== k) return
       e.stopPropagation()

@@ -96,7 +96,14 @@ export default function Combobox({
           if (e.key === 'ArrowDown') { e.preventDefault(); setOffen(true); setAktiv((a) => Math.min(a + 1, treffer.length - 1)) }
           else if (e.key === 'ArrowUp') { e.preventDefault(); setAktiv((a) => Math.max(a - 1, 0)) }
           else if (e.key === 'Enter' && offen && aktiv >= 0 && treffer[aktiv]) { e.preventDefault(); waehle(treffer[aktiv]) }
-          else if (e.key === 'Escape' || e.key === 'Tab') setOffen(false)
+          else if (e.key === 'Escape') {
+            // Offene Liste: Escape schliesst NUR die Liste. Ohne das erreichte die Taste den
+            // Escape-Handler des umgebenden Fensters (useGeriKapat) — in der Verkaufsmaske
+            // war dann die ganze Maske samt Eingaben weg (E2E-Test v1.33.2).
+            if (offen) { e.preventDefault(); e.nativeEvent.stopPropagation() }
+            setOffen(false)
+          }
+          else if (e.key === 'Tab') setOffen(false)
         }}
         className={className + ' pr-9'}
         style={style}

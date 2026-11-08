@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.33.2 — 2026-11-08
+
+E2E-Fix: Escape in offener Combobox schloss die ganze Verkaufsmaske (Eingaben weg)
+
 ## 1.33.1 — 2026-11-08
 
 E2E-Fix: Chat-Nachrichten von der Website liefen in 404 (falscher Pfad), Sendefehler sichtbar; E2E-Testskript
