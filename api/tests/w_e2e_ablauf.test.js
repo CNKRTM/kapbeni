@@ -28,17 +28,24 @@ test('v1.33.1 Chat: Website-Pfad = API-Route, Nachricht wird gespeichert', async
   const vorher = (await q('SELECT id FROM konusmalar WHERE ilan_id=$1 AND alici_id=$2', [il.id, KAEUFER])).rows[0];
   const k = await api('POST', '/mesajlar/konusma', { token: t, body: { ilan_uuid: il.uuid } });
   assert.strictEqual(k.status, 200);
+  let mesajId = null;
   try {
     // alter Pfad existiert nicht (Gegenprobe), neuer speichert
     assert.strictEqual((await api('POST', `/mesajlar/konusma/${k.body.id}`, { token: t, body: { metin: 'x' } })).status, 404);
     const m = await api('POST', `/mesajlar/konusma/${k.body.id}/mesaj`, { token: t, body: { metin: 'Merhaba, ürün duruyor mu? (Test)' } });
+    mesajId = m.body && m.body.mesaj && m.body.mesaj.id;
     assert.strictEqual(m.status, 200);
     assert.ok(m.body.mesaj && m.body.mesaj.id);
     const g = await api('GET', `/mesajlar/konusma/${k.body.id}`, { token: t });
     assert.ok(g.body.some((x) => x.id === m.body.mesaj.id));
   } finally {
-    await q('DELETE FROM mesajlar WHERE konusma_id=$1 AND gonderen_id=$2', [k.body.id, KAEUFER]);
-    await q("DELETE FROM musteri_olaylari WHERE user_id=$1 AND olay='mesaj' AND (detay->>'konusma_id')::int=$2", [KAEUFER, k.body.id]);
+    // NUR die eigene Testnachricht entfernen — die Konversation kann eine Seed-Konversation
+    // mit Seed-Nachrichten sein (frühere Fassung löschte alle Nachrichten des Käufers darin)
+    if (mesajId) {
+      await q('DELETE FROM mesajlar WHERE id=$1 AND gonderen_id=$2', [mesajId, KAEUFER]);
+      await q("DELETE FROM musteri_olaylari WHERE user_id=$1 AND olay='mesaj' AND hedef_id=$2", [KAEUFER, String(mesajId)]);
+      await q("DELETE FROM audit_log WHERE olay='mesaj.tehlikeli' AND hedef_id::text=$1::text", [mesajId]).catch(() => {});
+    }
     if (!vorher) await q('DELETE FROM konusmalar WHERE id=$1', [k.body.id]);
   }
 });

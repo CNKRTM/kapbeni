@@ -424,12 +424,16 @@ const SCHRITTE = {
     // A: „Satıldı“ im Panel?
     ({ ctx, page } = await seite('A', DESKTOP));
     await page.goto(`${BASIS}/#/panel/ilanlarim`); await page.reload(); await warte(page, 2000);
-    const satildi = page.getByRole('button', { name: /Satıldı/i });
-    pruefe(await satildi.count() > 0, 'abwicklung: Knopf „Satıldı“ für A in İlanlarım');
-    if (await satildi.count()) {
-      await satildi.first().click(); await warte(page, 600);
-      const ok = page.getByRole('button', { name: /Evet|Onayla|Satıldı olarak işaretle/ });
-      if (await ok.count()) { await ok.last().click(); await warte(page, 1500); }
+    // Genau die Karte dieses Inserats: vom Titel aus zum naechsten Vorfahren mit „Satıldı“-Knopf
+    // (nie den ersten Knopf im Raster — Lehre aus dem Vorfall 12.09.)
+    const karte = page.getByText('Sony WH-1000XM4 Kablosuz Kulaklık', { exact: false }).first()
+      .locator('xpath=ancestor::div[.//button[normalize-space()="Satıldı"]][1]');
+    const satildi = karte.locator('button', { hasText: 'Satıldı' });
+    pruefe(await satildi.count() === 1, 'abwicklung: Knopf „Satıldı“ für A in İlanlarım (an der richtigen Karte)');
+    if (await satildi.count() === 1) {
+      await satildi.click(); await warte(page, 700);
+      await foto(page, 'satildi-onay');
+      await page.getByRole('button', { name: 'Evet, satıldı' }).click(); await warte(page, 1800);
       const d = (await q('SELECT ilan_durum FROM ilanlar WHERE id=$1', [il.id])).rows[0].ilan_durum;
       pruefe(d === 'satildi', `abwicklung: Inserat steht auf ${d}`);
       await warte(page, 1500);
