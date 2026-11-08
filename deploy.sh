@@ -147,7 +147,7 @@ grep -q "\"$NEU\"" "$FRONTEND"/dist/assets/index-*.js 2>/dev/null \
 
 # ── 6) Dienste neu laden ──────────────────────────────────────────────────
 echo "6/7  Dienste"
-for d in kapbeni-api kapbeni-admin; do
+for d in kapbeni-api kapbeni-admin kapbeni-media; do
   pm2 reload "$d" --update-env >/dev/null 2>&1 && grau "     $d neu geladen" || rot "     $d liess sich nicht neu laden"
 done
 # Nach einem reload braucht der Dienst einen Moment, bis der Port wieder
@@ -163,7 +163,7 @@ pruefe() {
   printf '     %-38s HTTP %s\n' "$ziel" "$code"
   [ "$code" = "200" ]
 }
-for z in "http://127.0.0.1:3001/api/health" "http://127.0.0.1:3002/admin" "http://127.0.0.1:3003/"; do
+for z in "http://127.0.0.1:3001/api/health" "http://127.0.0.1:3002/admin" "http://127.0.0.1:3003/" "http://127.0.0.1:3901/saglik"; do
   pruefe "$z" || { rot "     $z antwortet nicht mit 200 — Abbruch vor dem Push."; exit 1; }
 done
 

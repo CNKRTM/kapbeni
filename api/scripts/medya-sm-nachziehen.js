@@ -21,9 +21,37 @@ const bild = require('../src/lib/bild');
 const medyaAyar = require('../src/lib/medyaAyar');
 
 const UYGULA = process.argv.includes('--uygula');
+const VIDEO = process.argv.includes('--video');
 const DIR = path.join(process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads', 'ilanlar');
 
+// --video (v1.28): Bestandsvideos ohne Poster als Job an kapbeni-media geben
+// (immer umrechnen: 720p H.264 CRF 28, AAC 96k, faststart + Poster). Die Datei
+// wird dafuer in das Engine-Verzeichnis KOPIERT; das bisherige Video bleibt
+// sichtbar, bis die Engine das neue eintraegt und das alte abraeumt.
+async function videosNachziehen() {
+  const medyaIs = require('../src/lib/medyaIs');
+  const { rows } = await query(`SELECT id, uuid, user_id, video_url FROM ilanlar
+     WHERE video_url LIKE '/uploads/ilanlar/%' AND video_poster_url IS NULL AND COALESCE(video_durum,'tamam') <> 'isleniyor' ORDER BY id`);
+  console.log(`Videos ohne Poster: ${rows.length}`);
+  for (const r of rows) {
+    const quelle = path.join(DIR, path.basename(r.video_url));
+    if (!fs.existsSync(quelle)) { console.log('  Datei fehlt:', r.video_url); continue; }
+    console.log(`  ${UYGULA ? 'Job fuer' : 'wuerde Job anlegen fuer'} ilan ${r.id} (${(fs.statSync(quelle).size / 1048576).toFixed(1)} MB)`);
+    if (!UYGULA) continue;
+    const kopie = path.join(medyaIs.TMP_MEDYA(), `${r.uuid}_bestand_${Date.now()}.mp4`);
+    fs.mkdirSync(medyaIs.TMP_MEDYA(), { recursive: true });
+    fs.copyFileSync(quelle, kopie);
+    const { rows: j } = await query(`INSERT INTO medya_isleri(tip,durum,ilan_id,ilan_uuid,user_id,kaynak,boyut_once,detay)
+       VALUES('video','bekliyor',$1,$2,$3,$4,$5,'{"bestand":true}') RETURNING id`, [r.id, r.uuid, r.user_id, kopie, fs.statSync(kopie).size]);
+    await query(`UPDATE ilanlar SET video_is_id=$1, video_durum='isleniyor' WHERE id=$2`, [j[0].id, r.id]);
+  }
+  if (UYGULA) medyaIs.motorWecken(); else console.log('Trockenlauf — nichts geschrieben. Mit --video --uygula ausfuehren.');
+  await new Promise((r) => setTimeout(r, 300));
+  await pool.end();
+}
+
 (async () => {
+  if (VIDEO) return videosNachziehen();
   const { rows } = await query(
     `SELECT f.id, f.url, f.ilan_id, i.uuid, i.user_id FROM ilan_fotograflar f JOIN ilanlar i ON i.id=f.ilan_id
       WHERE f.url LIKE '/uploads/ilanlar/%' ORDER BY f.id`);

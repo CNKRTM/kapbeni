@@ -18,8 +18,23 @@ const FOTO_BYTE = 10 * 1024 * 1024
 // VIDEO_ZIEL_BYTE rechnet er auf 720p herunter, statt es abzulehnen.
 // Dieselben Zahlen stehen in api/src/routes/ilanlar.js und api/src/lib/video.js.
 const VIDEO_BYTE = 100 * 1024 * 1024
-const VIDEO_ZIEL_BYTE = 20 * 1024 * 1024
+// (VIDEO_ZIEL_BYTE entfallen: seit v1.28 wird jedes Video umgerechnet.)
 const VIDEO_TYPEN = ['video/mp4', 'video/webm', 'video/quicktime']
+// Hoechstens 60 s (Auftragssammlung J). Der Server prueft per ffprobe erneut.
+const VIDEO_MAX_SN = 60
+
+/** Laenge eines gewaehlten Videos ueber HTML5 lesen; NaN, wenn der Browser
+ *  das Format nicht kennt (z. B. MOV in Firefox) — dann entscheidet der Server. */
+function videoDauer(url: string): Promise<number> {
+  return new Promise((fertig) => {
+    const v = document.createElement('video')
+    v.preload = 'metadata'
+    const uhr = window.setTimeout(() => fertig(NaN), 8000)
+    v.onloadedmetadata = () => { window.clearTimeout(uhr); fertig(v.duration) }
+    v.onerror = () => { window.clearTimeout(uhr); fertig(NaN) }
+    v.src = url
+  })
+}
 
 /**
  * Ein Bild in der Maske ist entweder ein Bestandsbild (liegt schon auf dem
@@ -304,7 +319,7 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
     )
   }
 
-  const handleVideo = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleVideo = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = (e.target.files || [])[0]
     if (e.target) e.target.value = ''
     if (!f) return
@@ -316,17 +331,22 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
       setErrors((p) => ({ ...p, video: `Video en fazla 100MB olabilir (seçilen: ${(f.size / 1048576).toFixed(1)}MB).` }))
       return
     }
+    const neueUrl = URL.createObjectURL(f)
+    const dauer = await videoDauer(neueUrl)
+    if (Number.isFinite(dauer) && dauer > VIDEO_MAX_SN + 0.5) {
+      URL.revokeObjectURL(neueUrl)
+      setErrors((p) => ({ ...p, video: `Video en fazla ${VIDEO_MAX_SN} saniye olabilir (seçilen: ${Math.round(dauer)} sn). Lütfen videoyu kısaltın.` }))
+      return
+    }
     setErrors((p) => { const { video, ...rest } = p; return rest })
-    // Kein Fehler, sondern ein Hinweis: das Video wird beim Hochladen
-    // verkleinert. Frueher stand hier eine Ablehnung.
-    setVideoHinweis(f.size > VIDEO_ZIEL_BYTE
-      ? `Video ${(f.size / 1048576).toFixed(0)}MB — yüklenirken otomatik olarak küçültülecek. Bu biraz sürebilir.`
-      : null)
+    // Seit v1.28 wird jedes Video nach dem Speichern von der Medien-Engine
+    // umgerechnet (720p) — das Inserat erscheint sofort, das Video kurz danach.
+    setVideoHinweis('Video kaydettikten sonra otomatik olarak işlenir (720p). Bu sırada ilanda „Medya işleniyor…" görünür.')
     // Nur eigene Objekt-URLs freigeben; eine Server-URL darf nicht widerrufen werden.
     if (videoVorschau && !videoBestand) URL.revokeObjectURL(videoVorschau)
     setVideo(f)
     setVideoBestand(false)
-    setVideoVorschau(URL.createObjectURL(f))
+    setVideoVorschau(neueUrl)
   }
 
   const removeVideo = () => {
@@ -579,7 +599,7 @@ export default function SellModal({ onClose, onAddListing, vorgabe, onSave, onDe
                 <span className="text-[11px] text-gray-500">Video ekle</span>
               </button>
             )}
-            <p className="text-[11px] text-gray-400 mt-2">1 video, en fazla 100MB. MP4, WebM veya MOV. Büyük videolar otomatik küçültülür.</p>
+            <p className="text-[11px] text-gray-400 mt-2">1 video, en fazla 60 saniye ve 100MB. MP4, WebM veya MOV. Her video otomatik olarak küçültülür.</p>
             {videoHinweis && (
               <p className="text-[11px] text-secondary mt-1 flex items-start gap-1">
                 <i className="ti ti-info-circle" style={{ fontSize: 13, marginTop: 1 }} />

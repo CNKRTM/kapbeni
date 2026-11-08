@@ -9,6 +9,7 @@ import BenzerIlanlar from '../components/BenzerIlanlar'
 import PaylasMenu from '../components/PaylasMenu'
 import OnayModal from '../components/OnayModal'
 import { UyelikChip, MusteriNo } from '../components/UyeRozeti'
+import IlanResim, { MedyaIsleniyor } from '../components/IlanResim'
 
 interface Props {
   listing: Listing
@@ -80,7 +81,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
   const [mapOpen, setMapOpen] = useState(false)
   // Galerie: Fotos und optionales Video kommen aus derselben Detail-Antwort,
   // die weiter unten ohnehin geholt wird — keine zusaetzliche Anfrage.
-  const [medien, setMedien] = useState<{ fotos: string[]; video: string | null }>({ fotos: [], video: null })
+  // poster/isleniyor/hata: Medya Motoru (v1.28) — Video wird asynchron umgerechnet.
+  const [medien, setMedien] = useState<{ fotos: string[]; video: string | null; poster?: string | null; isleniyor?: boolean; hata?: string | null }>({ fotos: [], video: null })
   const [aktiv, setAktiv] = useState(0)
   const [lightbox, setLightbox] = useState(false)
 
@@ -96,6 +98,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
     return [
       ...fotos.map((u) => ({ art: 'foto' as const, url: u })),
       ...(medien.video ? [{ art: 'video' as const, url: medien.video }] : []),
+      // Video noch in der Engine: eigene Station „Medya işleniyor…" statt eines kaputten Players.
+      ...(!medien.video && medien.isleniyor ? [{ art: 'isleniyor' as const, url: '#medya-isleniyor' }] : []),
     ]
   }, [medien, listing.image])
 
@@ -188,7 +192,8 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
           .sort((a: any, b: any) => (b.ana_foto ? 1 : 0) - (a.ana_foto ? 1 : 0) || (a.sira ?? 0) - (b.sira ?? 0))
           .map((f: any) => f.url)
           .filter(Boolean)
-        setMedien({ fotos, video: data.video_url || null })
+        setMedien({ fotos, video: data.video_url || null, poster: data.video_poster_url || null,
+          isleniyor: data.video_durum === 'isleniyor', hata: data.video_durum === 'hata' ? (data.video_hata || 'Video işlenemedi.') : null })
         if (user) setIsOwner(data.satici_id === user.id || data.user_id === user.id)
       })
       .catch(() => {})
@@ -342,8 +347,10 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
             onTouchStart={wischAnfang}
             onTouchEnd={wischEnde}
           >
-            {jetzt?.art === 'video' ? (
-              <video src={jetzt.url} controls playsInline className="w-full h-full object-contain bg-black" />
+            {jetzt?.art === 'isleniyor' ? (
+              <MedyaIsleniyor />
+            ) : jetzt?.art === 'video' ? (
+              <video src={jetzt.url} poster={medien.poster || undefined} preload="metadata" controls playsInline className="w-full h-full object-contain bg-black" />
             ) : (
               // Nur Fotos oeffnen die Lightbox. Beim Video wuerde der Klick mit
               // den eingebauten Bedienelementen kollidieren.
@@ -394,15 +401,24 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
                     idx === i ? 'border-primary' : 'border-gray-100 hover:border-gray-300'
                   }`}
                 >
-                  {st.art === 'video' ? (
-                    <span className="w-full h-full bg-gray-900 flex items-center justify-center">
-                      <i className="ti ti-player-play-filled" style={{ color: '#fff', fontSize: 18 }} />
+                  {st.art === 'isleniyor' ? (
+                    <MedyaIsleniyor klein />
+                  ) : st.art === 'video' ? (
+                    <span className="w-full h-full bg-gray-900 flex items-center justify-center relative">
+                      {medien.poster && <img src={medien.poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80" />}
+                      <i className="ti ti-player-play-filled relative" style={{ color: '#fff', fontSize: 18 }} />
                     </span>
                   ) : (
-                    <img src={st.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <IlanResim url={st.url} sizes="64px" className="w-full h-full object-cover" />
                   )}
                 </button>
               ))}
+            </div>
+          )}
+          {medien.hata && isOwner && (
+            <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-sm text-red-700 flex gap-2 items-start">
+              <i className="ti ti-alert-triangle text-lg leading-none" />
+              <span><strong>Video işlenemedi.</strong> {medien.hata} İlanınız videosuz yayında; düzenleyerek yeni bir video yükleyebilirsiniz.</span>
             </div>
           )}
           {/* İlan Özellikleri */}
@@ -699,8 +715,10 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
             onTouchStart={wischAnfang}
             onTouchEnd={wischEnde}
           >
-            {jetzt.art === 'video' ? (
-              <video src={jetzt.url} controls playsInline autoPlay className="max-w-full max-h-full" />
+            {jetzt.art === 'isleniyor' ? (
+              <div className="w-64 h-64 rounded-2xl overflow-hidden"><MedyaIsleniyor /></div>
+            ) : jetzt.art === 'video' ? (
+              <video src={jetzt.url} poster={medien.poster || undefined} controls playsInline autoPlay className="max-w-full max-h-full" />
             ) : (
               <img
                 src={jetzt.url}
@@ -747,12 +765,15 @@ export default function Details({ listing, onBack, onToggleFavorite, onStartChat
                     idx === i ? 'border-primary' : 'border-white/25 hover:border-white/60'
                   }`}
                 >
-                  {st.art === 'video' ? (
-                    <span className="w-full h-full bg-gray-900 flex items-center justify-center">
-                      <i className="ti ti-player-play-filled" style={{ color: '#fff', fontSize: 16 }} />
+                  {st.art === 'isleniyor' ? (
+                    <MedyaIsleniyor klein />
+                  ) : st.art === 'video' ? (
+                    <span className="w-full h-full bg-gray-900 flex items-center justify-center relative">
+                      {medien.poster && <img src={medien.poster} alt="" className="absolute inset-0 w-full h-full object-cover opacity-80" />}
+                      <i className="ti ti-player-play-filled relative" style={{ color: '#fff', fontSize: 16 }} />
                     </span>
                   ) : (
-                    <img src={st.url} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <IlanResim url={st.url} sizes="56px" className="w-full h-full object-cover" />
                   )}
                 </button>
               ))}

@@ -80,6 +80,9 @@ async function snapshotYaz(db, snap, { grund, grundDetay = null, kaynak, adminId
   };
   const bilder = snap.fotos.map(eintrag);
   const video = i.video_url ? eintrag(i.video_url) : null;
+  // Posterbild (v1.28) geht still mit ins Archiv, wie die _sm-Variante.
+  const relP = i.video_poster_url ? arsivPfad(i.video_poster_url, i.uuid, i.musteri_no) : null;
+  if (relP) dateien.push([path.join(ILAN_DIR(), path.basename(i.video_poster_url)), path.join(ARSIV(), relP)]);
   const marka = (snap.ozellikler.find((o) => o.alan_adi === 'marka') || {}).deger || null;
   const { rows } = await db.query(
     `INSERT INTO ilan_arsiv(ilan_uuid,ilan_id,ilan_no,user_id,musteri_no,baslik,aciklama,fiyat,kategori_id,kategori_ad,marka,durum,
@@ -178,7 +181,7 @@ async function kontoArsivle(userId) {
     if (!snap) continue;
     const arsiv = await snapshotYaz({ query }, snap, { grund: 'hesap_kapatildi', kaynak: 'cron' });
     await query('DELETE FROM ilan_fotograflar WHERE ilan_id=$1', [id]);
-    await query('UPDATE ilanlar SET video_url=NULL, has_video=false WHERE id=$1', [id]);
+    await query('UPDATE ilanlar SET video_url=NULL, has_video=false, video_poster_url=NULL, video_durum=NULL, video_is_id=NULL WHERE id=$1', [id]);
     dateienUebertragen(arsiv.dateien, { kopieren: false });
     n++;
   }

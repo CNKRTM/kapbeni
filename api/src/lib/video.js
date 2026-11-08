@@ -90,7 +90,7 @@ function pruefen(pfad) {
  * Video mit ffmpeg auf Zielgröße herunterrechnen.
  * Wirft bei Fehler oder Zeitüberschreitung; die Zieldatei wird dann entfernt.
  */
-async function umrechnen(quelle, ziel) {
+async function umrechnen(quelle, ziel, { hoehe = HOEHE, crf = CRF, sesKbit = 96 } = {}) {
   await platzNehmen();
   const start = Date.now();
   try {
@@ -98,9 +98,13 @@ async function umrechnen(quelle, ziel) {
       const p = spawn('ffmpeg', [
         '-i', quelle,
         // -2 statt -1: die Breite muss gerade sein, sonst lehnt libx264 ab.
-        '-vf', `scale=-2:${HOEHE}`,
-        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(CRF),
-        '-c:a', 'aac', '-b:a', '96k',
+        // min(): kleinere Videos werden nicht hochgerechnet (v1.28).
+        '-vf', `scale=-2:'min(${hoehe},ih)'`,
+        // yuv420p: sonst bleiben z. B. 4:2:2-Quellen 4:2:2 und spielen in
+        // Safari/iOS nicht ab.
+        '-pix_fmt', 'yuv420p',
+        '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf),
+        '-c:a', 'aac', '-b:a', `${sesKbit}k`,
         // Der Index wandert an den Dateianfang, damit das Video sofort startet
         // und nicht erst vollständig geladen sein muss.
         '-movflags', '+faststart',
@@ -134,4 +138,26 @@ async function umrechnen(quelle, ziel) {
   }
 }
 
-module.exports = { pruefen, umrechnen, auslastung, ZIEL_BYTE, HOEHE, CRF, GLEICHZEITIG, ZEITGRENZE_MS };
+/**
+ * Posterbild aus Sekunde 1 (bei sehr kurzen Videos aus dem ersten Bild) als
+ * PNG-Puffer. Die WebP-Kodierung macht der Aufrufer mit sharp.
+ */
+function posterRoh(pfad, dauer = 0) {
+  const ab = dauer >= 1.5 ? '1' : '0';
+  return new Promise((fertig, fehler) => {
+    const p = spawn('ffmpeg', ['-v', 'error', '-ss', ab, '-i', pfad, '-frames:v', '1', '-f', 'image2pipe', '-vcodec', 'png', 'pipe:1'],
+      { stdio: ['ignore', 'pipe', 'pipe'] });
+    const teile = [];
+    p.stdout.on('data', (d) => teile.push(d));
+    const uhr = setTimeout(() => { p.kill('SIGKILL'); fehler(new Error('Poster Zeitgrenze')); }, 30000);
+    p.on('error', (e) => { clearTimeout(uhr); fehler(e); });
+    p.on('close', (code) => {
+      clearTimeout(uhr);
+      const buf = Buffer.concat(teile);
+      if (code !== 0 || !buf.length) return fehler(new Error('Posterbild nicht erzeugt'));
+      fertig(buf);
+    });
+  });
+}
+
+module.exports = { pruefen, umrechnen, posterRoh, auslastung, ZIEL_BYTE, HOEHE, CRF, GLEICHZEITIG, ZEITGRENZE_MS };

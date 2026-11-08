@@ -15,6 +15,7 @@ const bildLib = require('../lib/bild');
 const olay = require('../lib/olay');
 // Einstellungen (Groessen/Qualitaet) und Job-Protokoll der Medien-Engine
 const medyaAyar = require('../lib/medyaAyar');
+const medyaIs = require('../lib/medyaIs');
 require('dotenv').config({ path: '/etc/kapbeni.env' });
 
 // Bilder und Video kommen im selben Formular, brauchen aber verschiedene
@@ -86,7 +87,7 @@ function optionalerNutzer(req) {
 
 /** Groesse und Format der hochgeladenen Dateien pruefen — VOR jedem Schreiben.
  *  Rueckgabe: Fehlertext (tuerkisch) oder null, wenn alles in Ordnung ist. */
-async function medienPruefen(fotos, video) {
+async function medienPruefen(fotos, video, ergebnis = {}) {
   const zuGross = fotos.find(f => f.size > FOTO_BYTE);
   if (zuGross) return `Fotoğraf çok büyük: ${zuGross.originalname} (maks 10MB)`;
   const falsch = fotos.find(f => !FOTO_TYPEN.includes(f.mimetype));
@@ -97,48 +98,22 @@ async function medienPruefen(fotos, video) {
     // Inhalt pruefen, nicht nur den mitgeschickten Typ — sonst wird eine
     // beliebige kleine Datei als Video abgelegt und das Inserat trotzdem
     // als erfolgreich gemeldet.
-    try { await videoLib.pruefen(video.path); }
+    try { ergebnis.probe = await videoLib.pruefen(video.path); }
     catch (e) {
       console.error('[video] ungueltige Datei:', e.message);
       return 'Video dosyası okunamadı. Lütfen geçerli bir video yükleyin.';
     }
+    // Hoechstens 60 s (Auftragssammlung J; Admin kann kuerzer einstellen).
+    // Kleine Toleranz, weil Container-Dauern oft 60,02 s o. ae. melden.
+    const max = (await medyaAyar.ayarlar()).video_max_sn;
+    if (ergebnis.probe.dauer > max + 0.5)
+      return `Video en fazla ${max} saniye olabilir (yüklenen: ${Math.round(ergebnis.probe.dauer)} sn). Lütfen videoyu kısaltın.`;
   }
   return null;
 }
 
-/**
- * Das hochgeladene Video an seinen endgueltigen Platz bringen.
- *
- * Bis zur Zielgroesse wird es unveraendert uebernommen; darueber rechnet ffmpeg
- * es auf 720p herunter, statt den Verkaeufer abzuweisen. Ein iPhone-MOV wird
- * immer umgerechnet — frueher landete es unveraendert unter der Endung .mp4,
- * der Container blieb aber QuickTime.
- *
- * Rueckgabe: { url, groesse, umgerechnet }. Wirft mit tuerkischem Text.
- * Die Rohdatei wird in jedem Fall entfernt.
- */
-async function videoUebernehmen(datei, uuid, uploadDir) {
-  const rohPfad = datei.path;
-  const mussUmrechnen = datei.size > VIDEO_ZIEL_BYTE || datei.mimetype === 'video/quicktime';
-  const endung = mussUmrechnen ? 'mp4' : VIDEO_TYPEN[datei.mimetype];
-  const name = `${uuid}_video.${endung}`;
-  const zielPfad = `${uploadDir}/${name}`;
-  try {
-    if (!mussUmrechnen) {
-      fs.copyFileSync(rohPfad, zielPfad);
-      return { url: `/uploads/ilanlar/${name}`, groesse: datei.size, umgerechnet: false };
-    }
-    const last = videoLib.auslastung();
-    if (last.wartend > 0) console.log(`[video] ${last.wartend} Auftrag/Auftraege warten`);
-    const groesse = await videoLib.umrechnen(rohPfad, zielPfad);
-    return { url: `/uploads/ilanlar/${name}`, groesse, umgerechnet: true };
-  } catch (e) {
-    console.error('[video] Umrechnen fehlgeschlagen:', e.message);
-    throw new Error('Video işlenemedi. Lütfen başka bir dosya deneyin.');
-  } finally {
-    try { if (fs.existsSync(rohPfad)) fs.unlinkSync(rohPfad); } catch { /* schon weg */ }
-  }
-}
+// Video: seit v1.28 nicht mehr im API-Prozess umgerechnet, sondern als Job
+// fuer kapbeni-media angelegt (lib/medyaIs.js, src/medyaMotoru.js).
 
 /**
  * Bilddateien eines Inserats von der Platte raeumen.
@@ -338,7 +313,11 @@ router.get('/:uuid', async (req, res) => {
     // Eigene Aufrufe nicht mitzaehlen — sonst faelscht schon das Oeffnen der
     // eigenen Bearbeiten-Maske die Aufrufzahl des eigenen Inserats.
     if (!istEigentuemer) await query('UPDATE ilanlar SET goruntulenme=goruntulenme+1 WHERE id=$1', [rows[0].id]);
-    res.json({ ...rows[0], fotograflar: foto, ozellikler, durum_etiket: ozellik.DURUM_ETIKET[rows[0].durum] || null });
+    const antwort = { ...rows[0], fotograflar: foto, ozellikler, durum_etiket: ozellik.DURUM_ETIKET[rows[0].durum] || null };
+    // Fehlertext der Medien-Engine sieht nur der Eigentuemer.
+    if (!istEigentuemer) delete antwort.video_hata;
+    delete antwort.video_is_id;
+    res.json(antwort);
   } catch(e) { res.status(500).json({ hata: e.message }); }
 });
 
@@ -415,7 +394,8 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     const videoDatei = ((req.files && req.files.video) || [])[0] || null;
 
     // Vor dem Anlegen pruefen, sonst stuende ein Inserat ohne Bilder in der DB.
-    const medienFehler = await medienPruefen(fotoDateien, videoDatei);
+    const pruefung = {};
+    const medienFehler = await medienPruefen(fotoDateien, videoDatei, pruefung);
     if (medienFehler) return res.status(400).json({ hata: medienFehler });
     // Zustand und Merkmale VOR dem Anlegen pruefen (Auftragssammlung M).
     if (durum !== undefined && durum !== '' && !ozellik.DURUM_KODLARI.includes(String(durum)))
@@ -446,7 +426,7 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     const ilan_durum = (!ai_sonuc.hata && ai_sonuc.onaylandi && Number(ai_sonuc.skor) >= 40) ? 'aktif' : 'moderasyonda';
     // Inserat, Merkmale und Fotozeilen in EINER Transaktion; Dateien erst nach dem COMMIT.
     const db = await pool.connect();
-    let rows; const dateien = [];
+    let rows; const dateien = []; let videoJob = null;
     try {
       await db.query('BEGIN');
       ({ rows } = await db.query(
@@ -468,6 +448,9 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
       }
       if (!bilder.length && fotoUrlGueltig)
         await db.query('INSERT INTO ilan_fotograflar(ilan_id,url,sira,ana_foto) VALUES($1,$2,0,true)', [ilanNeu.id, foto_url]);
+      // Video als Job fuer kapbeni-media (asynchron). Bis es fertig ist, zeigt
+      // die Detailseite „Medya işleniyor…".
+      if (videoDatei) videoJob = await medyaIs.videoJobAnlegen(db, { ilan: ilanNeu, userId: req.user.id, datei: videoDatei, probe: pruefung.probe });
       await db.query('COMMIT');
     } catch (e) {
       await db.query('ROLLBACK').catch(() => {});
@@ -477,14 +460,9 @@ router.post('/', authMiddleware, kycGerekli, ilanUpload, async (req, res) => {
     const uploadDir = `${process.env.UPLOAD_DIR}/ilanlar`;
     for (const [name, daten] of dateien) fs.writeFileSync(`${uploadDir}/${name}`, daten);
     await medyaAyar.bildProtokoll(req.user.id, ilan, bilder).catch(() => {});
-    // Video ablegen — zu grosse Dateien werden heruntergerechnet statt abgelehnt.
-    // has_video wird mitgefuehrt, damit der bestehende Filter "videolu=true"
-    // aus GET /api/ilanlar endlich echte Treffer liefert.
-    if (videoDatei) {
-      const v = await videoUebernehmen(videoDatei, ilan.uuid, uploadDir);
-      await query('UPDATE ilanlar SET video_url=$1, has_video=true WHERE id=$2', [v.url, ilan.id]);
-      ilan.video_url = v.url; ilan.has_video = true;
-    }
+    // Rohvideo erst nach dem COMMIT ins Engine-Verzeichnis (has_video setzt
+    // die Engine, sobald das umgerechnete Video da ist).
+    if (videoJob) { await medyaIs.nachCommit(videoJob); ilan.video_durum = 'isleniyor'; delete ilan.video_is_id; }
     await auditLog('ilan.olustur', 'api', { userId: req.user.id, hedefTip:'ilan', hedefId: ilan.id, detay: { ai_sonuc } });
     olay.kaydet(req, { userId: req.user.id, olay: 'ilan_olustur', hedefTip: 'ilan', hedefId: ilan.uuid,
       detay: { baslik: ilan.baslik, fiyat: ilan.fiyat, ilan_durum, ai_skor: ai_sonuc.skor ?? null } });
@@ -515,7 +493,8 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
 
     const neueFotos = (req.files && req.files.fotograflar) || [];
     const videoDatei = ((req.files && req.files.video) || [])[0] || null;
-    const medienFehler = await medienPruefen(neueFotos, videoDatei);
+    const pruefung = {};
+    const medienFehler = await medienPruefen(neueFotos, videoDatei, pruefung);
     if (medienFehler) return res.status(400).json({ hata: medienFehler });
 
     // Zielzustand der Galerie. `sirala` ist die vollstaendige Wunschreihenfolge:
@@ -631,22 +610,16 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
     const videoEntfernen = String(b.video_kaldir || '') === '1';
     const alteVideoUrl = ilan.video_url;
     const uploadDir = `${process.env.UPLOAD_DIR}/ilanlar`;
+    const altesPoster = ilan.video_poster_url;
     let neueVideoUrl = alteVideoUrl;
-    let videoName = null;
-    if (videoDatei) {
-      // Wie bei den Bildern: das Umrechnen laeuft VOR der Transaktion und
-      // schreibt zunaechst nur ins Zwischenverzeichnis. Scheitert es, ist an
-      // Inserat und bisherigem Video nichts veraendert.
-      const v = await videoUebernehmen(videoDatei, ilan.uuid, TMP_DIR);
-      videoName = v.url.split('/').pop();
-      neueVideoUrl = v.url;
-    } else if (videoEntfernen) {
+    // Neues Video: das bisherige bleibt sichtbar, bis die Engine das neue
+    // fertig hat (sie tauscht dann aus und raeumt das alte ab). Entfernen
+    // wirkt sofort und macht einen noch laufenden Job wirkungslos.
+    if (!videoDatei && videoEntfernen) {
       neueVideoUrl = null;
+      setzen.push('video_url=NULL', 'has_video=false', 'video_poster_url=NULL', 'video_durum=NULL', 'video_hata=NULL', 'video_is_id=NULL');
     }
-    if (neueVideoUrl !== alteVideoUrl) {
-      setzen.push(`video_url=$${p++}`); werte.push(neueVideoUrl);
-      setzen.push(`has_video=$${p++}`); werte.push(!!neueVideoUrl);
-    }
+    let videoJob = null;
     // updated_at ist immer dabei, das UPDATE laeuft also in jedem Fall.
     setzen.push('updated_at=NOW()');
     werte.push(ilan.id);
@@ -665,6 +638,7 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
       if (ozellikListe) await ozellik.ozellikleriYaz(verbindung, ilan.id, ozellikListe);
       else if (gueltigeTanime)
         await verbindung.query('DELETE FROM ilan_ozellik_degerleri WHERE ilan_id=$1 AND NOT (tanim_id = ANY($2::int[]))', [ilan.id, gueltigeTanime]);
+      if (videoDatei) videoJob = await medyaIs.videoJobAnlegen(verbindung, { ilan, userId: req.user.id, datei: videoDatei, probe: pruefung.probe });
       if (entfallen.length)
         await verbindung.query('DELETE FROM ilan_fotograflar WHERE id = ANY($1::int[])', [entfallen.map(f => f.id)]);
       for (let i = 0; i < ziel.length; i++) {
@@ -680,9 +654,7 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
       await verbindung.query('COMMIT');
     } catch (e) {
       await verbindung.query('ROLLBACK').catch(() => {});
-      // Das umgerechnete Video liegt noch im Zwischenverzeichnis — wegraeumen,
-      // sonst sammeln sich dort Reste fehlgeschlagener Aenderungen.
-      if (videoName) { try { fs.unlinkSync(`${TMP_DIR}/${videoName}`); } catch { /* schon weg */ } }
+      // Die Rohdatei raeumt ilanUpload am Ende der Anfrage ab.
       throw e;
     } finally {
       verbindung.release();
@@ -694,9 +666,9 @@ router.put('/:uuid', authMiddleware, ilanUpload, async (req, res) => {
       fs.writeFileSync(`${uploadDir}/${f.fnameSm}`, f.datenSm);
     }
     if (fertige.size) await medyaAyar.bildProtokoll(req.user.id, ilan, [...fertige.values()].map(f => f.v)).catch(() => {});
-    if (videoName) fs.renameSync(`${TMP_DIR}/${videoName}`, `${uploadDir}/${videoName}`);
+    if (videoJob) await medyaIs.nachCommit(videoJob);
     if (entfallen.length) await dateienEntfernen(entfallen.map(f => f.url), ilan.uuid);
-    if (alteVideoUrl && alteVideoUrl !== neueVideoUrl) await dateienEntfernen([alteVideoUrl], ilan.uuid);
+    if (alteVideoUrl && alteVideoUrl !== neueVideoUrl) await dateienEntfernen([alteVideoUrl, altesPoster].filter(Boolean), ilan.uuid);
 
     await meiliSync.syncListing(ilan.uuid);
     await auditLog('ilan.guncelle', 'api', { userId: req.user.id, hedefTip: 'ilan', hedefId: ilan.id });

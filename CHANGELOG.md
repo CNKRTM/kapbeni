@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.28.0 — 2026-11-08
+
+Medya Motoru (kapbeni-media, :3901): Videos asynchron, max. 60 s, immer 720p H.264 CRF 28/AAC 96k/faststart, WebP-Poster, Medya işleniyor (Auftragssammlung J)
+
 ## 1.27.0 — 2026-11-08
 
 Bilder in zwei Größen (_lg 1200/q75, _sm 480/q70), EXIF/GPS weg, srcset, Bestand nachgezogen (Auftragssammlung I)
