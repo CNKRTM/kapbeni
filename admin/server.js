@@ -27,6 +27,9 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
 // Auch unter /admin/… (z. B. /admin/img/…), falls die Seite mit Schraegstrich aufgerufen wird.
 app.use('/admin', express.static(path.join(__dirname, 'public'), { index: false, redirect: false }));
+// Inseratsbilder fuer Kundenakte/İlan Onayı auch unter dem Admin-Pfad (LAN :3002 kennt /uploads nicht).
+// Nur der ohnehin oeffentliche Ordner ilanlar — Archiv/KYC/Belege bleiben gesperrt.
+app.use('/admin/uploads/ilanlar', express.static(path.join(process.env.UPLOAD_DIR || '/var/www/kapbeni/uploads', 'ilanlar'), { index: false, redirect: false, fallthrough: false }));
 
 // ── Brute-Force-Schutz fuer den Admin-Login ───────────────────────────────
 // Analog zu api/src/index.js: 20 Versuche je 15 Minuten.
@@ -354,7 +357,8 @@ app.post('/admin/api/users/:id/aktifle', adminAuth, async (req, res) => {
 app.get('/admin/api/ilanlar', adminAuth, async (req, res) => {
   const { durum = 'moderasyonda', sayfa = 1, limit = 20 } = req.query;
   const { rows } = await db.query(
-    `SELECT i.*, u.email, u.ad, u.soyad, k.ad as kategori_ad,
+    `SELECT i.*, u.email, u.ad, u.soyad, u.musteri_no, u.cinsiyet, u.hesap_tipi, u.firma_adi, k.ad as kategori_ad,
+            (SELECT v.deger FROM ilan_ozellik_degerleri v JOIN kategori_ozellik_tanimlari t ON t.id=v.tanim_id WHERE v.ilan_id=i.id AND t.alan_adi='marka' LIMIT 1) as marka,
             (SELECT url FROM ilan_fotograflar WHERE ilan_id=i.id AND ana_foto=true LIMIT 1) as ana_foto
      FROM ilanlar i JOIN users u ON u.id=i.user_id LEFT JOIN kategoriler k ON k.id=i.kategori_id
      WHERE i.ilan_durum=$1 ORDER BY i.created_at ASC LIMIT $2 OFFSET $3`,
@@ -500,7 +504,7 @@ app.post('/admin/api/tickets/:uuid/yanitla', adminAuth, async (req, res) => {
 app.get('/admin/api/kyc', adminAuth, async (req, res) => {
   const { durum = 'manuel_inceleme' } = req.query;
   const { rows } = await db.query(
-    `SELECT k.*, u.email, u.ad, u.soyad, u.phone FROM kyc_results k
+    `SELECT k.*, u.email, u.ad, u.soyad, u.phone, u.musteri_no, u.cinsiyet, u.hesap_tipi, u.firma_adi FROM kyc_results k
      JOIN users u ON u.id=k.user_id WHERE k.durum=$1 ORDER BY k.created_at ASC`, [durum]
   );
   res.json(rows);
@@ -510,6 +514,13 @@ app.post('/admin/api/kyc/:id/onayla', adminAuth, async (req, res) => {
   await db.query("UPDATE kyc_results SET durum='onaylandi',manuel_onay_by=$1 WHERE id=$2", [req.admin.id, req.params.id]);
   await auditAdmin('kyc.manuel_onayla', req.admin.id, { hedefTip:'kyc', hedefId:+req.params.id });
   res.json({ mesaj: 'KYC onaylandı' });
+});
+// Reddet — die KYC-Seite rief diesen Endpunkt schon immer auf, er fehlte (404).
+app.post('/admin/api/kyc/:id/reddet', adminAuth, async (req, res) => {
+  const sebep = String(req.body?.sebep || '').trim().slice(0, 500) || null;
+  await db.query("UPDATE kyc_results SET durum='reddedildi', red_sebebi=COALESCE($1,red_sebebi), manuel_onay_by=$2, updated_at=NOW() WHERE id=$3", [sebep, req.admin.id, req.params.id]);
+  await auditAdmin('kyc.manuel_reddet', req.admin.id, { hedefTip:'kyc', hedefId:+req.params.id, detay:{ sebep } });
+  res.json({ mesaj: 'KYC reddedildi' });
 });
 
 // ── AUDIT LOG ──────────────────────────────────────────────────────────
@@ -526,7 +537,7 @@ app.get('/admin/api/audit', adminAuth, async (req, res) => {
 app.get('/admin/api/mesajlar/tehlikeli', adminAuth, async (req, res) => {
   const { rows } = await db.query(
     `SELECT m.*, k.ilan_id, il.baslik as ilan_baslik,
-            ug.email as gonderen_email
+            ug.email as gonderen_email, ug.musteri_no as gonderen_no, ug.cinsiyet as gonderen_cinsiyet, ug.hesap_tipi as gonderen_tip, ug.ad as gonderen_ad, ug.soyad as gonderen_soyad
      FROM mesajlar m
      JOIN konusmalar k ON k.id=m.konusma_id
      JOIN ilanlar il ON il.id=k.ilan_id
@@ -737,9 +748,11 @@ app.patch('/admin/api/ilanlar-yayin/:uuid/durum', adminAuth, async (req, res) =>
 app.get('/admin/api/ilan-sikayet', adminAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT s.*, k.ad as sikayet_eden_ad, i.baslik as ilan_baslik, i.ilan_no
+      `SELECT s.*, k.ad as sikayet_eden_ad, k.musteri_no as eden_no, k.cinsiyet as eden_cinsiyet, k.hesap_tipi as eden_tip,
+              i.baslik as ilan_baslik, i.ilan_no, sa.musteri_no as satici_no, sa.cinsiyet as satici_cinsiyet, sa.hesap_tipi as satici_tip,
+              sa.ad as satici_ad, sa.soyad as satici_soyad
        FROM sikayet s LEFT JOIN users k ON k.id=s.sikayet_eden
-       LEFT JOIN ilanlar i ON i.uuid=s.ilan_uuid ORDER BY s.created_at DESC`);
+       LEFT JOIN ilanlar i ON i.uuid=s.ilan_uuid LEFT JOIN users sa ON sa.id=i.user_id ORDER BY s.created_at DESC`);
     res.json(rows);
   } catch (e) { res.status(500).json({ hata: e.message }); }
 });
@@ -833,7 +846,7 @@ app.patch('/admin/api/whatsapp-ayar', adminAuth, async (req, res) => {
 app.get('/admin/api/kurumsal-bekleyenler', adminAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, ad, soyad, email, firma_adi, vkn, mersis_no, ticari_adres, yetkili_kisi, sektor, created_at
+      `SELECT id, ad, soyad, email, firma_adi, vkn, vergi_dairesi, mersis_no, ticari_adres, yetkili_kisi, sektor, created_at, musteri_no, cinsiyet, hesap_tipi
        FROM users WHERE hesap_tipi='kurumsal' AND kurumsal_onaylandi=false ORDER BY created_at DESC`);
     res.json(rows);
   } catch (e) { res.status(500).json({ hata: e.message }); }
@@ -923,6 +936,9 @@ app.get('/admin/api/abonelikler', adminAuth, async (req, res) => {
   } catch (e) { res.status(500).json({ hata: e.message }); }
 });
 
+
+// ── MÜŞTERİLER: Kundenliste + Kundenakte (v1.25/v1.26, admin/musteri.js) ──
+require('./musteri')(app, { db, adminAuth, auditAdmin, clientIp, arsivZeile, olayLib });
 
 // ── ADMIN UI (Single Page) ─────────────────────────────────────────────
 

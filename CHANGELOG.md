@@ -2,6 +2,10 @@
 
 Alle Versionen, neueste zuerst. Gepflegt von `deploy.sh`.
 
+## 1.25.0 — 2026-11-08
+
+A: Kundenliste (Suche/Filter/Sortierung serverseitig) und Kundenakte #/musteri/<no>/<reiter> mit Zeitleiste, Archiv, IP, Belgeler, Notlar; Kundennummer in allen Admin-Listen
+
 ## 1.24.1 — 2026-11-08
 
 Tests: Nummernreihenfolge nur echte Konten, Archivrest aufraeumen

@@ -197,6 +197,102 @@ const SZENARIEN = {
     const ueber = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     pruefe(ueber <= 1, `${b}: kein waagerechter Ueberlauf (${ueber})`);
   },
+  // Kundenliste (v1.25): Sidebar, KPI, Suche, Filter in der Adresse, Abzeichen, Zeile → Akte, Zurück → Liste mit Filter
+  async musteriler(page, b) {
+    const { q } = require('../_hilfe');
+    const elif = (await q("SELECT musteri_no FROM users WHERE email='elif.koc@test.kapbeni.com'")).rows[0].musteri_no;
+    await anmelden(page);
+    await page.goto(BASIS + '#/musteriler'); await page.waitForSelector('#m-tbody tr.m-row', { timeout: 8000 });
+    pruefe(await page.locator('#nav-musteriakte').count() === 0, `${b}: „Hazırlanıyor“-Eintrag ersetzt`);
+    pruefe(await page.locator('#nav-bireysel').count() + await page.locator('#nav-kurumsal').count() === 2 || b.includes('mobil'), `${b}: Unterpunkte Bireysel/Kurumsal`);
+    pruefe(await page.locator('#m-kpi .stat-card').count() === 6, `${b}: sechs Kennzahlen`);
+    pruefe(await page.locator('#m-tbody .kp-no').count() > 3, `${b}: Kundennummer-Abzeichen`);
+    pruefe(await page.locator('#m-tbody .kp-aktif').count() > 0 && await page.locator('#m-tbody .kp-pasif').count() > 0, `${b}: AKTİF / AKTİF DEĞİL`);
+    pruefe(await page.locator('#m-tbody .kp-sil').count() > 0 && await page.locator('#m-tbody .kp-askida').count() > 0, `${b}: Silme talebi / Askıda`);
+    await page.selectOption('#mf-tip', 'kurumsal'); await page.waitForTimeout(700);
+    pruefe(page.url().includes('tip=kurumsal'), `${b}: Filter in der Adresse`);
+    pruefe(await page.locator('#m-tbody .kp-no.kur').count() >= 2 && await page.locator('#m-tbody .kp-no.k').count() === 0, `${b}: nur gelbe (kurumsal)`);
+    await page.selectOption('#mf-tip', ''); await page.fill('#mf-q', '0555 001 00 08'); await page.press('#mf-q', 'Enter'); await page.waitForTimeout(700);
+    pruefe(await page.locator('#m-tbody tr.m-row').count() === 1, `${b}: Suche Telefon → 1 Treffer`);
+    await page.screenshot({ path: `${AUS}/admin-musteriler-${page.viewportSize().width}.png`, fullPage: true });
+    await page.click('#m-tbody tr.m-row'); await page.waitForSelector('.akte-kopf', { timeout: 8000 });
+    pruefe(page.url().endsWith(`#/musteri/${elif}/zaman`), `${b}: Zeile → Akte (${page.url().split('#')[1]})`);
+    await page.goBack(); await page.waitForSelector('#m-tbody', { timeout: 5000 }); await page.waitForTimeout(600);
+    pruefe(await page.inputValue('#mf-q') === '0555 001 00 08', `${b}: Zurück → Liste mit Suche`);
+    await page.goto(BASIS + '#/kullanicilar'); await page.waitForTimeout(800);
+    pruefe(page.url().endsWith('#/musteriler'), `${b}: alte Adresse #/kullanicilar umgeleitet`);
+  },
+  // Kundenakte (v1.26): Kopf, Reiter per Hash, Zeitleiste (neuester Tag offen, Ansicht gespeichert, Chips springen), Bilder
+  async akte(page, b) {
+    const { q } = require('../_hilfe');
+    const no = (k) => q('SELECT musteri_no FROM users WHERE email=$1', [k]).then((r) => r.rows[0].musteri_no);
+    const kaya = await no('satis.kayaelektronik@test.kapbeni.com'), ayse = await no('ayse.yilmaz@test.kapbeni.com');
+    const emre = await no('emre.celik@test.kapbeni.com'), mehmet = await no('mehmet.demir@test.kapbeni.com');
+    await anmelden(page);
+    await page.evaluate(() => localStorage.removeItem('kp_akte_gorunum'));
+    await page.goto(BASIS + `#/musteri/${ayse}/zaman`); await page.waitForSelector('.day', { timeout: 8000 });
+    const farbe = await page.locator('.akte-kopf .kp-no').evaluate((e) => getComputedStyle(e).backgroundColor);
+    pruefe(farbe === 'rgb(220, 38, 38)', `${b}: Frau = rot (${farbe})`);
+    pruefe(await page.locator('.akte-kopf .kp-aktif').count() === 1, `${b}: AKTİF pulsiert`);
+    pruefe(await page.locator('.akte-kpi > div').count() === 6, `${b}: sechs Kacheln`);
+    const offen = await page.locator('.day .ent').evaluateAll((e) => new Set(e.map((x) => x.closest('.day').id)).size);
+    pruefe(offen === 1 && await page.locator('.day').count() > 3, `${b}: nur der neueste Tag offen (${offen})`);
+    await page.locator('.day').first().screenshot({ path: `${AUS}/admin-akte-tag-${page.viewportSize().width}.png` }).catch(() => {});
+    // Tageschip springt (oeffnet einen anderen Tag)
+    await page.locator('.day').nth(2).locator('.day-chip').first().click(); await page.waitForTimeout(500);
+    pruefe(await page.locator('.day').nth(2).locator('.ent').count() > 0, `${b}: Tageschip öffnet und springt`);
+    pruefe(await page.locator('.tl-flash').count() === 1, `${b}: Eintrag blinkt`);
+    // Filter
+    await page.click('.tl-f[data-f="giris"]'); await page.waitForTimeout(300);
+    pruefe(await page.locator('.ent').evaluateAll((e) => e.every((x) => x.dataset.tur === 'giris')), `${b}: Filter Girişler`);
+    await page.click('.tl-f[data-f="tumu"]'); await page.click('.tl-lnk >> text=Tümünü aç'); await page.waitForTimeout(300);
+    pruefe(await page.locator('.day').count() === await page.locator('.day').evaluateAll((d) => d.filter((x) => x.querySelector('.ent')).length), `${b}: Tümünü aç`);
+    // Ansicht Liste / Kutucuk, gespeichert
+    await page.click('.tl-seg button >> text=Liste'); await page.waitForTimeout(300);
+    pruefe(await page.locator('tr.dl-day').count() > 0, `${b}: Liste mit Tageszeilen`);
+    await page.reload(); await page.waitForSelector('.akte-kopf', { timeout: 8000 }); await page.waitForTimeout(800);
+    pruefe(await page.locator('tr.dl-day').count() > 0, `${b}: Ansicht nach Reload gespeichert`);
+    await page.click('.tl-seg button >> text=Kutucuk'); await page.waitForTimeout(800);
+    const kach = await page.locator('.kach img').evaluateAll((i) => i.filter((x) => x.complete && x.naturalWidth > 0).length);
+    pruefe(kach > 0, `${b}: Kutucuk mit Inseratsbildern (${kach})`);
+    await page.click('.tl-seg button >> text=Blok');
+    // Reiter per Hash + Zurück
+    await page.click('.akte-tab[data-r="ilanlar"]'); await page.waitForSelector('#akte-inhalt table', { timeout: 6000 }); await page.waitForTimeout(800);
+    pruefe(page.url().endsWith(`#/musteri/${ayse}/ilanlar`), `${b}: Reiter in der Adresse`);
+    const bilder = await page.locator('#akte-inhalt img').evaluateAll((i) => [i.length, i.filter((x) => x.complete && x.naturalWidth > 0).length]);
+    pruefe(bilder[0] > 0 && bilder[0] === bilder[1], `${b}: İlanlar-Bilder geladen inkl. Archiv (${bilder[1]}/${bilder[0]})`);
+    await page.goBack(); await page.waitForSelector('.day', { timeout: 6000 });
+    pruefe(page.url().endsWith('/zaman'), `${b}: Zurück → vorheriger Reiter`);
+    // Gewerbe: gelb, Firmenblock, Belgeler
+    await page.goto(BASIS + `#/musteri/${kaya}/belgeler`); await page.waitForSelector('.akte-firma', { timeout: 8000 }); await page.waitForTimeout(800);
+    pruefe(await page.locator('.akte-kopf .kp-no.kur').count() === 1, `${b}: Kurumsal = gelb`);
+    pruefe(await page.locator('#akte-inhalt .card').count() >= 7, `${b}: sechs Unterlagen + Kurumsal-Onay`);
+    await page.screenshot({ path: `${AUS}/admin-akte-kurumsal-${page.viewportSize().width}.png`, fullPage: true });
+    // Silme talebi
+    await page.goto(BASIS + `#/musteri/${emre}/ozet`); await page.waitForSelector('.akte-kopf', { timeout: 8000 });
+    pruefe(/Silme talebi · \d+ gün kaldı/.test(await page.locator('#akte-hesap-rozet').innerText()), `${b}: rotes Abzeichen Silme talebi`);
+    // Mesajlar riskant, IP
+    await page.goto(BASIS + `#/musteri/${mehmet}/mesajlar`); await page.waitForSelector('#akte-inhalt .msg', { timeout: 8000 });
+    pruefe(await page.locator('.msg.risk').count() >= 2, `${b}: riskante Nachrichten markiert`);
+    await page.click('.akte-tab[data-r="ip"]'); await page.waitForSelector('#akte-inhalt table tbody tr', { timeout: 6000 });
+    pruefe(await page.locator('#akte-inhalt tbody tr').count() > 3, `${b}: IP-Protokoll`);
+    await page.screenshot({ path: `${AUS}/admin-akte-ip-${page.viewportSize().width}.png`, fullPage: true });
+    await page.goto(BASIS + `#/musteri/${ayse}/zaman`); await page.waitForSelector('.day', { timeout: 8000 }); await page.waitForTimeout(500);
+    await page.screenshot({ path: `${AUS}/admin-akte-${page.viewportSize().width}.png`, fullPage: true });
+    const ueber = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    pruefe(ueber <= 1, `${b}: kein waagerechter Ueberlauf (${ueber})`);
+  },
+  // Kundennummer-Abzeichen in den übrigen Listen mit Link auf die Akte
+  async listen(page, b) {
+    await anmelden(page);
+    for (const [r, sel] of [['ilanonay', '#view .kp-no'], ['riskmesaj', '#view .kp-no'], ['ilansikayet', '#view .kp-no'], ['kyc', '#view .kp-no'], ['kurumsalonay', '#view .kp-no']]) {
+      await page.goto(BASIS + '#/' + r); await page.waitForTimeout(1200);
+      pruefe(await page.locator(sel).count() > 0, `${b}: ${r} zeigt Kundennummer`);
+    }
+    await page.goto(BASIS + '#/riskmesaj'); await page.waitForTimeout(1000);
+    await page.locator('#view a.kp-no').first().click(); await page.waitForSelector('.akte-kopf', { timeout: 8000 });
+    pruefe(/#\/musteri\/KP-/.test(page.url()), `${b}: Abzeichen → Akte`);
+  },
 };
 
 (async () => {
